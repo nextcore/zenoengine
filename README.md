@@ -31,4 +31,4 @@ go run cmd/zeno/zeno.go
 Contributions are welcome! Please read our [ZENOLANG_STYLE_GUIDE.md](ZENOLANG_STYLE_GUIDE.md) before submitting pull requests.
 
 ## 📜 License
-(Your License Here - e.g., MIT)
+MIT
