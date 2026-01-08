@@ -119,7 +119,7 @@ func HandleRun(args []string) {
 		}
 	}
 
-	// Gunakan helper registry yang baru dibuat
+	// Use the newly created helper registry
 	queue := worker.NewDBQueue(dbMgr, "default")
 	r := chi.NewRouter()
 	app.RegisterAllSlots(eng, r, dbMgr, queue, nil)
