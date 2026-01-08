@@ -7,50 +7,52 @@ log: "Migrating Tenant DB: " + $TARGET_DB
 
 // 1. USERS TABLE
 db.execute: "CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) DEFAULT 'cashier',
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT DEFAULT 'cashier',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )" { db: $TARGET_DB }
 
 // 2. PRODUCTS TABLE
 db.execute: "CREATE TABLE IF NOT EXISTS products (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    sku VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(150) NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sku TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
     price DECIMAL(15,2) NOT NULL,
-    stock INT DEFAULT 0,
+    stock INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )" { db: $TARGET_DB }
 
 // 3. SALES HEADER
 db.execute: "CREATE TABLE IF NOT EXISTS sales (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    invoice_number VARCHAR(50) UNIQUE NOT NULL,
-    user_id INT NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_number TEXT UNIQUE NOT NULL,
+    user_id INTEGER NOT NULL,
     total_amount DECIMAL(15,2) DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'completed',
+    status TEXT DEFAULT 'completed',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_sales_created_at (created_at),
-    INDEX idx_sales_user_id (user_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
 )" { db: $TARGET_DB }
 
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at)" { db: $TARGET_DB }
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sales_user_id ON sales(user_id)" { db: $TARGET_DB }
+
 // 4. SALE ITEMS
 db.execute: "CREATE TABLE IF NOT EXISTS sale_items (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    sale_id INT NOT NULL,
-    product_id INT NOT NULL,
-    quantity INT NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
     price_at_sale DECIMAL(15,2) NOT NULL,
     subtotal DECIMAL(15,2) NOT NULL,
-    INDEX idx_sale_items_sale_id (sale_id),
-    INDEX idx_sale_items_product_id (product_id),
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
 )" { db: $TARGET_DB }
+
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id)" { db: $TARGET_DB }
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON sale_items(product_id)" { db: $TARGET_DB }
 
 log: "✓ Database schema created with indexes and foreign keys"
 

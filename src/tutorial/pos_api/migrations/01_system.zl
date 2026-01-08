@@ -6,11 +6,11 @@
 log: "Migrating System Database..."
 
 db.execute: "CREATE TABLE IF NOT EXISTS tenants (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    code VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    db_connection_name VARCHAR(100) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    db_connection_name TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )" { db: "system" } // Refers to DB_SYSTEM in .env
 

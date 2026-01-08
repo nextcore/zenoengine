@@ -33,81 +33,35 @@ This tutorial demonstrates how to build a **multi-tenant Point of Sale (POS) API
 ## Setup
 
 ### 1. Database Configuration
+**IMPORTANT**: Due to SQLite limitations, ensure paths are absolute or relative to the ZenoEngine root.
 
 **.env**:
 ```bash
 # System DB (tenant metadata)
-DB_SYSTEM_DRIVER=mysql
-DB_SYSTEM_HOST=127.0.0.1:3306
-DB_SYSTEM_USER=root
-DB_SYSTEM_PASS=yourpassword
-DB_SYSTEM_NAME=pos_system
+DB_SYSTEM_DRIVER=sqlite
+DB_SYSTEM_NAME=./data/pos_system.db
 
 # Tenant A
-DB_TENANT_ABC_DRIVER=mysql
-DB_TENANT_ABC_HOST=127.0.0.1:3306
-DB_TENANT_ABC_USER=root
-DB_TENANT_ABC_PASS=yourpassword
-DB_TENANT_ABC_NAME=pos_tenant_abc
+DB_TENANT_ABC_DRIVER=sqlite
+DB_TENANT_ABC_NAME=./data/pos_tenant_abc.db
+
+# Tenant B
+DB_TENANT_XYZ_DRIVER=sqlite
+DB_TENANT_XYZ_NAME=./data/pos_tenant_xyz.db
 
 # JWT Secret
 JWT_SECRET=your_secret_key_here
 ```
 
 ### 2. Create Databases
+Simply run the migration script, ZenoEngine will create the SQLite files automatically if the directory exists.
 
-```sql
--- System database
-CREATE DATABASE pos_system;
-USE pos_system;
+```bash
+# Ensure directory exists
+mkdir -p data
 
-CREATE TABLE tenants (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    code VARCHAR(50) UNIQUE,
-    name VARCHAR(100),
-    db_connection_name VARCHAR(50),
-    is_active BOOLEAN DEFAULT 1
-);
-
-INSERT INTO tenants (code, name, db_connection_name) VALUES
-('abc', 'Tenant ABC', 'tenant_abc'),
-('xyz', 'Tenant XYZ', 'tenant_xyz');
-
--- Tenant database
-CREATE DATABASE pos_tenant_abc;
-USE pos_tenant_abc;
-
-CREATE TABLE users (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(100),
-    email VARCHAR(100) UNIQUE,
-    password VARCHAR(255),
-    role VARCHAR(50) DEFAULT 'user'
-);
-
-CREATE TABLE products (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    sku VARCHAR(50) UNIQUE,
-    name VARCHAR(100),
-    price DECIMAL(10,2),
-    stock INT DEFAULT 0
-);
-
-CREATE TABLE sales (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    invoice_number VARCHAR(50) UNIQUE,
-    user_id INT,
-    total DECIMAL(10,2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE sale_items (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    sale_id INT,
-    product_id INT,
-    qty INT,
-    price DECIMAL(10,2)
-);
+# Run Migration
+zeno src/tutorial/pos_api/migrate.zl
 ```
 
 ## API Endpoints
