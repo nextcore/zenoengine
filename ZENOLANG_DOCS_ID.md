@@ -254,6 +254,15 @@ http.get: /hello {
   }
 }
 
+// Route dengan Parameter (Menggunakan syntax Chi Router: {param})
+// PENTING: Gunakan tanda kurung kurawal {}, bukan titik dua :
+http.get: "/users/{id}" {
+  do: {
+    // Variabel $id otomatis di-inject ke scope
+    http.ok: { message: "User ID: " + $id }
+  }
+}
+
 http.post: /submit {
   do: { ... }
 }
@@ -2291,3 +2300,108 @@ inertia.location: {
   url: "/login"
 }
 ```
+
+---
+
+## 14. Lampiran: Referensi API Lengkap (Cheat Sheet) 📚
+
+### 14.1 Database (SQL)
+**Driver Agnostic**: Mendukung MySQL, PostgreSQL, SQLite, SQL Server.
+
+| Slot | Signature / Children | Deskripsi |
+| :--- | :--- | :--- |
+| `db.table` | `value: "table"`, `db: "conn"` | Set tabel aktif/koneksi. |
+| `db.columns`| `value: ["col1", "col2"]` | Pilih kolom spesifik. |
+| `db.get` | `as: $var` | Ambil banyak baris (List of Maps). |
+| `db.first` | `as: $var` | Ambil satu baris (Map). |
+| `db.count` | `as: $var` | Hitung jumlah baris (Int). |
+| `db.insert` | Child keys sebagai kolom. | Insert data. Return `$db_last_id`. |
+| `db.update` | Child keys sebagai kolom. | Update data. Butuh `db.where`. |
+| `db.delete` | `as: $count` (optional) | Hapus data. Butuh `db.where`. |
+| `db.where` | `col: "name"`, `val: $val`, `op: "="` | Filter WHERE. Op default `=`. |
+| `db.where_in` | `col: "id"`, `val: [1, 2]` | WHERE IN. |
+| `db.where_not_in`| `col: "id"`, `val: [1, 2]` | WHERE NOT IN. |
+| `db.where_null` | `value: "col_name"` | WHERE col IS NULL. |
+| `db.where_not_null`| `value: "col_name"` | WHERE col IS NOT NULL. |
+| `db.group_by` | `value: "col_name"` | GROUP BY. |
+| `db.having` | `col: "c"`, `op: ">"`, `val: 1` | HAVING. |
+| `db.order_by` | `value: "id DESC"` | ORDER BY. |
+| `db.limit` | `value: $int` | LIMIT. |
+| `db.offset` | `value: $int` | OFFSET. |
+| `db.join` | `table: "t2"`, `on: ["t1.id", "=", "t2.fk"]` | INNER JOIN. |
+| `db.left_join` | `table: "t2"`, `on: [...]` | LEFT JOIN. |
+| `db.transaction`| `do: { ... }` | Transaksi Atomik. Auto-rollback jika error. |
+| `db.select` | `value: "SQL"`, `val: $p1`, `as: $res` | Raw SQL Select (Aman). |
+| `db.execute` | `value: "SQL"` | Raw SQL Execute (Aman). |
+
+### 14.2 HTTP Server & Client
+**PENTING**: Gunakan syntax `{id}` untuk parameter, JANGAN gunakan `:id`.
+
+| Slot | Signature / Children | Deskripsi |
+| :--- | :--- | :--- |
+| `http.get`, `post`...| `value: "/path/{id}"`, `do: {}`| Definisi Route. Variabel `{id}` otomatis di-inject. |
+| `http.group` | `value: "/api"`, `do: {}` | Grouping route. Bisa inherit middleware. |
+| `http.query` | `value: "param"`, `as: $var` | Ambil Query Param (`?id=1`). |
+| `http.form` | `value: "field"`, `as: $var` | Ambil Form/Multipart data. |
+| `http.response` | `status: 200`, `data: $json` | Kirim JSON response custom. |
+| `http.ok` | `value: { ... }` | Kirim 200 OK. |
+| `http.created` | `value: { ... }` | Kirim 201 Created. |
+| `http.not_found` | `value: { ... }` | Kirim 404 Not Found. |
+| `http.redirect` | `value: "/url"` | Redirect user. |
+| `http.upload` | `field: "file"`, `dest: "path"`, `as: $name` | Handle Upload File. |
+
+### 14.3 Logika & Flow Control
+
+| Slot | Signature / Children | Deskripsi |
+| :--- | :--- | :--- |
+| `if` | `value: "$a > $b"`, `then: {}`, `else: {}` | Kondisional. |
+| `switch` | `value: $var`, `case: "val" {}`, `default: {}` | Switch Case. |
+| `while` / `loop` | `value: "cond"`, `do: {}` | While Loop. |
+| `for` / `foreach` | `value: $list`, `as: $item`, `do: {}` | Foreach Loop. |
+| `break` | `value: "$i > 5"` (opsional) | Hentikan loop. |
+| `continue` | `value: "$i % 2 == 0"` (opsional) | Lanjut iterasi berikutnya. |
+| `return` | - | Hentikan eksekusi handler saat ini. |
+| `try` | `do: {}`, `catch: {}` | Error handling. Pesan error di `$error`. |
+| `ctx.timeout` | `value: "5s"`, `do: {}` | Batasi waktu eksekusi blok kode. |
+| `fn` | `value: name`, `children...` | Definisi fungsi global. |
+| `call` | `value: name` | Panggil fungsi global. |
+| `logic.compare` | `v1: $a`, `op: "=="`, `v2: $b`, `as: $res`| Komparasi eksplisit. |
+| `isset` | `value: $var`, `do: {}` | Eksekusi jika variabel ada. |
+| `empty` | `value: $var`, `do: {}` | Eksekusi jika variabel kosong/null. |
+| `unless` | `value: $bool`, `do: {}` | Eksekusi jika kondisi FALSE. |
+
+### 14.4 Utils, Security & Filesystem
+
+| Slot | Signature | Deskripsi |
+| :--- | :--- | :--- |
+| `log` | `value: "msg"` | Print ke console. |
+| `var` | `val: $val` | Set variabel. |
+| `sleep` | `value: ms` | Sleep N milidetik. |
+| `coalesce` | `val: $a`, `default: "b"`, `as: $r` | Null coalescing. |
+| `cast.to_int` | `val: $v`, `as: $i` | Ubah ke Integer. |
+| `crypto.hash` | `val: $pass`, `as: $hash` | Hash Password (Bcrypt). |
+| `crypto.verify` | `hash: $h`, `text: $p`, `as: $ok` | Verifikasi Password. |
+| `sec.csrf_token`| `as: $token` | Ambil token CSRF. |
+| `validator.validate`| `input: $map`, `rules: {...}`, `as: $err` | Validasi input. |
+| `math.calc` | `expr: "ceil($a * 1.1)"`, `as: $res` | Matematika Float. |
+| `money.calc` | `expr: "$a - $b"`, `as: $res` | Matematika Decimal (Keuangan). |
+| `io.file.write` | `path: "f.txt"`, `content: "s"` | Tulis file. |
+| `io.file.read` | `path: "f.txt"`, `as: $content` | Baca file. |
+| `io.file.delete`| `path: "f.txt"` | Hapus file. |
+| `io.dir.create` | `path: "dir"` | Buat direktori. |
+| `image.info` | `path: "img.jpg"`, `as: $info` | Cek dimensi gambar. |
+| `image.resize` | `source: "src"`, `dest: "dst"`, `width: 100` | Resize/Convert gambar. |
+
+### 14.5 Auth & Jobs
+
+| Slot | Signature | Deskripsi |
+| :--- | :--- | :--- |
+| `auth.login`| `username: $u`, `password: $p`, `as: $token` | Login & Issue JWT. |
+| `auth.middleware`| `do: {}` | Proteksi route. Inject `$auth`. |
+| `auth.user` | `as: $user` | Ambil user login saat ini. |
+| `auth.check`| `as: $bool` | Cek status login (true/false). |
+| `jwt.sign` | `claims: {...}`, `secret: "s"`, `as: $t` | Sign JWT manual. |
+| `jwt.verify`| `token: $t`, `secret: "s"`, `as: $c` | Verify JWT manual. |
+| `worker.config` | `value: ["queue1", "queue2"]` | Konfigurasi worker queue. |
+| `job.enqueue` | `queue: "q"`, `payload: {...}` | Masukkan job ke antrean. |
+| `mail.send` | `to: $e`, `subject: "s"`, `body: "b"`, `host: "smtp"` | Kirim email SMTP. |

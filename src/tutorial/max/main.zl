@@ -46,11 +46,7 @@ include: src/tutorial/max/modules/auth/routes.zl
 // ==========================================
 // 5. TASK MANAGEMENT MODULE
 // ==========================================
-include: src/tutorial/max/modules/tasks/list.zl
-include: src/tutorial/max/modules/tasks/create.zl
-include: src/tutorial/max/modules/tasks/edit.zl
-include: src/tutorial/max/modules/tasks/delete.zl
-include: src/tutorial/max/modules/tasks/complete.zl
+include: src/tutorial/max/modules/tasks/routes.zl
 
 // ==========================================
 // 6. TEAM COLLABORATION MODULE
@@ -76,7 +72,7 @@ include: src/tutorial/max/api/v1/teams.zl
 worker.config: ["notifications", "emails", "default"]
 
 log: "✅ ZenoLang Tutorial Demo (MAX) loaded successfully!"
-log: "🌐 Visit: http://localhost:8080/tutorial/max"
+log: "🌐 Visit: http://localhost:3000/tutorial/max"
 log: "📚 API Endpoints:"
 log: "   - GET    /api/v1/tasks"
 log: "   - POST   /api/v1/tasks"
