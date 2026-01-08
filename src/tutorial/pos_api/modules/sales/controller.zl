@@ -111,12 +111,13 @@ fn: create_sale {
             strings.concat: { val: "INV-"; val: $date_str; val: "%"; as: $inv_pattern }
             
             // FIX: Use FOR UPDATE to lock the count query
-            db.query: "SELECT COUNT(id) as total FROM sales WHERE invoice_number LIKE ? FOR UPDATE" {
+            db.query: "SELECT COUNT(id) as total FROM sales WHERE invoice_number LIKE ?" {
                 db: $db_name
                 bind: { val: $inv_pattern }
                 first: true
                 as: $last_inv
             }
+
             
             log: "Last invoice data retrieved"
             
@@ -143,7 +144,7 @@ fn: create_sale {
              log: "Generated invoice number: " + $invoice_no
             
             // B. Prepare Sale Header first (Pending amount) - Use raw SQL
-            db.execute: "INSERT INTO sales (invoice_number, user_id, total_amount, status, created_at) VALUES (?, ?, 0, 'completed', NOW())" {
+            db.execute: "INSERT INTO sales (invoice_number, user_id, total_amount, status, created_at) VALUES (?, ?, 0, 'completed', CURRENT_TIMESTAMP)" {
                 db: $db_name
                 bind: {
                     val: $invoice_no
@@ -158,8 +159,8 @@ fn: create_sale {
             foreach: $items {
                 as: $item
                 do: {
-                    // Get current price & check stock (Lock Row For Update)
-                    db.query: "SELECT id, sku, name, price, stock FROM products WHERE id = ? FOR UPDATE" {
+                    // Get current price & check stock
+                    db.query: "SELECT id, sku, name, price, stock FROM products WHERE id = ?" {
                         db: $db_name
                         bind: { val: $item.product_id }
                         first: true

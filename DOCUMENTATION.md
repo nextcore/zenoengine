@@ -190,6 +190,30 @@ db.transaction: {
 }
 ```
 
+### 4.3 Raw SQL with Binding (Safe)
+Use `db.select` and `db.execute` for complex queries. Always use `bind` to prevent SQL Injection.
+
+```javascript
+// Select with Parameters
+db.select: {
+  sql: "SELECT * FROM users WHERE email = ? AND status = ?"
+  bind: {
+    val: $email
+    val: "active"
+  }
+  as: $users
+}
+
+// Execute with Parameters
+db.execute: {
+  sql: "UPDATE users SET role = ? WHERE id = ?"
+  bind: {
+    val: "admin"
+    val: $user_id
+  }
+}
+```
+
 ---
 
 ## 5. Input Validation

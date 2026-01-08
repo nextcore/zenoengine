@@ -215,9 +215,12 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		Description: "Perform a SELECT query and retrieve multiple rows.",
 		Example:     "db.select: 'SELECT * FROM users'\n  as: $users",
 		Inputs: map[string]engine.InputMeta{
-			"as":    {Description: "Variable to store results", Required: false},
-			"first": {Description: "Return only the first row as a map (Default: false)", Required: false},
-			"db":    {Description: "Database connection name", Required: false},
+			"as":     {Description: "Variable to store results", Required: false},
+			"first":  {Description: "Return only the first row as a map (Default: false)", Required: false},
+			"db":     {Description: "Database connection name", Required: false},
+			"bind":   {Description: "Bind parameters container", Required: false},
+			"val":    {Description: "Single bind value", Required: false},
+			"params": {Description: "List of bind values", Required: false},
 		},
 	})
 	eng.Register("mysql.select", handlerSelect, engine.SlotMeta{Description: "Alias for db.select"})
@@ -257,7 +260,10 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		Description: "Execute a raw SQL query (INSERT, UPDATE, DELETE, etc.).",
 		Example:     "db.execute: 'UPDATE users SET x=1'",
 		Inputs: map[string]engine.InputMeta{
-			"db": {Description: "Database connection name", Required: false},
+			"db":     {Description: "Database connection name", Required: false},
+			"bind":   {Description: "Bind parameters container", Required: false},
+			"val":    {Description: "Single bind value", Required: false},
+			"params": {Description: "List of bind values", Required: false},
 		},
 	})
 	eng.Register("mysql.execute", handlerExecute, engine.SlotMeta{Description: "Alias for db.execute"})

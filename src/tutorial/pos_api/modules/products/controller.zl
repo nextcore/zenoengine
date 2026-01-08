@@ -11,9 +11,10 @@ fn: get_products {
     $db_name: $CURRENT_TENANT_DB
     
     // Select all products
+    // Select all products
     db.select: {
+        sql: "SELECT * FROM products"
         db: $db_name
-        table: "products"
         as: $products
     }
     
@@ -49,15 +50,22 @@ fn: create_product {
     $db_name: $CURRENT_TENANT_DB
     
     // Insert product
-    db.insert: {
+    db.execute: "INSERT INTO products (sku, name, price, stock) VALUES (?, ?, ?, ?)" {
         db: $db_name
-        table: "products"
-        data: {
-            sku: $form.sku
-            name: $form.name
-            price: $form.price
-            stock: $form.stock
+        bind: {
+            val: $form.sku
+            val: $form.name
+            val: $form.price
+            val: $form.stock
         }
+    }
+    // Fetch the created product using LastInsertId
+    // Fetch the created product using LastInsertId
+    db.select: {
+        sql: "SELECT * FROM products WHERE id = ?"
+        db: $db_name
+        bind: { val: $db_last_id }
+        first: true
         as: $product
     }
     

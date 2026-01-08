@@ -52,8 +52,8 @@
 | `db.join` | `table: "t2"`, `on: ["t1.id", "=", "t2.fk"]` | INNER JOIN. |
 | `db.left_join` | `table: "t2"`, `on: [...]` | LEFT JOIN. |
 | `db.transaction`| `do: { ... }` | Atomic transaction. Auto-rollback on error. |
-| `db.select` | `value: "SQL"`, `val: $p1`, `as: $res` | Raw SQL Select (Safe binding). |
-| `db.execute` | `value: "SQL"` | Raw SQL Execute (Safe binding). |
+| `db.select` | `sql: "SQL"`, `bind: { val: $p1 }`, `as: $res` | Raw SQL Select. Uses `bind` for safe parameters. |
+| `db.execute` | `sql: "SQL"`, `bind: { val: $p1 }` | Raw SQL Execute. Uses `bind` for safe parameters. |
 
 ### 2.2 HTTP Server & Client
 **Router**: Uses `chi` under the hood. **MUST use `{id}` for parameters**.
