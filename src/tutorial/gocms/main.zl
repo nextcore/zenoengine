@@ -1,0 +1,73 @@
+// GoCMS: Production-Ready CMS using Google Sheets
+// Base path: /src/tutorial/gocms
+
+// 1. Initial Configuration & Environment
+// Assumes GSHEET_ID and GSHEET_CREDS are set in .env
+
+http.get: "/" {
+    do: {
+        call: "GoCMS.index"
+    }
+}
+
+http.get: "/contact" {
+    do: {
+        view.blade: "tutorial/gocms/contact.blade.zl"
+    }
+}
+
+http.post: "/contact" {
+    do: {
+        call: "GoCMS.storeContact"
+    }
+}
+
+// ==========================================
+// ADMIN DASHBOARD & CRUD
+// ==========================================
+http.get: "/admin" {
+    do: {
+        call: "GoCMS.adminDashboard"
+    }
+}
+
+http.get: "/admin/create" {
+    do: {
+        view.blade: "tutorial/gocms/admin/create.blade.zl"
+    }
+}
+
+http.post: "/admin/store" {
+    do: {
+        call: "GoCMS.storePage"
+    }
+}
+
+http.get: "/admin/edit/{slug}" {
+    do: {
+        call: "GoCMS.editPage"
+    }
+}
+
+http.post: "/admin/update/{row}" {
+    do: {
+        call: "GoCMS.updatePage"
+    }
+}
+
+http.post: "/admin/delete/{row}" {
+    do: {
+        call: "GoCMS.deletePage" {
+            row: $row
+        }
+    }
+}
+
+// Dynamic Page Route
+http.get: "/p/{slug}" {
+    do: {
+        call: "GoCMS.showPage" {
+            slug: $slug
+        }
+    }
+}

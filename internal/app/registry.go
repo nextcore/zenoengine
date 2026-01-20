@@ -34,6 +34,7 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 	slots.RegisterCollectionSlots(eng)
 	slots.RegisterTimeSlots(eng)
 	slots.RegisterExcelSlots(eng)
+	slots.RegisterGSheetSlots(eng)
 	slots.RegisterHTTPClientSlots(eng)
 	slots.RegisterFunctionSlots(eng)
 }

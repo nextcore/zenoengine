@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings" // [BARU] Import strings untuk manipulasi nama variabel
+
+	"github.com/shopspring/decimal"
 )
 
 type HandlerFunc func(ctx context.Context, node *Node, scope *Scope) error
@@ -21,6 +24,7 @@ type SlotMeta struct {
 	Example        string               `json:"example"` // Snippet kode .zl
 	Inputs         map[string]InputMeta `json:"inputs,omitempty"`
 	RequiredBlocks []string             `json:"required_blocks,omitempty"` // e.g. ["do"], ["then", "else"]
+	ValueType      string               `json:"value_type,omitempty"`      // [BARU] Tipe data untuk value utama slot
 }
 
 type Engine struct {
@@ -42,6 +46,9 @@ func (e *Engine) Register(name string, fn HandlerFunc, meta SlotMeta) {
 }
 
 func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) error {
+	// Inject engine into context for slots use
+	ctx = context.WithValue(ctx, "engine", e)
+
 	// FASTEST PATH: Try optimized fast paths for common operations (2-3x faster)
 	if used, err := TryFastPath(ctx, node, scope); used {
 		if err != nil {
@@ -94,15 +101,35 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) error {
 			for name, input := range node.cachedMeta.Inputs {
 				if input.Required {
 					found := false
+					var attrNode *Node
 					for _, child := range node.Children {
 						if child.Name == name {
 							found = true
+							attrNode = child
 							break
 						}
 					}
 					if !found {
 						return fmt.Errorf("[%s:%d:%d] validation error: missing required attribute '%s' for slot '%s'",
 							node.Filename, node.Line, node.Col, name, node.Name)
+					}
+
+					// --- [BARU] VALIDASI TIPE DATA (Strict Mode) ---
+					if input.Type != "" && input.Type != "any" && attrNode != nil {
+						val := e.ResolveShorthandValue(attrNode, scope)
+						if err := e.ValidateValueType(val, input.Type, attrNode, node.Name); err != nil {
+							return err
+						}
+					}
+				} else {
+					// Cek tipe data untuk atribut opsional jika diset
+					for _, child := range node.Children {
+						if child.Name == name && input.Type != "" && input.Type != "any" {
+							val := e.ResolveShorthandValue(child, scope)
+							if err := e.ValidateValueType(val, input.Type, child, node.Name); err != nil {
+								return err
+							}
+						}
 					}
 				}
 			}
@@ -137,7 +164,7 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) error {
 		varName := strings.TrimPrefix(node.Name, "$")
 
 		// Gunakan helper internal untuk resolve value
-		val := e.resolveShorthandValue(node, scope)
+		val := e.ResolveShorthandValue(node, scope)
 
 		scope.Set(varName, val)
 		return nil
@@ -153,13 +180,13 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) error {
 	return nil
 }
 
-// [BARU] Helper internal untuk memproses nilai pada Variable Shorthand
-func (e *Engine) resolveShorthandValue(n *Node, scope *Scope) interface{} {
+// ResolveShorthandValue Helper internal untuk memproses nilai pada Variable Shorthand (Exported for analysis)
+func (e *Engine) ResolveShorthandValue(n *Node, scope *Scope) interface{} {
 	// A. Jika punya children, anggap sebagai Map/Object
 	if len(n.Children) > 0 {
 		m := make(map[string]interface{})
 		for _, c := range n.Children {
-			m[c.Name] = e.resolveShorthandValue(c, scope)
+			m[c.Name] = e.ResolveShorthandValue(c, scope)
 		}
 		return m
 	}
@@ -176,7 +203,7 @@ func (e *Engine) resolveShorthandValue(n *Node, scope *Scope) interface{} {
 	}
 
 	// D. Cek Referensi Variabel Lain ($other)
-	if strings.HasPrefix(valStr, "$") {
+	if strings.HasPrefix(valStr, "$") && scope != nil {
 		key := strings.TrimPrefix(valStr, "$")
 		// Resolusi variabel sederhana dari scope
 		if v, ok := scope.Get(key); ok {
@@ -186,6 +213,90 @@ func (e *Engine) resolveShorthandValue(n *Node, scope *Scope) interface{} {
 
 	// E. Fallback (Return raw value: int, bool, dll)
 	return n.Value
+}
+
+// ValidateValueType Helper internal untuk memvalidasi tipe data (Exported for slots)
+func (e *Engine) ValidateValueType(val interface{}, expectedType string, node *Node, slotName string) error {
+	if val == nil {
+		return nil // Nil is generally allowed unless 'required' check fails (which is separate)
+	}
+
+	actualType := fmt.Sprintf("%T", val)
+	isValid := false
+
+	switch expectedType {
+	case "string":
+		_, ok := val.(string)
+		isValid = ok
+	case "int", "integer":
+		switch v := val.(type) {
+		case int, int32, int64:
+			isValid = true
+		case float64:
+			isValid = v == float64(int(v))
+		case string:
+			// [ZENO FRIENDLY] Allow numeric strings for literals
+			if _, err := strconv.Atoi(v); err == nil {
+				isValid = true
+			}
+		}
+	case "bool", "boolean":
+		switch v := val.(type) {
+		case bool:
+			isValid = true
+		case string:
+			lower := strings.ToLower(v)
+			isValid = (lower == "true" || lower == "false" || lower == "1" || lower == "0")
+		}
+	case "float", "number":
+		switch v := val.(type) {
+		case float32, float64, int, int32, int64:
+			isValid = true
+		case string:
+			if _, err := strconv.ParseFloat(v, 64); err == nil {
+				isValid = true
+			}
+		}
+	case "decimal":
+		switch v := val.(type) {
+		case float32, float64, int, int32, int64:
+			isValid = true
+		case string:
+			if _, err := decimal.NewFromString(v); err == nil {
+				isValid = true
+			}
+		}
+	case "list", "array":
+		actualTypeLower := strings.ToLower(actualType)
+		isValid = strings.Contains(actualTypeLower, "slice") || strings.Contains(actualTypeLower, "array")
+		if !isValid {
+			if s, ok := val.(string); ok && (s == "[]" || s == "[[]]" || strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
+				isValid = true
+			}
+		}
+	case "map", "object":
+		actualTypeLower := strings.ToLower(actualType)
+		isValid = strings.Contains(actualTypeLower, "map")
+		if !isValid {
+			if s, ok := val.(string); ok && (s == "{}" || strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) {
+				isValid = true
+			}
+		}
+	default:
+		return nil
+	}
+
+	if !isValid {
+		attrName := node.Name
+		if attrName == slotName {
+			attrName = "(main value)"
+		}
+
+		return fmt.Errorf("[%s:%d:%d] validation error: type mismatch for '%s' in slot '%s'. Expected %s, got %T (%v)",
+			node.Filename, node.Line, node.Col, attrName, slotName, expectedType, val, val)
+	}
+
+	return nil
 }
 
 // Helper untuk mengambil semua docs (Sorted by Name)

@@ -154,10 +154,10 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		Description: "Create a variable (Legacy alias for 'var').",
 		Example:     "scope.set: $my_var\n  val: 123",
 		Inputs: map[string]engine.InputMeta{
-			"key":   {Description: "Variable name", Required: false},
-			"name":  {Description: "Variable name (alias for key)", Required: false},
-			"val":   {Description: "Variable value", Required: false},
-			"value": {Description: "Variable value (alias for val)", Required: false},
+			"key":   {Description: "Variable name", Required: false, Type: "string"},
+			"name":  {Description: "Variable name (alias for key)", Required: false, Type: "string"},
+			"val":   {Description: "Variable value", Required: false, Type: "any"},
+			"value": {Description: "Variable value (alias for val)", Required: false, Type: "any"},
 		},
 	})
 
@@ -221,10 +221,10 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		Description: "Compare two values.",
 		Example:     "logic.compare\n  v1: $age\n  op: '>'\n  v2: 17",
 		Inputs: map[string]engine.InputMeta{
-			"v1": {Description: "First value", Required: true},
-			"v2": {Description: "Second value", Required: true},
-			"op": {Description: "Comparison operator", Required: true},
-			"as": {Description: "Variable to store result (Default: compare_result)", Required: false},
+			"v1": {Description: "First value", Required: true, Type: "any"},
+			"v2": {Description: "Second value", Required: true, Type: "any"},
+			"op": {Description: "Comparison operator", Required: true, Type: "string"},
+			"as": {Description: "Variable to store result (Default: compare_result)", Required: false, Type: "string"},
 		},
 	})
 

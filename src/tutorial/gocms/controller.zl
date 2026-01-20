@@ -1,0 +1,174 @@
+fn: "GoCMS.index" {
+    do: {
+        gsheet.get: env.GSHEET_ID {
+          range: "Pages!A1:C20"
+          credentials: env.GSHEET_CREDS
+          as: $raw_pages
+        }
+        
+        gsheet.find: env.GSHEET_ID {
+          range: "Pages!A1:C20"
+          where: {} // Find all
+          credentials: env.GSHEET_CREDS
+          as: $pages
+        }
+
+        // Type Safety: Ensure $pages is always a list
+        schema: $pages { type: "list" }
+
+        view.blade: "tutorial/gocms/index.blade.zl" {
+            data: {
+                pages: $pages
+            }
+        }
+    }
+}
+
+fn: "GoCMS.showPage" {
+    do: {
+        gsheet.find: env.GSHEET_ID {
+          range: "Pages!A1:C20"
+          where: {
+            Slug: $slug
+          }
+          credentials: env.GSHEET_CREDS
+          as: $matches
+        }
+        
+        // Type Safety
+        schema: $matches { type: "list" }
+        
+        array.pop: $matches { as: $page }
+        
+        // Type Safety: Ensure $page is a map (single row)
+        if: $page {
+            then: {
+                schema: $page { type: "map" }
+                view.blade: "tutorial/gocms/index.blade.zl" {
+                    data: {
+                        page: $page
+                        is_single: true
+                    }
+                }
+            }
+            else: {
+                http.not_found: { message: "Page not found" }
+            }
+        }
+    }
+}
+
+fn: "GoCMS.storeContact" {
+    do: {
+        // Appending to "Contacts" sheet
+        // Row: [Name, Email, Message, Date]
+        gsheet.append: env.GSHEET_ID {
+          range: "Contacts!A1"
+          values: [[$request.body.name $request.body.email $request.body.message date.now]]
+          credentials: env.GSHEET_CREDS
+        }
+
+        http.redirect: "/contact?success=1"
+    }
+}
+
+// ==========================================
+// ADMIN DASHBOARD
+// ==========================================
+fn: "GoCMS.adminDashboard" {
+    do: {
+        gsheet.find: env.GSHEET_ID {
+          range: "Pages!A1:C100"
+          where: {} // All rows
+          credentials: env.GSHEET_CREDS
+          as: $pages
+        }
+
+        view.blade: "tutorial/gocms/admin/dashboard.blade.zl" {
+            data: {
+                pages: $pages
+            }
+        }
+    }
+}
+
+// ==========================================
+// STORE NEW PAGE
+// ==========================================
+fn: "GoCMS.storePage" {
+    do: {
+        gsheet.append: env.GSHEET_ID {
+          range: "Pages!A1"
+          values: [[$request.body.title $request.body.content $request.body.slug]]
+          credentials: env.GSHEET_CREDS
+        }
+
+        http.redirect: "/admin?success=created"
+    }
+}
+
+// ==========================================
+// EDIT PAGE FORM
+// ==========================================
+fn: "GoCMS.editPage" {
+    do: {
+        gsheet.find: env.GSHEET_ID {
+          range: "Pages!A1:C100"
+          where: {
+            Slug: $slug
+          }
+          credentials: env.GSHEET_CREDS
+          as: $matches
+        }
+
+        array.pop: $matches { as: $page }
+
+        if: $page {
+            then: {
+                view.blade: "tutorial/gocms/admin/edit.blade.zl" {
+                    data: {
+                        page: $page
+                    }
+                }
+            }
+            else: {
+                http.redirect: "/admin?error=not_found"
+            }
+        }
+    }
+}
+
+// ==========================================
+// UPDATE PAGE
+// ==========================================
+fn: "GoCMS.updatePage" {
+    do: {
+        // Range: Pages!A{row}:C{row}
+        var: $update_range { val: "Pages!A" + $row + ":C" + $row }
+        
+        gsheet.update: env.GSHEET_ID {
+          range: $update_range
+          values: [[$request.body.title $request.body.content $request.body.slug]]
+          credentials: env.GSHEET_CREDS
+        }
+
+        http.redirect: "/admin?success=updated"
+    }
+}
+
+// ==========================================
+// DELETE PAGE
+// ==========================================
+fn: "GoCMS.deletePage" {
+    do: {
+        // Range: Pages!A{row}:C{row}
+        var: $delete_range { val: "Pages!A" + $row + ":C" + $row }
+        
+        gsheet.clear: env.GSHEET_ID {
+          range: $delete_range
+          credentials: env.GSHEET_CREDS
+        }
+
+        http.redirect: "/admin?success=deleted"
+    }
+}

@@ -85,6 +85,46 @@ fn: calculate_tax {
 call: calculate_tax
 ```
 
+### 2.5 Type Safety & Schema
+ZenoEngine provides both static and runtime type validation to ensure code reliability.
+
+#### Static Analysis (CLI)
+Use the `check` command to validate your code without running it. It catches unknown slots, missing attributes, and literal type mismatches.
+```bash
+zeno check path/to/script.zl
+```
+
+#### Explicit Type Locking (Schema)
+Use the `schema` slot to lock a variable to a specific type.
+```javascript
+schema: $user_id { type: "int" }
+```
+
+#### Typed Variables
+You can enforce types when defining variables using the `var` slot.
+```javascript
+var: $count {
+  val: 10
+  type: "int"
+}
+```
+
+Supported Types: `string`, `int`, `bool`, `float`, `decimal`, `list`, `map`, `any`.
+
+#### When does validation occur?
+1.  **Static Analysis (`zeno check`)**: Before execution. Validates literal values (e.g., `sleep: "ten"`) and structure. Catches typos early.
+2.  **Runtime Validation**: During execution. Validates dynamic data (e.g., HTTP input or variable values) when assigned or used in a `schema` locked variable.
+
+#### Special Type: `decimal`
+The `decimal` type is designed for high-precision financial data. While internally it uses string-based storage to prevent floating-point errors, ZenoEngine validates it as a valid numeric decimal. Always use `decimal` for money, prices, and taxes in combination with `money.calc`.
+
+```javascript
+// Reliable money handling
+var: $price { val: "150.50", type: "decimal" }
+schema: $tax { type: "decimal" }
+money.calc: $price * $tax { as: $total }
+```
+
 ---
 
 ## 3. HTTP & Routing
@@ -303,7 +343,37 @@ job.enqueue: {
   queue: "emails"
   payload: { to: "user@test.com", subject: "Hi" }
 }
-```
+
+### 6.2 Excel
+Generate spreadsheets from templates. (See `slots.RegisterExcelSlots`)
+
+### 6.3 Google Sheets
+ZenoEngine provides built-in support for Google Sheets as a database-like data source.
+
+#### `gsheet.get`
+Fetch data from a spreadsheet.
+- `id`: Spreadsheet ID.
+- `range`: Cell range (e.g., `"Sheet1!A1:B10"`).
+- `credentials`: path or JSON string of service account.
+- `as`: Variable name for rows.
+
+#### `gsheet.find`
+Search for rows using header-based filtering.
+- `range`: Cell range including headers.
+- `where`: Map of criteria `{ "ColumnName": "Value" }`.
+- `as`: Variable name for matching rows.
+
+#### `gsheet.append`
+Append data to the end of a sheet.
+- `values`: List of lists (rows).
+
+#### `gsheet.update`
+Overwrite a specific range.
+
+#### `gsheet.clear`
+Remove data from a specific range.
+
+---
 
 ### 7.4 Email
 ```javascript

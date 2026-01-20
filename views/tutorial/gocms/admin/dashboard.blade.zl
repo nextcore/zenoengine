@@ -1,0 +1,107 @@
+@extends('tutorial/gocms/layout')
+
+@section('content')
+<div class="max-w-6xl mx-auto py-8 px-4">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
+        <div class="space-x-3 no-print">
+            <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition">
+                🖨️ Print PDF
+            </button>
+            <a href="/admin/create" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
+                + Create New Page
+            </a>
+        </div>
+    </div>
+
+    <!-- Simple Print Styling -->
+    <style>
+        @media print {
+            .no-print, nav, footer, .action-col {
+                display: none !important;
+            }
+            body {
+                background: white;
+            }
+            .shadow-md {
+                box-shadow: none !important;
+            }
+            table {
+                width: 100% !important;
+                border: 1px solid #ccc;
+            }
+            th, td {
+                border: 1px solid #ddd;
+                padding: 8px;
+            }
+            a {
+                text-decoration: none;
+                color: black;
+            }
+        }
+    </style>
+
+    @if($request.query.success)
+    <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-8" role="alert">
+        <p class="font-bold">Success!</p>
+        <p>Operation completed successfully ({{ $request.query.success }}).</p>
+    </div>
+    @endif
+
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <table class="min-w-full leading-normal">
+            <thead>
+                <tr>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Title
+                    </th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Slug
+                    </th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Row (Meta)
+                    </th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider action-col no-print">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($pages as $p)
+                <tr>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
+                        <p class="text-gray-900 whitespace-no-wrap font-bold">{{ $p.Title }}</p>
+                    </td>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
+                        <p class="text-gray-600 whitespace-no-wrap">/p/{{ $p.Slug }}</p>
+                    </td>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
+                        <span class="relative inline-block px-3 py-1 font-semibold text-gray-900 leading-tight">
+                            <span aria-hidden class="absolute inset-0 bg-gray-200 opacity-50 rounded-full"></span>
+                            <span class="relative">Row {{ $p.__row }}</span>
+                        </span>
+                    </td>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm text-right action-col no-print">
+                        <div class="inline-flex space-x-2">
+                            <a href="/admin/edit/{{ $p.Slug }}" class="text-blue-600 hover:text-blue-900 font-semibold px-3 py-1 border border-blue-600 rounded hover:bg-blue-50">
+                                Edit
+                            </a>
+                            <form action="/admin/delete/{{ $p.__row }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this page row?');">
+                                @csrf
+                                <button type="submit" class="text-red-600 hover:text-red-900 font-semibold px-3 py-1 border border-red-600 rounded hover:bg-red-50">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-8">
+        <a href="/" class="text-blue-600 hover:underline">← Back to Site</a>
+    </div>
+</div>
+@endsection

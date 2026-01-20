@@ -81,10 +81,11 @@ func RegisterMathSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{
 		Description: "Melakukan perhitungan matematika menggunakan ekspresi string.",
 		Example:     "math.calc: ceil($total / 10)\n  as: $pages",
+		ValueType:   "string",
 		Inputs: map[string]engine.InputMeta{
-			"as":   {Description: "Variabel penyimpan hasil", Required: false},
-			"val":  {Description: "Ekspresi matematika (jika tidak via value utama)", Required: false},
-			"expr": {Description: "Alias untuk val", Required: false},
+			"as":   {Description: "Variabel penyimpan hasil", Required: false, Type: "string"},
+			"val":  {Description: "Ekspresi matematika (jika tidak via value utama)", Required: false, Type: "string"},
+			"expr": {Description: "Alias untuk val", Required: false, Type: "string"},
 		},
 	})
 
@@ -108,13 +109,22 @@ func RegisterMathSlots(eng *engine.Engine) {
 		env := make(map[string]interface{})
 
 		for k, v := range scope.ToMap() {
+			// Only convert if it looks like a number
 			s := coerce.ToString(v)
-			if d, err := decimal.NewFromString(s); err == nil {
-				env[k] = d
-			} else {
-				env[k] = decimal.Zero
+			if s != "" && (s[0] == '-' || (s[0] >= '0' && s[0] <= '9')) {
+				if d, err := decimal.NewFromString(s); err == nil {
+					env[k] = d
+					continue
+				}
 			}
+			env[k] = v // Keep original for non-numeric
 		}
+
+		// Inject Decimal Functions for Operator Overloading
+		env["Add"] = func(a, b decimal.Decimal) decimal.Decimal { return a.Add(b) }
+		env["Sub"] = func(a, b decimal.Decimal) decimal.Decimal { return a.Sub(b) }
+		env["Mul"] = func(a, b decimal.Decimal) decimal.Decimal { return a.Mul(b) }
+		env["Div"] = func(a, b decimal.Decimal) decimal.Decimal { return a.Div(b) }
 
 		// 2. Pre-processing
 		cleanExpr := strings.ReplaceAll(expressionStr, "$", "")
@@ -149,9 +159,10 @@ func RegisterMathSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{
 		Description: "Melakukan perhitungan keuangan menggunakan Decimal untuk presisi tinggi.",
 		Example:     "money.calc: ($harga * $qty) - $diskon\n  as: $total",
+		ValueType:   "decimal",
 		Inputs: map[string]engine.InputMeta{
-			"as":  {Description: "Variabel penyimpan hasil", Required: false},
-			"val": {Description: "Ekspresi keuangan", Required: false},
+			"as":  {Description: "Variabel penyimpan hasil", Required: false, Type: "string"},
+			"val": {Description: "Ekspresi keuangan", Required: false, Type: "decimal"},
 		},
 	})
 }

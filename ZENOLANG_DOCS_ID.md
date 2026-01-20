@@ -239,6 +239,46 @@ call: hitung_diskon
 - **Timeout:** `ctx.timeout: "5s" { do: { ... } }` (Batasi waktu eksekusi)
 - **Include Script:** `include: "src/modules/other.zl"` (Modularisasi kode)
 
+### 2.10 Keamanan Tipe & Skema (Type Safety) 🆕
+ZenoEngine menyediakan validasi tipe data baik secara statis maupun runtime untuk menjamin keandalan kode.
+
+#### Analisis Statis (CLI)
+Gunakan perintah `check` untuk memvalidasi kode tanpa menjalankannya. Fitur ini mendeteksi slot tidak dikenal, atribut yang kurang, hingga ketidakcocokan tipe data literal.
+```bash
+zeno check path/to/script.zl
+```
+
+#### Penguncian Tipe (Schema)
+Gunakan slot `schema` untuk mengunci tipe data variabel tertentu agar tidak bisa diubah ke tipe lain secara tidak sengaja.
+```javascript
+schema: $user_id { type: "int" }
+```
+
+#### Variabel Ter-tipe (Typed Variables)
+Anda bisa memaksakan tipe data saat mendefinisikan variabel menggunakan slot `var`.
+```javascript
+var: $count {
+  val: 10
+  type: "int"
+}
+```
+
+Tipe data yang didukung: `string`, `int`, `bool`, `float`, `decimal`, `list`, `map`, `any`.
+
+#### Kapan validasi terjadi? ⏱️
+1.  **Analisis Statis (`zeno check`)**: Terjadi **sebelum** kode dijalankan. Berguna untuk mengecek nilai literal (misal: `sleep: "sepuluh"`) dan struktur kode. Sangat disarankan dijalankan sebelum *deployment*.
+2.  **Validasi Runtime**: Terjadi **saat** kode sedang berjalan. Berguna untuk mengecek data dinamis (misal: input HTTP atau hasil database) yang dimasukkan ke variabel yang sudah dikunci menggunakan `schema`.
+
+#### Tipe Khusus: `decimal` 💰
+Tipe `decimal` dirancang khusus untuk data keuangan dengan presisi tinggi. Secara internal, data disimpan sebagai string untuk menghindari pembulatan salah (*floating point error*), namun ZenoEngine akan memvalidasi bahwa isinya adalah angka desimal yang valid. Gunakan tipe ini bersama slot `money.calc`.
+
+```javascript
+// Penanganan uang yang aman
+var: $harga { val: "15000.50", type: "decimal" }
+schema: $pajak { type: "decimal" }
+money.calc: $harga * $pajak { as: $total }
+```
+
 ---
 
 ## 3. HTTP & Web Server
@@ -2253,6 +2293,7 @@ excel.from_template: "templates/report_invoice.xlsx" {
 
 ---
 
+
 ## 13. Modern Frontend (Inertia.js) 🆕
 ZenoEngine memiliki dukungan first-party untuk **Inertia.js**. Ini memungkinkan Anda membangun *Single Page Application* (React, Vue, Svelte) tanpa membuat API terpisah (Monolith Modern).
 
@@ -2404,4 +2445,11 @@ inertia.location: {
 | `jwt.verify`| `token: $t`, `secret: "s"`, `as: $c` | Verify JWT manual. |
 | `worker.config` | `value: ["queue1", "queue2"]` | Konfigurasi worker queue. |
 | `job.enqueue` | `queue: "q"`, `payload: {...}` | Masukkan job ke antrean. |
+| `gsheet.get` | `config: {...}`, `as: $data` | Mengambil data dari spreadsheet (Support JSON Service Account). |
+| `gsheet.find` | `id: $id`, `range: "A1:Z", where: { Nama: "X" }` | Mencari data baris berdasarkan kriteria header. |
+| `gsheet.append` | `config: {...}`, `data: [...]` | Menambah baris baru ke akhir tabel. |
+| `gsheet.update` | `config: {...}`, `range: "A1:B2"`, `data: [...]` | Mengubah data pada range tertentu. |
+| `gsheet.clear` | `config: {...}`, `range: "A1:B10"` | Menghapus konten pada range tertentu. |
+| `job.dispatch` | `queue: "q"`, `payload: {...}` | Memasukkan pekerjaan ke antrian sinkron/asinkron. |
 | `mail.send` | `to: $e`, `subject: "s"`, `body: "b"`, `host: "smtp"` | Kirim email SMTP. |
+```

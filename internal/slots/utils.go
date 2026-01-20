@@ -155,8 +155,8 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		Description: "Menggabungkan beberapa string menjadi satu.",
 		Example:     "strings.concat\n  val: 'Hello '\n  val: $name\n  as: $greeting",
 		Inputs: map[string]engine.InputMeta{
-			"val": {Description: "Nilai yang akan digabung (Bisa banyak)", Required: true},
-			"as":  {Description: "Variabel penyimpan hasil", Required: false},
+			"val": {Description: "Nilai yang akan digabung (Bisa banyak)", Required: true, Type: "string"},
+			"as":  {Description: "Variabel penyimpan hasil", Required: false, Type: "string"},
 		},
 	})
 
@@ -456,19 +456,71 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		}
 
 		var val interface{}
+		var expectedType string
 		for _, c := range node.Children {
 			if c.Name == "val" || c.Name == "value" {
 				val = parseNodeValue(c, scope)
 			}
+			if c.Name == "type" {
+				expectedType = coerce.ToString(parseNodeValue(c, scope))
+			}
 		}
+
+		// [ENFORCEMENT] Validate type if provided
+		if expectedType != "" && expectedType != "any" {
+			if e, ok := ctx.Value("engine").(*engine.Engine); ok {
+				if err := e.ValidateValueType(val, expectedType, node, "var"); err != nil {
+					return err
+				}
+			}
+		}
+
 		scope.Set(varName, val)
 		return nil
 	}, engine.SlotMeta{
 		Description: "Membuat atau mengubah nilai variabel dalam scope saat ini.",
-		Example:     "var: $count\n  val: 10",
+		Example:     "var: $count\n  val: 10\n  type: 'int'",
 		Inputs: map[string]engine.InputMeta{
-			"val":   {Description: "Nilai variabel", Required: false},
-			"value": {Description: "Alias untuk val", Required: false},
+			"val":   {Description: "Nilai variabel", Required: false, Type: "any"},
+			"value": {Description: "Alias untuk val", Required: false, Type: "any"},
+			"type":  {Description: "Tipe data (opsional)", Required: false, Type: "string"},
+		},
+	})
+
+	// 10.5 SCHEMA (Type Locking/Schema Check)
+	eng.Register("schema", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		rawName := coerce.ToString(node.Value)
+		varName := strings.TrimPrefix(rawName, "$")
+
+		if varName == "" {
+			return fmt.Errorf("schema: variable name required (usage: schema: $name)")
+		}
+
+		val, ok := scope.Get(varName)
+		if !ok {
+			return fmt.Errorf("schema: variable '$%s' not found", varName)
+		}
+
+		var expectedType string
+		for _, c := range node.Children {
+			if c.Name == "type" {
+				expectedType = coerce.ToString(parseNodeValue(c, scope))
+			}
+		}
+
+		if expectedType != "" && expectedType != "any" {
+			if e, ok := ctx.Value("engine").(*engine.Engine); ok {
+				if err := e.ValidateValueType(val, expectedType, node, "schema"); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}, engine.SlotMeta{
+		Description: "Memvalidasi tipe data variabel yang sudah ada.",
+		Example:     "schema: $user_id { type: 'int' }",
+		Inputs: map[string]engine.InputMeta{
+			"type": {Description: "Tipe data yang diharapkan", Required: true, Type: "string"},
 		},
 	})
 	// 11. SLEEP
@@ -476,7 +528,11 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		ms, _ := coerce.ToInt(node.Value)
 		time.Sleep(time.Duration(ms) * time.Millisecond)
 		return nil
-	}, engine.SlotMeta{Example: "sleep: 1000"})
+	}, engine.SlotMeta{
+		Description: "Menghentikan eksekusi selama beberapa milidetik.",
+		Example:     "sleep: 1000",
+		ValueType:   "int",
+	})
 
 	// ==========================================
 	// SLOT: COALESCE (Null Safety)

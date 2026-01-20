@@ -10,6 +10,7 @@ include: src/tutorial/max/main.zl
 // ==========================================
 // include: src/tutorial/pos_api/main.zl
 // include: src/tutorial/inertia_demo/main.zl
+include: src/tutorial/gocms/main.zl
 
 // 404 Handler
 http.get: /* {

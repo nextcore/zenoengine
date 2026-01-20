@@ -14,6 +14,8 @@
     *   Example: `if: $condition { ... }`
 3.  **Variables**: Always prefixed with `$` (e.g., `$user_id`).
     *   **Assignment**: `var: $name { val: "value" }` (Preferred) or `scope.set`.
+    *   **Typed Assignment**: `var: $n { val: 1, type: "int" }`.
+    *   **Supported Types**: `string`, `int`, `bool`, `float`, `decimal`, `list`, `map`, `any`.
     *   **Access**: `$user.name` (Dot notation), `$items.0` (Index).
     *   **Interpolation**: `"Hello " + $name` (String concatenation).
 4.  **Quoting**:
@@ -53,6 +55,11 @@
 | `db.left_join` | `table: "t2"`, `on: [...]` | LEFT JOIN. |
 | `db.transaction`| `do: { ... }` | Atomic transaction. Auto-rollback on error. |
 | `db.select` | `sql: "SQL"`, `bind: { val: $p1 }`, `as: $res` | Raw SQL Select. Uses `bind` for safe parameters. |
+| `gsheet.get` | `id: "s_id"`, `range: "A1:B10"`, `creds: $json`, `as: $rows` | Fetch rows from Google Sheet. |
+| `gsheet.find` | `id: "s_id"`, `range: "A1:Z"`, `where: { Col: val }`, `creds: $json`, `as: $rows` | Search for rows by criteria. |
+| `gsheet.append` | `id: "s_id"`, `range: "A1"`, `values: [[...]]`, `creds: $json` | Add rows to Google Sheet. |
+| `gsheet.update` | `id: "s_id"`, `range: "A1:B2"`, `values: [[...]]`, `creds: $json` | Update cells in Google Sheet. |
+| `gsheet.clear`  | `id: "s_id"`, `range: "A1:B10"`, `creds: $json` | Clear data from Google Sheet. |
 | `db.execute` | `sql: "SQL"`, `bind: { val: $p1 }` | Raw SQL Execute. Uses `bind` for safe parameters. |
 
 ### 2.2 HTTP Server & Client
@@ -100,6 +107,7 @@
 | `sleep` | `value: ms` | Sleep for N milliseconds. |
 | `coalesce` | `val: $a`, `default: "b"`, `as: $r` | Null coalescing. |
 | `is_null` | `val: $a`, `as: $bool` | Check if null. |
+| `schema` | `value: $var`, `type: "t"` | Lock variable to a type. |
 | `cast.to_int` | `val: $v`, `as: $i` | Cast to Integer. |
 | `crypto.hash` | `val: $pass`, `as: $hash` | Bcrypt hash. |
 | `crypto.verify` | `hash: $h`, `text: $p`, `as: $ok` | Verify Bcrypt. |
@@ -192,8 +200,25 @@ http.get: "/users/{id}/edit" {
 ```
 
 ### 3.3 Financial Calculations
-**Critical**: Use `money.calc` for currency to avoid floating point errors.
+**Critical**: Use `money.calc` for currency to avoid floating point errors. Always pair with `decimal` type enforcement for constants.
 
 ```javascript
-money.calc: ($price * $quantity) - $discount { as: $total }
+// High-confidence financial pattern
+var: $price { val: "99.99", type: "decimal" }
+money.calc: $price * $quantity { as: $total }
+schema: $total { type: "decimal" }
+```
+
+### 3.4 Type Safety & Validation
+**High Reliability**: Use `schema` to lock types and `zeno check` to validate scripts.
+
+```javascript
+// Ensure $user_id is always an integer
+schema: $user_id { type: "int" }
+
+// Define variable with strict type
+var: $counter {
+  val: 0
+  type: "int"
+}
 ```
