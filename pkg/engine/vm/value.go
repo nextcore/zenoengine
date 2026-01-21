@@ -138,3 +138,26 @@ func NewString(s string) Value      { return Value{Type: ValString, AsPtr: s} }
 func NewNil() Value                 { return Value{Type: ValNil} }
 func NewObject(o interface{}) Value { return Value{Type: ValObject, AsPtr: o} }
 func NewFunction(c *Chunk) Value    { return Value{Type: ValFunction, AsPtr: c} }
+
+// NewValue creates a Value from any native Go type, sniffing for numbers/strings/etc.
+func NewValue(v interface{}) Value {
+	if v == nil {
+		return NewNil()
+	}
+	switch val := v.(type) {
+	case float64:
+		return NewNumber(val)
+	case int:
+		return NewNumber(float64(val))
+	case int64:
+		return NewNumber(float64(val))
+	case bool:
+		return NewBool(val)
+	case string:
+		return NewString(val)
+	case *Chunk:
+		return NewFunction(val)
+	default:
+		return NewObject(val)
+	}
+}

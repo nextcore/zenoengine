@@ -241,11 +241,7 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			name := vm.readConstant().AsPtr.(string)
 			val, ok := scope.Get(name)
 			if ok {
-				if c, ok := val.(*Chunk); ok {
-					vm.push(NewFunction(c))
-				} else {
-					vm.push(NewObject(val))
-				}
+				vm.push(NewValue(val))
 			} else {
 				vm.push(NewNil())
 			}
@@ -396,7 +392,7 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			case ValObject:
 				if slice, ok := iterable.AsPtr.([]interface{}); ok {
 					if index < len(slice) {
-						nextVal = NewObject(slice[index])
+						nextVal = NewValue(slice[index])
 						hasNext = true
 						// Increment hidden index
 						vm.stack[vm.sp-2] = NewNumber(float64(index + 1))
@@ -411,7 +407,7 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 					}
 					if index < len(keys) {
 						key := keys[index]
-						nextVal = NewObject(m[key])
+						nextVal = NewValue(m[key])
 						hasNext = true
 						vm.stack[vm.sp-2] = NewNumber(float64(index + 1))
 					}

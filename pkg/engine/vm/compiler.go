@@ -68,15 +68,16 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 			}
 		}
 
-		if idx := c.resolveLocal(varName); idx != -1 {
-			c.emitByte(byte(OpSetLocal))
-			c.emitByte(byte(idx))
-			c.emitByte(byte(OpPop))
-		} else {
-			// Global assignment
-			c.emitByte(byte(OpSetGlobal))
-			c.emitByte(c.addConstant(NewString(varName)))
+		idx := c.resolveLocal(varName)
+		if idx == -1 {
+			// Automatic local allocation for $ variables
+			c.locals = append(c.locals, Local{Name: varName, Depth: c.scopeDepth})
+			idx = len(c.locals) - 1
 		}
+
+		c.emitByte(byte(OpSetLocal))
+		c.emitByte(byte(idx))
+		c.emitByte(byte(OpPop))
 		return nil
 	}
 
