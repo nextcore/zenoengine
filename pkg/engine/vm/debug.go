@@ -18,21 +18,25 @@ func (c *Chunk) DisassembleInstruction(offset int) int {
 	fmt.Printf("%04d ", offset)
 	instruction := OpCode(c.Code[offset])
 	switch instruction {
-	case OpReturn, OpNil, OpTrue, OpFalse, OpAdd, OpSubtract,
-		OpEqual, OpNotEqual, OpGreater, OpGreaterEqual, OpLess, OpLessEqual, OpIterEnd, OpPop:
+	case OpReturn, OpNil, OpTrue, OpFalse, OpAdd, OpSubtract, OpMultiply, OpDivide, OpNegate,
+		OpEqual, OpNotEqual, OpGreater, OpGreaterEqual, OpLess, OpLessEqual, OpIterEnd, OpPop,
+		OpLogicalOr, OpLogicalAnd, OpLogicalNot, OpStop:
 		return simpleInstruction(instruction.String(), offset)
 
-	case OpConstant, OpGetGlobal, OpSetGlobal, OpCallSlot:
+	case OpConstant, OpGetGlobal, OpSetGlobal, OpCallSlot, OpAccessProperty:
 		return constantInstruction(instruction.String(), c, offset)
 
-	case OpGetLocal, OpSetLocal, OpCall:
+	case OpGetLocal, OpSetLocal, OpCall, OpMakeMap, OpMakeList:
 		return byteInstruction(instruction.String(), c, offset)
 
-	case OpJump, OpJumpIfFalse, OpLoop, OpIterNext:
+	case OpJump, OpJumpIfFalse, OpLoop, OpIterNext, OpTry:
 		return jumpInstruction(instruction.String(), 1, c, offset)
 
+	case OpEndTry:
+		return simpleInstruction(instruction.String(), offset)
+
 	default:
-		fmt.Printf("Unknown opcode %d\n", instruction)
+		fmt.Printf("Unknown opcode %d (%s)\n", byte(instruction), instruction.String())
 		return offset + 1
 	}
 }

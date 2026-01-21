@@ -3,6 +3,8 @@ package vm
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"zeno/pkg/engine"
 	"zeno/pkg/utils/coerce"
@@ -411,4 +413,197 @@ func TestVMIterationItem(t *testing.T) {
 	}
 
 	chunk.Disassemble("IterationItemTest")
+}
+
+func TestVMPOSStress(t *testing.T) {
+	// 1. Test Logical Operators and Property Access
+	src := `
+	$email: "user@example.com"
+	$password: "secret"
+	$request: {
+		body: {
+			email: "user@example.com",
+			password: "secret"
+		}
+	}
+	
+	$valid: false
+	if: $request.body.email == $email && $request.body.password == $password {
+		then: { $valid: true }
+	}
+
+	$tags: ["admin", "pos", "staff"]
+	$role: $tags.0
+	
+	$is_not_empty: false
+	if: !($email == "") {
+		then: { $is_not_empty: true }
+	}
+
+	$stopped: false
+	if: true {
+		then: {
+			$stopped: true
+			stop
+			$stopped: false // Should not be reached
+		}
+	}
+	`
+
+	compiler := NewCompiler()
+	node, err := engine.ParseString(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chunk, err := compiler.Compile(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	eng := engine.NewEngine()
+	ctx := context.WithValue(context.Background(), "engine", eng)
+	scope := engine.NewScope(nil)
+
+	err = vm.Run(ctx, chunk, scope)
+	if err != nil {
+		chunk.Disassemble("POSStressTest")
+		t.Fatal(err)
+	}
+
+	valid, _ := scope.Get("valid")
+	role, _ := scope.Get("role")
+	email, _ := scope.Get("email")
+	request, _ := scope.Get("request")
+
+	if valid != true {
+		chunk.Disassemble("POSStressTest")
+		t.Errorf("Expected valid to be true, got %v. Email: %v, Request: %v", valid, email, request)
+	}
+	if role != "admin" {
+		t.Errorf("Expected role to be admin, got %v", role)
+	}
+	if val, ok := scope.Get("is_not_empty"); !ok || val.(bool) != true {
+		t.Errorf("Expected is_not_empty to be true, got %v", val)
+	}
+	if val, ok := scope.Get("stopped"); !ok || val.(bool) != true {
+		t.Errorf("Expected stopped to be true, got %v", val)
+	}
+}
+
+func TestVMStringConcat(t *testing.T) {
+	src := `
+	$str1: "Hello"
+	$str2: " World"
+	$res1: $str1 + $str2
+	
+	$num: 42
+	$res2: "Answer: " + $num
+	`
+
+	compiler := NewCompiler()
+	node, err := engine.ParseString(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk, err := compiler.Compile(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	scope := engine.NewScope(nil)
+
+	err = vm.Run(context.Background(), chunk, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if val, ok := scope.Get("res1"); !ok || val.(string) != "Hello World" {
+		t.Errorf("Expected 'Hello World', got %v", val)
+	}
+	if val, ok := scope.Get("res2"); !ok || val.(string) != "Answer: 42" {
+		t.Errorf("Expected 'Answer: 42', got %v", val)
+	}
+}
+
+func TestVMTryCatch(t *testing.T) {
+	// Case 1: Exception Caught
+	src1 := `
+	$res: "init"
+	try {
+	   call: nonExistentSlot
+	   $res: "not reached"
+	} catch {
+	   $res: "caught"
+	}
+	`
+	runTestScript(t, src1, map[string]interface{}{"res": "caught"})
+
+	// Case 2: Exception Variable
+	src2 := `
+	$errMsg: ""
+	try {
+	   nonExistentSlot
+	} catch: $e {
+	   $errMsg: $e
+	}
+	`
+	// We expect errMsg to contain "slot not found"
+	_, scope2 := runTestScriptReturnVM(t, src2)
+	errMsg, _ := scope2.Get("errMsg")
+	if !strings.Contains(fmt.Sprintf("%v", errMsg), "slot not found") {
+		t.Errorf("Expected error message to contain 'slot not found', got %v", errMsg)
+	}
+	// Stack validation removed as VM frame is invalid after execution
+
+	// Case 3: No Exception
+	src3 := `
+	$res: "init"
+	try {
+	   $res: "success"
+	} catch {
+	   $res: "fail"
+	}
+	`
+	runTestScript(t, src3, map[string]interface{}{"res": "success"})
+}
+
+// Helper to reduce boilerplate
+func runTestScript(t *testing.T, src string, expectedGlobals map[string]interface{}) {
+	_, scope := runTestScriptReturnVM(t, src)
+	for k, v := range expectedGlobals {
+		val, ok := scope.Get(k)
+		if !ok {
+			t.Errorf("Expected global %s to be set", k)
+			continue
+		}
+		if fmt.Sprintf("%v", val) != fmt.Sprintf("%v", v) {
+			t.Errorf("Expected global %s to be %v, got %v", k, v, val)
+		}
+	}
+}
+
+func runTestScriptReturnVM(t *testing.T, src string) (*VM, *engine.Scope) {
+	node, err := engine.ParseString(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiler := NewCompiler()
+	chunk, err := compiler.Compile(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	scope := engine.NewScope(nil)
+	eng := engine.NewEngine()
+	ctx := context.WithValue(context.Background(), "engine", eng)
+
+	err = vm.Run(ctx, chunk, scope)
+	if err != nil {
+		t.Fatalf("VM Error: %v", err)
+	}
+	return vm, scope
 }

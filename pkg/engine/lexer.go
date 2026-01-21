@@ -12,6 +12,7 @@ const (
 	TokenString     TokenType = "STRING"
 	TokenLBrace     TokenType = "LBRACE"
 	TokenRBrace     TokenType = "RBRACE"
+	TokenComma      TokenType = "COMMA"
 	TokenEOF        TokenType = "EOF"
 	TokenError      TokenType = "ERROR"
 )
@@ -57,6 +58,8 @@ func (l *Lexer) NextToken() Token {
 	switch l.ch {
 	case ':':
 		tok = l.newToken(TokenColon, string(l.ch))
+	case ',':
+		tok = l.newToken(TokenComma, string(l.ch))
 	case '"', '\'':
 		tok.Line = l.line
 		tok.Column = l.col
@@ -69,7 +72,7 @@ func (l *Lexer) NextToken() Token {
 		tok.Line = l.line
 		tok.Column = l.col
 	default:
-		if isLetter(l.ch) || isDigit(l.ch) || l.ch == '$' || l.ch == '.' || l.ch == '_' || l.ch == '/' || l.ch == '*' || l.ch == '!' || l.ch == '=' || l.ch == '<' || l.ch == '>' || l.ch == '(' || l.ch == ')' || l.ch == '+' || l.ch == '-' || l.ch == '%' || l.ch == '{' || l.ch == '}' {
+		if isLetter(l.ch) || isDigit(l.ch) || l.ch == '$' || l.ch == '.' || l.ch == '_' || l.ch == '/' || l.ch == '*' || l.ch == '!' || l.ch == '=' || l.ch == '<' || l.ch == '>' || l.ch == '(' || l.ch == ')' || l.ch == '+' || l.ch == '-' || l.ch == '%' || l.ch == '{' || l.ch == '}' || l.ch == '&' || l.ch == '|' {
 			tok.Line = l.line
 			tok.Column = l.col
 			tok.Literal = l.readIdentifier()
@@ -96,7 +99,7 @@ func (l *Lexer) newToken(tokenType TokenType, ch string) Token {
 
 func (l *Lexer) readIdentifier() string {
 	position := l.position
-	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '$' || l.ch == '.' || l.ch == '_' || l.ch == '-' || l.ch == '/' || l.ch == '*' || l.ch == '!' || l.ch == '=' || l.ch == '<' || l.ch == '>' || l.ch == '(' || l.ch == ')' || l.ch == '+' || l.ch == '%' || l.ch == '{' || l.ch == '}' {
+	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '$' || l.ch == '.' || l.ch == '_' || l.ch == '-' || l.ch == '/' || l.ch == '*' || l.ch == '!' || l.ch == '=' || l.ch == '<' || l.ch == '>' || l.ch == '(' || l.ch == ')' || l.ch == '+' || l.ch == '%' || l.ch == '{' || l.ch == '}' || l.ch == '&' || l.ch == '|' {
 		l.readChar()
 	}
 	return l.input[position:l.position]

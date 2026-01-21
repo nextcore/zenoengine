@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"zeno/pkg/engine"
 )
 
@@ -19,6 +20,13 @@ type CallFrame struct {
 	base  int // Index in the global stack where this frame's locals begin
 }
 
+// CatchFrame represents a try/catch block handler.
+type CatchFrame struct {
+	Ip         int // Instruction Pointer to jump to (Catch block)
+	Sp         int // Stack Pointer to restore
+	FrameCount int // Call Frame count to restore
+}
+
 // VM is the bytecode execution engine.
 type VM struct {
 	frames     [FramesMax]CallFrame
@@ -26,10 +34,14 @@ type VM struct {
 
 	stack [StackMax]Value
 	sp    int // Stack Pointer
+
+	catchFrames []CatchFrame
 }
 
 func NewVM() *VM {
-	return &VM{}
+	return &VM{
+		catchFrames: make([]CatchFrame, 0),
+	}
 }
 
 // Chunk stores a sequence of bytecode and constants.
@@ -212,6 +224,9 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 	// Reserve space for locals
 	vm.sp = len(chunk.LocalNames)
 
+	var err error
+
+Loop:
 	for {
 		instruction := OpCode(vm.readByte())
 		switch instruction {
@@ -254,7 +269,17 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 		case OpAdd:
 			b := vm.pop()
 			a := vm.pop()
-			vm.push(NewNumber(a.AsNum + b.AsNum))
+
+			// String Concatenation?
+			if a.Type == ValString || b.Type == ValString {
+				// Convert both to string
+				strA := fmt.Sprintf("%v", a.ToNative())
+				strB := fmt.Sprintf("%v", b.ToNative())
+				vm.push(NewString(strA + strB))
+			} else {
+				// Numeric Addition
+				vm.push(NewNumber(a.AsNum + b.AsNum))
+			}
 
 		case OpSubtract:
 			b := vm.pop()
@@ -268,13 +293,15 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			// 1. Get Engine from context
 			eng, ok := ctx.Value("engine").(*engine.Engine)
 			if !ok {
-				return fmt.Errorf("engine not found in context")
+				err = fmt.Errorf("engine not found in context")
+				goto ErrorHandler
 			}
 
 			// 2. Lookup Handler
 			handler, exists := eng.Registry[slotName]
 			if !exists {
-				return fmt.Errorf("slot not found: %s", slotName)
+				err = fmt.Errorf("slot not found: %s", slotName)
+				goto ErrorHandler
 			}
 
 			// 3. Prepare Mock Node for arguments (Stack to Node bridge)
@@ -299,9 +326,9 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			vm.syncLocals(scope)
 
 			// 4. Execution
-			err := handler(ctx, mockNode, scope)
+			err = handler(ctx, mockNode, scope)
 			if err != nil {
-				return err
+				goto ErrorHandler
 			}
 
 		case OpEqual:
@@ -338,7 +365,8 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			argCount := int(vm.readByte())
 			fnVal := vm.stack[vm.sp-1-argCount]
 			if fnVal.Type != ValFunction {
-				return fmt.Errorf("can only call functions, got %v", fnVal.Type)
+				err = fmt.Errorf("can only call functions, got %v", fnVal.Type)
+				goto ErrorHandler
 			}
 			fnChunk := fnVal.AsPtr.(*Chunk)
 			// Base of new frame is the first argument's position
@@ -433,13 +461,103 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			vm.pop() // iterable
 			vm.pop() // index
 
+		case OpLogicalOr:
+			b := vm.pop()
+			a := vm.pop()
+			vm.push(NewBool(vm.isTruthy(a) || vm.isTruthy(b)))
+
+		case OpLogicalAnd:
+			b := vm.pop()
+			a := vm.pop()
+			vm.push(NewBool(vm.isTruthy(a) && vm.isTruthy(b)))
+
+		case OpLogicalNot:
+			a := vm.pop()
+			vm.push(NewBool(!vm.isTruthy(a)))
+
+		case OpTry:
+			offset := vm.readShort()
+			vm.catchFrames = append(vm.catchFrames, CatchFrame{
+				Ip:         vm.frame().ip + int(offset),
+				Sp:         vm.sp,
+				FrameCount: vm.frameCount,
+			})
+
+		case OpEndTry:
+			if len(vm.catchFrames) > 0 {
+				vm.catchFrames = vm.catchFrames[:len(vm.catchFrames)-1]
+			}
+
+		case OpStop:
+			vm.syncLocals(scope)
+			return nil
+
+		case OpAccessProperty:
+			name := vm.readConstant().AsPtr.(string)
+			obj := vm.pop()
+
+			var res Value
+			switch obj.Type {
+			case ValObject:
+				if m, ok := obj.AsPtr.(map[string]interface{}); ok {
+					if v, ok := m[name]; ok {
+						res = NewValue(v)
+					}
+				} else if slice, ok := obj.AsPtr.([]interface{}); ok {
+					// Numeric index?
+					if idx, err := strconv.Atoi(name); err == nil {
+						if idx >= 0 && idx < len(slice) {
+							res = NewValue(slice[idx])
+						}
+					}
+				}
+			}
+			vm.push(res)
+
+		case OpMakeMap:
+			count := int(vm.readByte())
+			m := make(map[string]interface{})
+			for i := 0; i < count; i++ {
+				val := vm.pop().ToNative()
+				key := vm.pop().ToNative().(string)
+				m[key] = val
+			}
+			vm.push(NewObject(m))
+
+		case OpMakeList:
+			count := int(vm.readByte())
+			slice := make([]interface{}, count)
+			for i := count - 1; i >= 0; i-- {
+				slice[i] = vm.pop().ToNative()
+			}
+			vm.push(NewObject(slice))
+
 		case OpPop:
 			vm.pop()
 
 		default:
-			return fmt.Errorf("unsupported opcode: %d", instruction)
+			err = fmt.Errorf("unsupported opcode: %d", instruction)
+			goto ErrorHandler
 		}
 	}
+
+ErrorHandler:
+	if len(vm.catchFrames) > 0 {
+		// Recover
+		catch := vm.catchFrames[len(vm.catchFrames)-1]
+		vm.catchFrames = vm.catchFrames[:len(vm.catchFrames)-1] // Pop handler
+
+		vm.frameCount = catch.FrameCount
+		vm.sp = catch.Sp
+
+		// Push error object
+		vm.push(NewString(err.Error()))
+
+		vm.frame().ip = catch.Ip
+		// Continue execution from catch block
+		goto Loop
+	}
+	return err
 }
 
 func (vm *VM) readByte() byte {

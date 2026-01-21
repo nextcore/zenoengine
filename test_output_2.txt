@@ -1,0 +1,76 @@
+=== RUN   TestVMArithmetic
+--- PASS: TestVMArithmetic (0.00s)
+=== RUN   TestVMCompilerVariables
+--- PASS: TestVMCompilerVariables (0.00s)
+=== RUN   TestVMComplexSlot
+--- PASS: TestVMComplexSlot (0.00s)
+=== RUN   TestVMControlFlow
+--- PASS: TestVMControlFlow (0.00s)
+=== RUN   TestVMSerialization
+--- PASS: TestVMSerialization (0.00s)
+=== RUN   TestVMInternalFunctions
+--- PASS: TestVMInternalFunctions (0.00s)
+=== RUN   TestVMDisassembler
+== TestChunk ==
+0000 OpConstant          0 '10'
+0002 OpSetLocal          0
+0004 OpPop           
+0005 OpGetLocal          0
+0007 OpConstant          1 '10'
+0009 OpEqual         
+0010 OpJumpIfFalse      10 -> 0019
+0013 OpCallSlot          2 'log'
+0015 OpReturn        
+0016 OpJump             16 -> 0019
+0019 OpReturn        
+--- PASS: TestVMDisassembler (0.00s)
+=== RUN   TestVMIteration
+== IterationTest ==
+0000 OpConstant          0 '0'
+0002 OpSetLocal          0
+0004 OpPop           
+0005 OpConstant          1 '0'
+0007 OpConstant          2 '[10 20 30]'
+0009 OpIterNext          9 -> 0027
+0012 OpPop           
+0013 OpSetLocal          3
+0015 OpConstant          3 '1'
+0017 OpConstant          4 '1'
+0019 OpAdd           
+0020 OpSetLocal          0
+0022 OpPop           
+0023 OpPop           
+0024 OpLoop             24 -> 0009
+0027 OpIterEnd       
+0028 OpReturn        
+--- PASS: TestVMIteration (0.00s)
+=== RUN   TestVMIterationItem
+== IterationItemTest ==
+0000 OpConstant          0 '0'
+0002 OpSetLocal          0
+0004 OpPop           
+0005 OpConstant          1 '0'
+0007 OpConstant          2 '[10 20 30]'
+0009 OpIterNext          9 -> 0027
+0012 OpPop           
+0013 OpSetLocal          3
+0015 OpGetLocal          0
+0017 OpGetLocal          3
+0019 OpAdd           
+0020 OpSetLocal          0
+0022 OpPop           
+0023 OpPop           
+0024 OpLoop             24 -> 0009
+0027 OpIterEnd       
+0028 OpReturn        
+--- PASS: TestVMIterationItem (0.00s)
+=== RUN   TestVMPOSStress
+--- PASS: TestVMPOSStress (0.00s)
+=== RUN   TestVMStringConcat
+--- PASS: TestVMStringConcat (0.00s)
+=== RUN   TestVMTryCatch
+DEBUG: Caught error: can only call functions, got 0
+DEBUG: Caught error: slot not found: nonExistentSlot
+--- PASS: TestVMTryCatch (0.00s)
+PASS
+ok  	command-line-arguments	0.003s

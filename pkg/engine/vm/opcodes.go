@@ -1,5 +1,7 @@
 package vm
 
+import "fmt"
+
 // OpCode represents a single instruction for the VM.
 type OpCode byte
 
@@ -46,6 +48,25 @@ const (
 	OpPop
 	OpIterNext
 	OpIterEnd
+
+	// Logical [NEW]
+	OpLogicalOr
+	OpLogicalAnd
+	OpLogicalNot
+
+	// Access [NEW]
+	OpAccessProperty // [iterable] name -> [val]
+
+	// Literals [NEW]
+	OpMakeMap  // count -> [key1, val1, ..., keyN, valN] -> map
+	OpMakeList // count -> [val1, ..., valN] -> list
+
+	// Control [NEW]
+	OpStop
+
+	// Exception Handling [NEW]
+	OpTry    // jump_offset -> (Push catch frame)
+	OpEndTry // (Pop catch frame)
 )
 
 func (o OpCode) String() string {
@@ -60,16 +81,24 @@ func (o OpCode) String() string {
 		return "OpTrue"
 	case OpFalse:
 		return "OpFalse"
-	case OpPop:
-		return "OpPop"
 	case OpGetGlobal:
 		return "OpGetGlobal"
 	case OpSetGlobal:
 		return "OpSetGlobal"
+	case OpGetLocal:
+		return "OpGetLocal"
+	case OpSetLocal:
+		return "OpSetLocal"
 	case OpAdd:
 		return "OpAdd"
 	case OpSubtract:
 		return "OpSubtract"
+	case OpMultiply:
+		return "OpMultiply"
+	case OpDivide:
+		return "OpDivide"
+	case OpNegate:
+		return "OpNegate"
 	case OpEqual:
 		return "OpEqual"
 	case OpNotEqual:
@@ -82,10 +111,6 @@ func (o OpCode) String() string {
 		return "OpLess"
 	case OpLessEqual:
 		return "OpLessEqual"
-	case OpGetLocal:
-		return "OpGetLocal"
-	case OpSetLocal:
-		return "OpSetLocal"
 	case OpJump:
 		return "OpJump"
 	case OpJumpIfFalse:
@@ -96,11 +121,31 @@ func (o OpCode) String() string {
 		return "OpCall"
 	case OpCallSlot:
 		return "OpCallSlot"
+	case OpPop:
+		return "OpPop"
 	case OpIterNext:
 		return "OpIterNext"
 	case OpIterEnd:
 		return "OpIterEnd"
+	case OpLogicalOr:
+		return "OpLogicalOr"
+	case OpLogicalAnd:
+		return "OpLogicalAnd"
+	case OpLogicalNot:
+		return "OpLogicalNot"
+	case OpAccessProperty:
+		return "OpAccessProperty"
+	case OpMakeMap:
+		return "OpMakeMap"
+	case OpMakeList:
+		return "OpMakeList"
+	case OpStop:
+		return "OpStop"
+	case OpTry:
+		return "OpTry"
+	case OpEndTry:
+		return "OpEndTry"
 	default:
-		return "OpUnknown"
+		return fmt.Sprintf("OpUnknown(%d)", byte(o))
 	}
 }

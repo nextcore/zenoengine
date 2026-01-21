@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -68,6 +69,12 @@ func clearNodeCache(node *Node) {
 	}
 }
 
+// ParseString memparsing string ZenoLang menjadi AST Node
+func ParseString(data string) (*Node, error) {
+	l := NewLexer(data)
+	return parse(l, "string")
+}
+
 func parseFile(path string) (*Node, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -75,6 +82,10 @@ func parseFile(path string) (*Node, error) {
 	}
 
 	l := NewLexer(string(data))
+	return parse(l, path)
+}
+
+func parse(l *Lexer, filename string) (*Node, error) {
 	root := &Node{Name: "root"}
 	stack := []*Node{root}
 	var lastNode *Node
@@ -92,7 +103,7 @@ func parseFile(path string) (*Node, error) {
 				Name:     tok.Literal,
 				Line:     tok.Line,
 				Col:      tok.Column,
-				Filename: path,
+				Filename: filename,
 			}
 			parent := stack[len(stack)-1]
 			parent.Children = append(parent.Children, node)
@@ -102,7 +113,7 @@ func parseFile(path string) (*Node, error) {
 		case TokenColon:
 			// Berpotensi diikuti Value (bisa beberapa token di baris yang sama) atau Blok
 			currentLine := tok.Line
-			var valueParts []string
+			var valueParts []Token
 
 			for {
 				peek := l.PeekToken()
@@ -118,20 +129,31 @@ func parseFile(path string) (*Node, error) {
 
 				// Ambil tokennya
 				tok = l.NextToken()
-				valueParts = append(valueParts, tok.Literal)
+				valueParts = append(valueParts, tok)
 			}
 
 			if len(valueParts) > 0 {
 				if lastNode != nil {
-					// Join dengan spasi agar "1 + 2" tetap "1 + 2"
-					var fullVal string
-					for i, p := range valueParts {
-						if i > 0 {
-							fullVal += " "
+					// Detect Raw String Literal
+					if len(valueParts) == 1 && valueParts[0].Type == TokenString {
+						lastNode.Value = "\x00" + valueParts[0].Literal
+					} else {
+						// Join dengan spasi agar "1 + 2" tetap "1 + 2"
+						var fullVal string
+						for i, p := range valueParts {
+							if i > 0 {
+								fullVal += " "
+							}
+							val := p.Literal
+							// If it's a string token and doesn't have quotes, add them back
+							// so the compiler knows it's a string literal.
+							if p.Type == TokenString && !strings.HasPrefix(val, "\"") && !strings.HasPrefix(val, "'") {
+								val = "\"" + val + "\""
+							}
+							fullVal += val
 						}
-						fullVal += p
+						lastNode.Value = fullVal
 					}
-					lastNode.Value = fullVal
 				}
 			}
 
@@ -160,7 +182,7 @@ func parseFile(path string) (*Node, error) {
 					Name:     "",
 					Line:     tok.Line,
 					Col:      tok.Column,
-					Filename: path,
+					Filename: filename,
 				}
 				parent := stack[len(stack)-1]
 				parent.Children = append(parent.Children, node)
@@ -173,8 +195,12 @@ func parseFile(path string) (*Node, error) {
 				stack = stack[:len(stack)-1]
 			}
 
+		case TokenComma:
+			// Just consume it
+			continue
+
 		case TokenError:
-			return nil, fmt.Errorf("lexical error at line %d, col %d in %s: %s", tok.Line, tok.Column, path, tok.Literal)
+			return nil, fmt.Errorf("lexical error at line %d, col %d in %s: %s", tok.Line, tok.Column, filename, tok.Literal)
 		}
 	}
 

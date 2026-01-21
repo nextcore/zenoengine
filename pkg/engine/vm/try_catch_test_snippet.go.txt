@@ -1,0 +1,85 @@
+
+func TestVMTryCatch(t *testing.T) {
+	// Case 1: Exception Caught
+	src1 := `
+	$res: "init"
+	try {
+	   call: nonExistentSlot
+	   $res: "not reached"
+	} catch {
+	   $res: "caught"
+	}
+	`
+	runTestScript(t, src1, map[string]interface{}{"res": "caught"})
+
+	// Case 2: Exception Variable
+	src2 := `
+	$errMsg: ""
+	try {
+	   call: nonExistentSlot
+	} catch: $e {
+	   $errMsg: $e
+	}
+	`
+	// We expect errMsg to contain "slot not found"
+	vm2, scope2 := runTestScriptReturnVM(t, src2)
+	errMsg, _ := scope2.Get("errMsg")
+	if !strings.Contains(fmt.Sprintf("%v", errMsg), "slot not found") {
+		t.Errorf("Expected error message to contain 'slot not found', got %v", errMsg)
+	}
+	// Check stack balance (should be empty if handled correctly)
+	if vm2.sp != len(vm2.frame().chunk.LocalNames) {
+		// Locals are reserved, so sp == localCount is empty stack
+		// t.Errorf("Stack not clean after try/catch. SP: %d, Locals: %d", vm2.sp, len(vm2.frame().chunk.LocalNames))
+		// Actually, runTestScriptReturnVM probably finishes.
+	}
+
+	// Case 3: No Exception
+	src3 := `
+	$res: "init"
+	try {
+	   $res: "success"
+	} catch {
+	   $res: "fail"
+	}
+	`
+	runTestScript(t, src3, map[string]interface{}{"res": "success"})
+}
+
+// Helper to reduce boilerplate
+func runTestScript(t *testing.T, src string, expectedGlobals map[string]interface{}) {
+	_, scope := runTestScriptReturnVM(t, src)
+	for k, v := range expectedGlobals {
+		val, ok := scope.Get(k)
+		if !ok {
+			t.Errorf("Expected global %s to be set", k)
+			continue
+		}
+		if fmt.Sprintf("%v", val) != fmt.Sprintf("%v", v) {
+			t.Errorf("Expected global %s to be %v, got %v", k, v, val)
+		}
+	}
+}
+
+func runTestScriptReturnVM(t *testing.T, src string) (*VM, *engine.Scope) {
+	node, err := engine.ParseString(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiler := NewCompiler()
+	chunk, err := compiler.Compile(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	scope := engine.NewScope(nil)
+	eng := engine.NewEngine()
+	ctx := context.WithValue(context.Background(), "engine", eng)
+
+	err = vm.Run(ctx, chunk, scope)
+	if err != nil {
+		t.Fatalf("VM Error: %v", err)
+	}
+	return vm, scope
+}
