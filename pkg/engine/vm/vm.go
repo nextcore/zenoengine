@@ -164,26 +164,6 @@ func DeserializeChunk(r io.Reader) (*Chunk, error) {
 	return c, nil
 }
 
-func writeString(w io.Writer, s string) error {
-	if err := binary.Write(w, binary.LittleEndian, uint32(len(s))); err != nil {
-		return err
-	}
-	_, err := w.Write([]byte(s))
-	return err
-}
-
-func readString(r io.Reader) (string, error) {
-	var l uint32
-	if err := binary.Read(r, binary.LittleEndian, &l); err != nil {
-		return "", err
-	}
-	buf := make([]byte, l)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return "", err
-	}
-	return string(buf), nil
-}
-
 // SaveToFile saves the chunk to a file.
 func (c *Chunk) SaveToFile(filename string) error {
 	f, err := os.Create(filename)
@@ -275,7 +255,12 @@ Loop:
 		// OpPop is now later
 
 		case OpGetGlobal:
-			name := vm.readConstant().AsPtr.(string)
+			nameVal := vm.readConstant()
+			name, ok := nameVal.AsString()
+			if !ok {
+				err = fmt.Errorf("OpGetGlobal: expected string constant")
+				goto ErrorHandler
+			}
 			val, ok := vm.scope.Get(name)
 			if ok {
 				vm.push(NewValue(val))
@@ -284,7 +269,12 @@ Loop:
 			}
 
 		case OpSetGlobal:
-			name := vm.readConstant().AsPtr.(string)
+			nameVal := vm.readConstant()
+			name, ok := nameVal.AsString()
+			if !ok {
+				err = fmt.Errorf("OpSetGlobal: expected string constant")
+				goto ErrorHandler
+			}
 			val := vm.pop()
 			vm.scope.Set(name, val.ToNative())
 
@@ -294,31 +284,50 @@ Loop:
 
 			// String Concatenation?
 			if a.Type == ValString || b.Type == ValString {
-				// Convert both to string
-				strA := fmt.Sprintf("%v", a.ToNative())
-				strB := fmt.Sprintf("%v", b.ToNative())
+				strA, _ := a.AsString()
+				strB, _ := b.AsString()
+				// If one is not string, use String() method to convert
+				if a.Type != ValString {
+					strA = a.String()
+				}
+				if b.Type != ValString {
+					strB = b.String()
+				}
 				vm.push(NewString(strA + strB))
 			} else {
 				// Numeric Addition
-				vm.push(NewNumber(a.AsNum + b.AsNum))
+				numA, _ := a.AsNumber()
+				numB, _ := b.AsNumber()
+				vm.push(NewNumber(numA + numB))
 			}
 
 		case OpSubtract:
 			b := vm.pop()
 			a := vm.pop()
-			vm.push(NewNumber(a.AsNum - b.AsNum))
+			numA, _ := a.AsNumber()
+			numB, _ := b.AsNumber()
+			vm.push(NewNumber(numA - numB))
 
 		case OpCallSlot:
-			slotName := vm.readConstant().AsPtr.(string)
+			nameVal := vm.readConstant()
+			slotName, ok := nameVal.AsString()
+			if !ok {
+				err = fmt.Errorf("OpCallSlot: expected string slot name")
+				goto ErrorHandler
+			}
 			argCount := int(vm.readByte())
 
 			// Collect arguments from stack into map
 			args := make(map[string]interface{}, argCount)
 			for i := argCount - 1; i >= 0; i-- {
 				val := vm.pop()
-				nameVal := vm.pop()
-				name := nameVal.AsPtr.(string)
-				args[name] = val.ToNative()
+				argNameVal := vm.pop()
+				argName, ok := argNameVal.AsString()
+				if !ok {
+					err = fmt.Errorf("OpCallSlot: argument name must be string")
+					goto ErrorHandler
+				}
+				args[argName] = val.ToNative()
 			}
 
 			// Sync locals before external call
@@ -343,22 +352,30 @@ Loop:
 		case OpGreater:
 			b := vm.pop()
 			a := vm.pop()
-			vm.push(NewBool(a.AsNum > b.AsNum))
+			numA, _ := a.AsNumber()
+			numB, _ := b.AsNumber()
+			vm.push(NewBool(numA > numB))
 
 		case OpGreaterEqual:
 			b := vm.pop()
 			a := vm.pop()
-			vm.push(NewBool(a.AsNum >= b.AsNum))
+			numA, _ := a.AsNumber()
+			numB, _ := b.AsNumber()
+			vm.push(NewBool(numA >= numB))
 
 		case OpLess:
 			b := vm.pop()
 			a := vm.pop()
-			vm.push(NewBool(a.AsNum < b.AsNum))
+			numA, _ := a.AsNumber()
+			numB, _ := b.AsNumber()
+			vm.push(NewBool(numA < numB))
 
 		case OpLessEqual:
 			b := vm.pop()
 			a := vm.pop()
-			vm.push(NewBool(a.AsNum <= b.AsNum))
+			numA, _ := a.AsNumber()
+			numB, _ := b.AsNumber()
+			vm.push(NewBool(numA <= numB))
 
 		case OpCall:
 			argCount := int(vm.readByte())
@@ -367,7 +384,7 @@ Loop:
 				err = fmt.Errorf("can only call functions, got %v", fnVal.Type)
 				goto ErrorHandler
 			}
-			fnChunk := fnVal.AsPtr.(*Chunk)
+			fnChunk, _ := fnVal.AsFunction()
 			// Base of new frame is the first argument's position
 			// The function value itself stays on stack below base (to be cleaned up on return)
 			vm.pushFrame(fnChunk, vm.sp-argCount)
@@ -410,31 +427,34 @@ Loop:
 			iterable := vm.peek(0)
 			// Hidden iteration index is at peek(1)
 			indexVal := vm.peek(1)
-			index := int(indexVal.AsNum)
+			indexFloat, _ := indexVal.AsNumber()
+			index := int(indexFloat)
 
 			var nextVal Value
 			var hasNext bool
 
 			switch iterable.Type {
-			case ValObject:
-				if slice, ok := iterable.AsPtr.([]interface{}); ok {
-					if index < len(slice) {
-						nextVal = NewValue(slice[index])
+			case ValList:
+				if list, ok := iterable.AsList(); ok {
+					if index < len(list) {
+						nextVal = list[index]
 						hasNext = true
 						// Increment hidden index
 						vm.stack[vm.sp-2] = NewNumber(float64(index + 1))
 					}
-				} else if m, ok := iterable.AsPtr.(map[string]interface{}); ok {
-					// Optimized Map Iteration: convert to slice ONLY once (at index 0)
-					// or better: store the keys as a hidden object at peek(2).
-					// For now, let's just avoid the allocation if index > 0
+				}
+			case ValMap:
+				if m, ok := iterable.AsMap(); ok {
+					// Inefficient map iteration (re-keys every step) but works for now.
+					// Implementation plan suggested re-keying or creating separate iterator object.
+					// Keeping simple for Phase 2: extract keys every time.
 					keys := make([]string, 0, len(m))
 					for k := range m {
 						keys = append(keys, k)
 					}
 					if index < len(keys) {
 						key := keys[index]
-						nextVal = NewValue(m[key])
+						nextVal = m[key]
 						hasNext = true
 						vm.stack[vm.sp-2] = NewNumber(float64(index + 1))
 					}
@@ -492,21 +512,28 @@ Loop:
 			return nil
 
 		case OpAccessProperty:
-			name := vm.readConstant().AsPtr.(string)
+			nameVal := vm.readConstant()
+			name, ok := nameVal.AsString()
+			if !ok {
+				err = fmt.Errorf("OpAccessProperty: expected string property name")
+				goto ErrorHandler
+			}
 			obj := vm.pop()
 
 			var res Value
 			switch obj.Type {
-			case ValObject:
-				if m, ok := obj.AsPtr.(map[string]interface{}); ok {
+			case ValMap:
+				if m, ok := obj.AsMap(); ok {
 					if v, ok := m[name]; ok {
-						res = NewValue(v)
+						res = v
 					}
-				} else if slice, ok := obj.AsPtr.([]interface{}); ok {
+				}
+			case ValList:
+				if list, ok := obj.AsList(); ok {
 					// Numeric index?
 					if idx, err := strconv.Atoi(name); err == nil {
-						if idx >= 0 && idx < len(slice) {
-							res = NewValue(slice[idx])
+						if idx >= 0 && idx < len(list) {
+							res = list[idx]
 						}
 					}
 				}
@@ -515,21 +542,23 @@ Loop:
 
 		case OpMakeMap:
 			count := int(vm.readByte())
-			m := make(map[string]interface{})
+			m := make(map[string]Value)
 			for i := 0; i < count; i++ {
-				val := vm.pop().ToNative()
-				key := vm.pop().ToNative().(string)
+				val := vm.pop()
+				keyVal := vm.pop()
+
+				key, _ := keyVal.AsString() // Assumes compiler pushed string key
 				m[key] = val
 			}
-			vm.push(NewObject(m))
+			vm.push(NewMap(m))
 
 		case OpMakeList:
 			count := int(vm.readByte())
-			slice := make([]interface{}, count)
+			slice := make([]Value, count)
 			for i := count - 1; i >= 0; i-- {
-				slice[i] = vm.pop().ToNative()
+				slice[i] = vm.pop()
 			}
-			vm.push(NewObject(slice))
+			vm.push(NewList(slice))
 
 		case OpPop:
 			vm.pop()
@@ -582,11 +611,14 @@ func (vm *VM) isTruthy(v Value) bool {
 	case ValNil:
 		return false
 	case ValBool:
-		return v.AsNum > 0
+		b, _ := v.AsBool()
+		return b
 	case ValNumber:
-		return v.AsNum != 0
+		n, _ := v.AsNumber()
+		return n != 0
 	case ValString:
-		return v.AsPtr.(string) != ""
+		s, _ := v.AsString()
+		return s != ""
 	default:
 		return true
 	}

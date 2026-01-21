@@ -47,8 +47,9 @@ func TestVMArithmetic(t *testing.T) {
 	}
 
 	result := vm.pop()
-	if result.AsNum != 3 {
-		t.Errorf("Expected 3, got %g", result.AsNum)
+	num, ok := result.AsNumber()
+	if !ok || num != 3 {
+		t.Errorf("Expected 3, got %g", num)
 	}
 }
 
@@ -219,8 +220,12 @@ func TestVMSerialization(t *testing.T) {
 	if !bytes.Equal(chunk.Code, decoded.Code) {
 		t.Error("Code mismatch after serialization")
 	}
-	if len(chunk.Constants) != len(decoded.Constants) || decoded.Constants[0].AsPtr.(string) != "hello" {
+	if len(chunk.Constants) != len(decoded.Constants) {
 		t.Error("Constants mismatch after serialization")
+	}
+	s, ok := decoded.Constants[0].AsString()
+	if !ok || s != "hello" {
+		t.Errorf("Expected 'hello', got %v", decoded.Constants[0])
 	}
 	if len(chunk.LocalNames) != len(decoded.LocalNames) || decoded.LocalNames[0] != "var1" {
 		t.Error("LocalNames mismatch after serialization")

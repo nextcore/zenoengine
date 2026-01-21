@@ -197,7 +197,7 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 
 			// 2. Push Iterable
 			c.emitByte(byte(OpConstant))
-			c.emitByte(c.addConstant(NewObject(slice)))
+			c.emitByte(c.addConstant(NewValue(slice)))
 
 			// 3. Mark Loop Start
 			loopStart := len(c.chunk.Code)
@@ -556,7 +556,7 @@ func (c *Compiler) compileValue(v interface{}) error {
 	}
 	// Fallback raw values
 	c.emitByte(byte(OpConstant))
-	c.emitByte(c.addConstant(NewObject(v)))
+	c.emitByte(c.addConstant(NewValue(v)))
 	return nil
 }
 
