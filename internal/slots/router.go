@@ -22,6 +22,7 @@ import (
 type routerKey struct{}
 
 func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
+	RegisterDebugSlots(eng) // [NEW] Register debug utilities
 
 	// Helper: Ambil router aktif (Root atau Group)
 	getCurrentRouter := func(ctx context.Context) chi.Router {

@@ -274,3 +274,141 @@ func TestVMInternalFunctions(t *testing.T) {
 		t.Errorf("Expected $x to be 10 (isolated), got %v", res)
 	}
 }
+
+func TestVMDisassembler(t *testing.T) {
+	rootNode := &engine.Node{
+		Name: "root",
+		Children: []*engine.Node{
+			{Name: "$x", Value: 10},
+			{
+				Name:  "if",
+				Value: "$x == 10",
+				Children: []*engine.Node{
+					{
+						Name: "then",
+						Children: []*engine.Node{
+							{Name: "log", Value: "Correct"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	compiler := NewCompiler()
+	chunk, err := compiler.Compile(rootNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// This is mainly to ensure it doesn't crash and we can see the output
+	chunk.Disassemble("TestChunk")
+}
+
+func TestVMIteration(t *testing.T) {
+	// Program:
+	// items: [10, 20, 30] {
+	//   $sum: $sum + $item
+	// }
+
+	items := []interface{}{10.0, 20.0, 30.0}
+
+	rootNode := &engine.Node{
+		Name: "root",
+		Children: []*engine.Node{
+			{Name: "$sum", Value: 0},
+			{
+				Name:  "items",
+				Value: items,
+				Children: []*engine.Node{
+					{
+						// In our current compiler simplification,
+						// OpIterNext pushes the item to stack.
+						// We need to 'capture' it.
+						// For now, let's assume the compiler should have
+						// emitted an OpSetLocal for a dummy var or something.
+						// Let's adjust compiler to push it and we use it as a 'dummy' for test.
+						Name:  "$sum",
+						Value: "1 + 1", // Just a placeholder for children execution
+					},
+				},
+			},
+		},
+	}
+
+	// NOTE: The current compiler logic for iteration is VERY simplified
+	// (it runs children but doesn't map 'item' to a variable yet).
+	// But let's verify if the loop itself runs 3 times.
+
+	// We'll modify the compiler to at least POP the item pushed by IterNext
+	// so it doesn't leak on stack.
+
+	compiler := NewCompiler()
+	chunk, err := compiler.Compile(rootNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	scope := engine.NewScope(nil)
+	ctx := context.WithValue(context.Background(), "engine", &engine.Engine{})
+
+	if err := vm.Run(ctx, chunk, scope); err != nil {
+		t.Fatal(err)
+	}
+
+	// If it ran 3 times, some side effect should be visible.
+	// Since our loop body is just a dummy, let's look at the disassembler first.
+	chunk.Disassemble("IterationTest")
+}
+
+func TestVMIterationItem(t *testing.T) {
+	// Program:
+	// $sum: 0
+	// items: [10, 20, 30] {
+	//   $sum: $sum + $item
+	// }
+
+	items := []interface{}{10.0, 20.0, 30.0}
+
+	rootNode := &engine.Node{
+		Name: "root",
+		Children: []*engine.Node{
+			{Name: "$sum", Value: 0},
+			{
+				Name:  "items",
+				Value: items,
+				Children: []*engine.Node{
+					{
+						// In ZenoLang, $sum: $sum + $item would be:
+						Name:  "$sum",
+						Value: "$sum + $item",
+					},
+				},
+			},
+		},
+	}
+
+	compiler := NewCompiler()
+	chunk, err := compiler.Compile(rootNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	scope := engine.NewScope(nil)
+	ctx := context.WithValue(context.Background(), "engine", &engine.Engine{})
+
+	if err := vm.Run(ctx, chunk, scope); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify Sum
+	res, _ := scope.Get("sum")
+	v, _ := coerce.ToInt(res)
+	if v != 60 {
+		t.Errorf("Expected sum to be 60, got %v", res)
+	}
+
+	chunk.Disassemble("IterationItemTest")
+}

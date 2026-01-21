@@ -192,9 +192,7 @@ func (vm *VM) syncLocals(scope *engine.Scope) {
 	frame := vm.frame()
 	for i, name := range frame.chunk.LocalNames {
 		stackIdx := frame.base + i
-		if stackIdx < vm.sp {
-			scope.Set(name, vm.stack[stackIdx].ToNative())
-		}
+		scope.Set(name, vm.stack[stackIdx].ToNative())
 	}
 }
 
@@ -211,6 +209,8 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 	vm.frameCount = 0
 	vm.sp = 0
 	vm.pushFrame(chunk, 0)
+	// Reserve space for locals
+	vm.sp = len(chunk.LocalNames)
 
 	for {
 		instruction := OpCode(vm.readByte())
@@ -235,6 +235,7 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			vm.push(NewBool(true))
 		case OpFalse:
 			vm.push(NewBool(false))
+		// OpPop is now later
 
 		case OpGetGlobal:
 			name := vm.readConstant().AsPtr.(string)
@@ -257,7 +258,6 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 		case OpAdd:
 			b := vm.pop()
 			a := vm.pop()
-			// Basic numeric add
 			vm.push(NewNumber(a.AsNum + b.AsNum))
 
 		case OpSubtract:
@@ -348,10 +348,14 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			// Base of new frame is the first argument's position
 			// The function value itself stays on stack below base (to be cleaned up on return)
 			vm.pushFrame(fnChunk, vm.sp-argCount)
+			// Reserve space for locals
+			vm.sp = vm.frame().base + len(fnChunk.LocalNames)
 
 		case OpGetLocal:
 			index := vm.readByte()
-			vm.push(vm.stack[vm.frame().base+int(index)])
+			stackIdx := vm.frame().base + int(index)
+			val := vm.stack[stackIdx]
+			vm.push(val)
 
 		case OpSetLocal:
 			index := vm.readByte()
@@ -377,6 +381,64 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 		case OpLoop:
 			offset := vm.readShort()
 			vm.frame().ip -= int(offset)
+
+		case OpIterNext:
+			offset := vm.readShort()
+			iterable := vm.peek(0)
+			// Hidden iteration index is at peek(1)
+			indexVal := vm.peek(1)
+			index := int(indexVal.AsNum)
+
+			var nextVal Value
+			var hasNext bool
+
+			switch iterable.Type {
+			case ValObject:
+				if slice, ok := iterable.AsPtr.([]interface{}); ok {
+					if index < len(slice) {
+						nextVal = NewObject(slice[index])
+						hasNext = true
+						// Increment hidden index
+						vm.stack[vm.sp-2] = NewNumber(float64(index + 1))
+					}
+				} else if m, ok := iterable.AsPtr.(map[string]interface{}); ok {
+					// Optimized Map Iteration: convert to slice ONLY once (at index 0)
+					// or better: store the keys as a hidden object at peek(2).
+					// For now, let's just avoid the allocation if index > 0
+					keys := make([]string, 0, len(m))
+					for k := range m {
+						keys = append(keys, k)
+					}
+					if index < len(keys) {
+						key := keys[index]
+						nextVal = NewObject(m[key])
+						hasNext = true
+						vm.stack[vm.sp-2] = NewNumber(float64(index + 1))
+					}
+				}
+			default:
+				fmt.Printf("DEBUG: OpIterNext unsupported type: %v\n", iterable.Type)
+			}
+
+			if hasNext {
+				vm.push(nextVal)
+				vm.push(NewBool(true))
+			} else {
+				vm.push(NewNil()) // Placeholder
+				vm.push(NewBool(false))
+				vm.frame().ip += int(offset)
+			}
+
+		case OpIterEnd:
+			// Pop boolean status, nextVal, iterable, and hidden index
+			// these were pushed AFTER the locals.
+			vm.pop() // status
+			vm.pop() // nextVal
+			vm.pop() // iterable
+			vm.pop() // index
+
+		case OpPop:
+			vm.pop()
 
 		default:
 			return fmt.Errorf("unsupported opcode: %d", instruction)

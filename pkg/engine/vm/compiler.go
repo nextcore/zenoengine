@@ -53,24 +53,29 @@ func (c *Compiler) Compile(node *engine.Node) (*Chunk, error) {
 func (c *Compiler) compileNode(node *engine.Node) error {
 	// Simple Arithmetic Example: "1 + 2" atau "$x: 10"
 
-	// If it's a variable assignment: $varName: value
+	// If it's a	// Variable Assignment: $x: 10
 	if strings.HasPrefix(node.Name, "$") {
 		varName := node.Name[1:]
 		// Evaluate value
-		if err := c.compileValue(node.Value); err != nil {
-			return err
+		if s, ok := node.Value.(string); ok && strings.Contains(s, " ") {
+			// Likely an expression
+			if err := c.compileExpression(s); err != nil {
+				return err
+			}
+		} else {
+			if err := c.compileValue(node.Value); err != nil {
+				return err
+			}
 		}
 
-		// Local Variable Optimization:
-		// Check if it's already a local
 		if idx := c.resolveLocal(varName); idx != -1 {
 			c.emitByte(byte(OpSetLocal))
 			c.emitByte(byte(idx))
+			c.emitByte(byte(OpPop))
 		} else {
-			// Add as a new local
-			c.locals = append(c.locals, Local{Name: varName, Depth: c.scopeDepth})
-			c.emitByte(byte(OpSetLocal))
-			c.emitByte(byte(len(c.locals) - 1))
+			// Global assignment
+			c.emitByte(byte(OpSetGlobal))
+			c.emitByte(c.addConstant(NewString(varName)))
 		}
 		return nil
 	}
@@ -183,6 +188,69 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 		return nil
 	}
 
+	// Optimization: If node has a list value and children, it's likely an iteration
+	if node.Value != nil && node.Name != "" && !strings.HasPrefix(node.Name, "$") && node.Name != "then" && node.Name != "else" {
+		if slice, ok := node.Value.([]interface{}); ok && len(node.Children) > 0 {
+			// Reserve Hidden Index and Iterable as Locals to avoid collisions
+			indexLocalIdx := len(c.locals)
+			c.locals = append(c.locals, Local{Name: fmt.Sprintf("iter_idx_%d", indexLocalIdx), Depth: c.scopeDepth})
+			listLocalIdx := len(c.locals)
+			c.locals = append(c.locals, Local{Name: fmt.Sprintf("iter_list_%d", listLocalIdx), Depth: c.scopeDepth})
+
+			// 1. Push Initial Hidden Index (0)
+			c.emitByte(byte(OpConstant))
+			c.emitByte(c.addConstant(NewNumber(0)))
+
+			// 2. Push Iterable
+			c.emitByte(byte(OpConstant))
+			c.emitByte(c.addConstant(NewObject(slice)))
+
+			// 3. Mark Loop Start
+			loopStart := len(c.chunk.Code)
+
+			// 4. OpIterNext (Jumps to End if done)
+			// OpIterNext expects [iterable] at peek(0) and [index] at peek(1) relative to CURRENT SP
+			exitJump := c.emitJump(OpIterNext)
+
+			// 5. Loop Body
+			c.emitByte(byte(OpPop)) // Pop the boolean 'true' from IterNext
+
+			// The 'item' is now at the top of the stack (pushed by OpIterNext).
+			// We assign it to a local named 'item' so we can resolve it.
+			itemIdx := c.resolveLocal("item")
+			if itemIdx == -1 {
+				c.locals = append(c.locals, Local{Name: "item", Depth: c.scopeDepth})
+				itemIdx = len(c.locals) - 1
+			}
+			// Important: OpSetLocal DOES NOT pop.
+			c.emitByte(byte(OpSetLocal))
+			c.emitByte(byte(itemIdx))
+
+			for _, child := range node.Children {
+				if err := c.compileNode(child); err != nil {
+					return err
+				}
+			}
+
+			// Pop the item before looping back to maintain stack balance
+			c.emitByte(byte(OpPop))
+
+			// 6. Loop back
+			c.emitByte(byte(OpLoop))
+			offset := len(c.chunk.Code) - loopStart + 2
+			c.emitByte(byte((offset >> 8) & 0xff))
+			c.emitByte(byte(offset & 0xff))
+
+			// 7. Cleanup and Exit
+			c.patchJump(exitJump)
+			c.emitByte(byte(OpIterEnd))
+			return nil
+		}
+	}
+
+	// [NEW] ZIP Iteration: items, tags: [[1, 2], ["a", "b"]]
+	// For now, we handle single list iteration perfectly. Zip will be refined later.
+
 	// If it's a regular slot call (e.g., http.response)
 	if node.Name != "" && !strings.HasPrefix(node.Name, "$") && node.Name != "root" && node.Name != "else" && node.Name != "then" {
 		// Compile children as named arguments
@@ -208,7 +276,6 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -216,7 +283,7 @@ func (c *Compiler) compileExpression(expr string) error {
 	// Simple Expression Parser: $x == 10
 	expr = strings.TrimSpace(expr)
 
-	ops := []string{"==", "!=", ">=", "<=", ">", "<"}
+	ops := []string{"==", "!=", ">=", "<=", ">", "<", "+"}
 	for _, op := range ops {
 		if strings.Contains(expr, op) {
 			parts := strings.SplitN(expr, op, 2)
@@ -243,6 +310,8 @@ func (c *Compiler) compileExpression(expr string) error {
 				c.emitByte(byte(OpGreater))
 			case "<":
 				c.emitByte(byte(OpLess))
+			case "+":
+				c.emitByte(byte(OpAdd))
 			}
 			return nil
 		}
@@ -276,6 +345,29 @@ func (c *Compiler) resolveLocal(name string) int {
 }
 
 func (c *Compiler) compileValue(v interface{}) error {
+	if v == nil {
+		c.emitByte(byte(OpNil))
+		return nil
+	}
+	if b, ok := v.(bool); ok {
+		if b {
+			c.emitByte(byte(OpTrue))
+		} else {
+			c.emitByte(byte(OpFalse))
+		}
+		return nil
+	}
+	if n, ok := v.(float64); ok {
+		c.emitByte(byte(OpConstant))
+		c.emitByte(c.addConstant(NewNumber(n)))
+		return nil
+	}
+	if n, ok := v.(int); ok {
+		c.emitByte(byte(OpConstant))
+		c.emitByte(c.addConstant(NewNumber(float64(n))))
+		return nil
+	}
+
 	if s, ok := v.(string); ok {
 		s = strings.TrimSpace(s)
 		// Variable reference?
