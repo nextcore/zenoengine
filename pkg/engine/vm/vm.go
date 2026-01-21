@@ -232,14 +232,25 @@ func (vm *VM) Run(chunk *Chunk) error {
 
 		switch instruction {
 		case OpReturn:
+			result := vm.pop()
 			vm.syncLocals()
+
+			// Capture current frame base before popping
+			base := vm.frame().base
+
 			vm.frameCount--
 			if vm.frameCount == 0 {
 				return nil
 			}
-			// When returning from a function, we usually pop the call frame
-			// and continue in the previous one.
-			// Internal function return logic will be refined in OpCall implementation.
+
+			// Stack Cleanup:
+			// The stack currently looks like: [ ... | Func | Arg1 | ... | ArgN | Locals... ]
+			// We want it to look like:      [ ... | Result ]
+			// 'base' points to Arg1. 'base-1' is where Func is.
+
+			// Reset SP to overwrite Function object position
+			vm.sp = base - 1
+			vm.push(result)
 
 		case OpConstant:
 			constant := vm.readConstant()

@@ -15,7 +15,7 @@ db.execute: "CREATE TABLE IF NOT EXISTS tutorial_teams (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES tutorial_users(id) ON DELETE CASCADE
 )" {
-  db: tutorial
+  db: "tutorial"
 }
 
 log: "✅ Teams table created successfully in tutorial database"

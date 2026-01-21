@@ -39,6 +39,8 @@ func (c *Compiler) Compile(node *engine.Node) (*Chunk, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Implicit return nil for main chunk
+	c.emitByte(byte(OpNil))
 	c.emitByte(byte(OpReturn))
 
 	// Transfer local names for VM sync
@@ -73,18 +75,26 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 				}
 			}
 		} else if len(node.Children) > 0 {
-			// Map literal
-			for _, child := range node.Children {
-				// Push key
-				c.emitByte(byte(OpConstant))
-				c.emitByte(c.addConstant(NewString(child.Name)))
-				// Push value (Force evaluation as data, not instruction)
-				if err := c.compileNodeAsValue(child); err != nil {
+			// [FIX] Check if it's a Function Call Assignment ($res: call: foo)
+			if len(node.Children) == 1 && node.Children[0].Name == "call" {
+				// Compile the call instruction. Results will be on stack.
+				if err := c.compileNode(node.Children[0]); err != nil {
 					return err
 				}
+			} else {
+				// Map literal
+				for _, child := range node.Children {
+					// Push key
+					c.emitByte(byte(OpConstant))
+					c.emitByte(c.addConstant(NewString(child.Name)))
+					// Push value (Force evaluation as data, not instruction)
+					if err := c.compileNodeAsValue(child); err != nil {
+						return err
+					}
+				}
+				c.emitByte(byte(OpMakeMap))
+				c.emitByte(byte(len(node.Children)))
 			}
-			c.emitByte(byte(OpMakeMap))
-			c.emitByte(byte(len(node.Children)))
 		}
 
 		idx := c.resolveLocal(varName)
@@ -116,11 +126,99 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 		return nil
 	}
 
-	// [LIMITATION] fn and call - Not yet fully supported in VM bytecode mode
-	// For now, skip these to allow compilation to proceed
-	// Users should use Legacy Engine (ZENO_VM_ENABLED=false) for fn/call features
-	if node.Name == "fn" || node.Name == "call" {
-		fmt.Printf("[WARN] Skipping '%s:%v' - user-defined functions not yet supported in VM mode\n", node.Name, node.Value)
+	// [NEW] Function Definition: fn: myFunc
+	if node.Name == "fn" {
+		funcName := coerce.ToString(node.Value)
+		if funcName == "" {
+			return fmt.Errorf("fn node must have a name value")
+		}
+
+		// Create separate compiler for function body
+		fnCompiler := NewCompiler()
+		fnCompiler.scopeDepth = c.scopeDepth + 1
+
+		// Compile Body (Children)
+		for _, child := range node.Children {
+			// Special handling for 'params' node to define argument order?
+			// For now, assume implicit locals or no args.
+			// Actually, let's assume standard execution flow.
+			err := fnCompiler.compileNode(child)
+			if err != nil {
+				return err
+			}
+		}
+		// Finalize body with Implicit Return Nil
+		fnCompiler.emitByte(byte(OpNil))
+		fnCompiler.emitByte(byte(OpReturn))
+
+		// Sync locals
+		fnCompiler.chunk.LocalNames = make([]string, len(fnCompiler.locals))
+		for i, l := range fnCompiler.locals {
+			fnCompiler.chunk.LocalNames[i] = l.Name
+		}
+
+		// Emit Function Constant in CURRENT chunk
+		fnChunk := fnCompiler.chunk
+		c.emitByte(byte(OpConstant))
+		c.emitByte(c.addConstant(NewFunction(fnChunk)))
+
+		// Store in Global Variable
+		c.emitByte(byte(OpSetGlobal))
+		c.emitByte(c.addConstant(NewString(funcName)))
+
+		return nil
+	}
+
+	// [NEW] Return Statement: return value
+	if node.Name == "return" {
+		if node.Value != nil {
+			// Compile value (e.g., return 10 or return "foo")
+			// Use compileExpression to handle expressions like return 1 + 2
+			s := coerce.ToString(node.Value)
+			if err := c.compileExpression(s); err != nil {
+				return err
+			}
+		} else if len(node.Children) > 0 {
+			// Handle return with children as expression (e.g. return { ... })
+			// Use compileNodeAsValue logic on first child?
+			// Simplification: Assume single child expression for now
+			if err := c.compileNodeAsValue(node.Children[0]); err != nil {
+				return err
+			}
+		} else {
+			// return (void) -> return nil
+			c.emitByte(byte(OpNil))
+		}
+		c.emitByte(byte(OpReturn))
+		return nil
+	}
+
+	// [NEW] Function Call: call: myFunc
+	if node.Name == "call" {
+		funcName := coerce.ToString(node.Value)
+		if funcName == "" {
+			return fmt.Errorf("call node must have a function name value")
+		}
+
+		// 1. Push Function (Get from Global)
+		c.emitByte(byte(OpGetGlobal))
+		c.emitByte(c.addConstant(NewString(funcName)))
+
+		// 2. Compile arguments (Children)
+		argCount := 0
+		for _, child := range node.Children {
+			// Compile child value and push to stack
+			// Supports: arg: 10 or just raw values
+			if err := c.compileNodeAsValue(child); err != nil {
+				return err
+			}
+			argCount++
+		}
+
+		// 3. Emit Call
+		c.emitByte(byte(OpCall))
+		c.emitByte(byte(argCount))
+
 		return nil
 	}
 
@@ -247,6 +345,21 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 
 	// If it's a regular slot call (e.g., http.response)
 	if node.Name != "" && !strings.HasPrefix(node.Name, "$") && node.Name != "root" && node.Name != "else" && node.Name != "then" && node.Name != "try" && node.Name != "catch" {
+		argCount := len(node.Children)
+
+		// [NEW] Handle implicit value (log: "msg")
+		if node.Value != nil {
+			// Push implicit key
+			c.emitByte(byte(OpConstant))
+			c.emitByte(c.addConstant(NewString("__value__")))
+			// Push value
+			// Compile value logic handles string/number/etc
+			if err := c.compileValue(node.Value); err != nil {
+				return err
+			}
+			argCount++
+		}
+
 		// Compile children as named arguments
 		for _, child := range node.Children {
 			// Push Name
@@ -260,7 +373,7 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 
 		c.emitByte(byte(OpCallSlot))
 		c.emitByte(c.addConstant(NewString(node.Name)))
-		c.emitByte(byte(len(node.Children))) // Argument count
+		c.emitByte(byte(argCount)) // Argument count
 		return nil
 	}
 

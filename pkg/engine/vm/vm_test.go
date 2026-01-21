@@ -233,26 +233,27 @@ func TestVMSerialization(t *testing.T) {
 }
 
 func TestVMInternalFunctions(t *testing.T) {
-	// fn: myFunc {
-	//   $x: 20
+	// fn: getVal {
+	//   return 888
 	// }
-	// $x: 10
-	// call: myFunc
-	// $res: $x
+	// $res: call: getVal
 
 	rootNode := &engine.Node{
 		Name: "root",
 		Children: []*engine.Node{
 			{
 				Name:  "fn",
-				Value: "myFunc",
+				Value: "getVal",
 				Children: []*engine.Node{
-					{Name: "$x", Value: 20},
+					{Name: "return", Value: 888},
 				},
 			},
-			{Name: "$x", Value: 10},
-			{Name: "call", Value: "myFunc"},
-			{Name: "$res", Value: "$x"},
+			{
+				Name: "$res",
+				Children: []*engine.Node{
+					{Name: "call", Value: "getVal"},
+				},
+			},
 		},
 	}
 
@@ -269,28 +270,17 @@ func TestVMInternalFunctions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, _ := scope.Get("res")
-	// If dynamic scope is used, $x will be 20 after call.
-	// If static scope with isolation is used (standard function behavior),
-	// $x in the caller should remain 10 if $x in the function was local.
-	// Current implementation uses OpSetGlobal for fn (to match existing slot behavior)
-	// and OpSetLocal for $x if recognized.
-	// In the sub-compiler, $x will be a NEW local.
-	// OpSetGlobal should be updated to handle local synchronization.
-
-	// Wait, our OpCall implementation:
-	// vm.pushFrame(fnChunk, vm.sp-argCount)
-	// This means locals in myFunc start at some index.
-	// $x in the root: index 0
-	// $x in myFunc: index 0 (relative to frame base)
-
-	// When myFunc finishes, $x (20) is synced to scope.
-	// Then root resumes, and $res: $x happens.
-	// $x will be loaded from index 0 of root frame, which is still 10!
-
-	v, _ := coerce.ToInt(res)
-	if v != 10 {
-		t.Errorf("Expected $x to be 10 (isolated), got %v", res)
+	res, ok := scope.Get("res")
+	if !ok {
+		t.Fatal("Expected variable 'res' to be set")
+	}
+	// Value might be float64 in generic interface
+	valNum, ok := res.(float64)
+	if !ok {
+		t.Fatalf("Expected float64, got %T: %v", res, res)
+	}
+	if valNum != 888 {
+		t.Errorf("Expected 888, got %v", res)
 	}
 }
 

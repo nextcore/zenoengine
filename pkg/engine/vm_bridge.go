@@ -36,6 +36,13 @@ func (h *EngineCallHandler) Call(slotName string, args map[string]interface{}) (
 
 	// 2. Convert args map to Node structure (VM -> Engine bridge)
 	mockNode := &Node{Name: slotName}
+
+	// [NEW] Check for implicit value passed from Compiler
+	if val, ok := args["__value__"]; ok {
+		mockNode.Value = val
+		delete(args, "__value__") // Remove so it doesn't appear as a child
+	}
+
 	if len(args) > 0 {
 		mockNode.Children = make([]*Node, 0, len(args))
 		for k, v := range args {
