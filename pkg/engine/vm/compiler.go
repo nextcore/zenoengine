@@ -116,46 +116,11 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 		return nil
 	}
 
-	// Function Definition?
-	if node.Name == "fn" {
-		funcName := coerce.ToString(node.Value)
-		// Compile children as a separate function chunk
-		subCompiler := NewFunctionCompiler()
-		// Function arguments handling (optional for now, ZenoLang uses dynamic scope)
-		for _, child := range node.Children {
-			if err := subCompiler.compileNode(child); err != nil {
-				return err
-			}
-		}
-		subCompiler.emitByte(byte(OpReturn))
-
-		// Push the compiled function as a constant
-		fnChunk := subCompiler.chunk
-		// Sync local names for the sub-chunk
-		fnChunk.LocalNames = make([]string, len(subCompiler.locals))
-		for i, l := range subCompiler.locals {
-			fnChunk.LocalNames[i] = l.Name
-		}
-
-		c.emitByte(byte(OpConstant))
-		c.emitByte(c.addConstant(NewFunction(fnChunk)))
-
-		// Set as global (for now, to match existing behavior)
-		c.emitByte(byte(OpSetGlobal))
-		c.emitByte(c.addConstant(NewString(funcName)))
-		return nil
-	}
-
-	// Native Call?
-	if node.Name == "call" {
-		funcName := coerce.ToString(node.Value)
-		// Get function from global
-		c.emitByte(byte(OpGetGlobal))
-		c.emitByte(c.addConstant(NewString(funcName)))
-		// For now, native call doesn't pass explicit arguments through stack
-		// (Dynamic scope is used)
-		c.emitByte(byte(OpCall))
-		c.emitByte(0) // 0 arguments
+	// [LIMITATION] fn and call - Not yet fully supported in VM bytecode mode
+	// For now, skip these to allow compilation to proceed
+	// Users should use Legacy Engine (ZENO_VM_ENABLED=false) for fn/call features
+	if node.Name == "fn" || node.Name == "call" {
+		fmt.Printf("[WARN] Skipping '%s:%v' - user-defined functions not yet supported in VM mode\n", node.Name, node.Value)
 		return nil
 	}
 
@@ -402,7 +367,9 @@ func (c *Compiler) compileExpression(expr string) error {
 	}
 
 	// Multi-part expressions (Binary ops)
-	ops := []string{"||", "&&", "==", "!=", ">=", "<=", ">", "<", "+"}
+	// Multi-part expressions (Binary ops)
+	// Order determines precedence (Lowest binding power first to split at top level)
+	ops := []string{"||", "&&", "==", "!=", ">=", "<=", ">", "<", "+", "-", "*", "/"}
 	for _, op := range ops {
 		leftStr, rightStr, found := splitExpression(expr, op)
 		if found {
@@ -432,6 +399,12 @@ func (c *Compiler) compileExpression(expr string) error {
 				c.emitByte(byte(OpLess))
 			case "+":
 				c.emitByte(byte(OpAdd))
+			case "-":
+				c.emitByte(byte(OpSubtract))
+			case "*":
+				c.emitByte(byte(OpMultiply))
+			case "/":
+				c.emitByte(byte(OpDivide))
 			}
 			return nil
 		}
@@ -622,6 +595,7 @@ func (c *Compiler) compileNodeAsValue(node *engine.Node) error {
 func splitExpression(s, op string) (string, string, bool) {
 	inQuote := false
 	var quoteChar rune
+	lastIdx := -1
 
 	for i := 0; i < len(s); i++ {
 		char := rune(s[i])
@@ -630,9 +604,9 @@ func splitExpression(s, op string) (string, string, bool) {
 				inQuote = true
 				quoteChar = char
 			} else if char == quoteChar {
-				// Check for escaped quote? For now assume simple strings
+				// Check for escaped quote?
 				if i > 0 && s[i-1] == '\\' {
-					// escaped, continue
+					// escaped
 				} else {
 					inQuote = false
 				}
@@ -642,9 +616,14 @@ func splitExpression(s, op string) (string, string, bool) {
 		if !inQuote {
 			// Check if op matches here
 			if strings.HasPrefix(s[i:], op) {
-				return s[:i], s[i+len(op):], true
+				lastIdx = i
 			}
 		}
 	}
+
+	if lastIdx != -1 {
+		return s[:lastIdx], s[lastIdx+len(op):], true
+	}
+
 	return "", "", false
 }

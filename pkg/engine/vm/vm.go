@@ -1,13 +1,11 @@
 package vm
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
-	"zeno/pkg/engine"
 )
 
 const StackMax = 256
@@ -28,6 +26,13 @@ type CatchFrame struct {
 }
 
 // VM is the bytecode execution engine.
+//
+// OWNERSHIP: VM does NOT own Chunk, ExternalCallHandler, or ScopeInterface.
+//
+//	It only borrows them during Run().
+//
+// THREAD-SAFETY: NOT thread-safe. Use one VM instance per goroutine.
+// LIFECYCLE: Can be reused for multiple Run() calls after each completes.
 type VM struct {
 	frames     [FramesMax]CallFrame
 	frameCount int
@@ -36,11 +41,28 @@ type VM struct {
 	sp    int // Stack Pointer
 
 	catchFrames []CatchFrame
+
+	// External dependencies (injected, not owned)
+	externalHandler ExternalCallHandler
+	scope           ScopeInterface
 }
 
-func NewVM() *VM {
+// NewVM creates a new VM instance with given dependencies.
+//
+// PRECONDITION: handler and scope must be non-nil
+// POSTCONDITION: VM is ready for Run() calls
+func NewVM(handler ExternalCallHandler, scope ScopeInterface) *VM {
+	if handler == nil {
+		panic("NewVM: handler must not be nil")
+	}
+	if scope == nil {
+		panic("NewVM: scope must not be nil")
+	}
+
 	return &VM{
-		catchFrames: make([]CatchFrame, 0),
+		catchFrames:     make([]CatchFrame, 0),
+		externalHandler: handler,
+		scope:           scope,
 	}
 }
 
@@ -200,11 +222,11 @@ func (vm *VM) frame() *CallFrame {
 	return &vm.frames[vm.frameCount-1]
 }
 
-func (vm *VM) syncLocals(scope *engine.Scope) {
+func (vm *VM) syncLocals() {
 	frame := vm.frame()
 	for i, name := range frame.chunk.LocalNames {
 		stackIdx := frame.base + i
-		scope.Set(name, vm.stack[stackIdx].ToNative())
+		vm.scope.Set(name, vm.stack[stackIdx].ToNative())
 	}
 }
 
@@ -216,7 +238,7 @@ func (vm *VM) pushFrame(chunk *Chunk, base int) {
 	vm.frameCount++
 }
 
-func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error {
+func (vm *VM) Run(chunk *Chunk) error {
 	// Root Frame
 	vm.frameCount = 0
 	vm.sp = 0
@@ -231,7 +253,7 @@ Loop:
 		instruction := OpCode(vm.readByte())
 		switch instruction {
 		case OpReturn:
-			vm.syncLocals(scope)
+			vm.syncLocals()
 			vm.frameCount--
 			if vm.frameCount == 0 {
 				return nil
@@ -254,7 +276,7 @@ Loop:
 
 		case OpGetGlobal:
 			name := vm.readConstant().AsPtr.(string)
-			val, ok := scope.Get(name)
+			val, ok := vm.scope.Get(name)
 			if ok {
 				vm.push(NewValue(val))
 			} else {
@@ -264,7 +286,7 @@ Loop:
 		case OpSetGlobal:
 			name := vm.readConstant().AsPtr.(string)
 			val := vm.pop()
-			scope.Set(name, val.ToNative())
+			vm.scope.Set(name, val.ToNative())
 
 		case OpAdd:
 			b := vm.pop()
@@ -290,39 +312,20 @@ Loop:
 			slotName := vm.readConstant().AsPtr.(string)
 			argCount := int(vm.readByte())
 
-			// 1. Get Engine from context
-			eng, ok := ctx.Value("engine").(*engine.Engine)
-			if !ok {
-				err = fmt.Errorf("engine not found in context")
-				goto ErrorHandler
+			// Collect arguments from stack into map
+			args := make(map[string]interface{}, argCount)
+			for i := argCount - 1; i >= 0; i-- {
+				val := vm.pop()
+				nameVal := vm.pop()
+				name := nameVal.AsPtr.(string)
+				args[name] = val.ToNative()
 			}
 
-			// 2. Lookup Handler
-			handler, exists := eng.Registry[slotName]
-			if !exists {
-				err = fmt.Errorf("slot not found: %s", slotName)
-				goto ErrorHandler
-			}
+			// Sync locals before external call
+			vm.syncLocals()
 
-			// 3. Prepare Mock Node for arguments (Stack to Node bridge)
-			mockNode := &engine.Node{Name: slotName}
-			if argCount > 0 {
-				mockNode.Children = make([]*engine.Node, argCount)
-				// Pop in reverse order because they were pushed in original order
-				for i := argCount - 1; i >= 0; i-- {
-					val := vm.pop()
-					nameVal := vm.pop()
-					name := nameVal.AsPtr.(string)
-
-					mockNode.Children[i] = vm.expandToNode(name, val.ToNative(), mockNode)
-				}
-			}
-
-			// [NEW] Sync locals before calling native slot to ensure consistency
-			vm.syncLocals(scope)
-
-			// 4. Execution
-			err = handler(ctx, mockNode, scope)
+			// Call external handler
+			_, err = vm.externalHandler.Call(slotName, args)
 			if err != nil {
 				goto ErrorHandler
 			}
@@ -485,7 +488,7 @@ Loop:
 			}
 
 		case OpStop:
-			vm.syncLocals(scope)
+			vm.syncLocals()
 			return nil
 
 		case OpAccessProperty:
@@ -587,20 +590,4 @@ func (vm *VM) isTruthy(v Value) bool {
 	default:
 		return true
 	}
-}
-
-func (vm *VM) expandToNode(name string, val interface{}, parent *engine.Node) *engine.Node {
-	node := &engine.Node{Name: name, Parent: parent}
-
-	if m, ok := val.(map[string]interface{}); ok {
-		// Map -> Children
-		for k, v := range m {
-			child := vm.expandToNode(k, v, node)
-			node.Children = append(node.Children, child)
-		}
-	} else {
-		// Leaf value
-		node.Value = val
-	}
-	return node
 }

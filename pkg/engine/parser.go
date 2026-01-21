@@ -82,7 +82,17 @@ func parseFile(path string) (*Node, error) {
 	}
 
 	l := NewLexer(string(data))
-	return parse(l, path)
+	root, err := parse(l, path)
+	if err != nil {
+		return nil, err
+	}
+
+	// [STATIC INCLUDE] Resolve includes to create monolithic AST for compilation
+	if err := resolveIncludes(root); err != nil {
+		return nil, err
+	}
+
+	return root, nil
 }
 
 func parse(l *Lexer, filename string) (*Node, error) {
@@ -205,4 +215,50 @@ func parse(l *Lexer, filename string) (*Node, error) {
 	}
 
 	return root, nil
+}
+
+// resolveIncludes recursively processes 'include' directives to create a monolithic AST
+func resolveIncludes(node *Node) error {
+	var newChildren []*Node
+	for _, child := range node.Children {
+		// Clean the name just in case
+		childName := strings.ToLower(child.Name)
+
+		if childName == "include" {
+			// Resolve path from Value
+			valStr := fmt.Sprintf("%v", child.Value)
+			// Remove quotes if present ("src/file.zl" -> src/file.zl)
+			if len(valStr) >= 2 {
+				if (strings.HasPrefix(valStr, "\"") && strings.HasSuffix(valStr, "\"")) ||
+					(strings.HasPrefix(valStr, "'") && strings.HasSuffix(valStr, "'")) {
+					valStr = valStr[1 : len(valStr)-1]
+				}
+			}
+			path := strings.TrimSpace(valStr)
+
+			// If path is empty (e.g. include: )
+			if path == "" {
+				continue
+			}
+
+			// Parse included file recursively
+			// Note: This relies on parsed file paths being relative to CWD or absolute
+			includedRoot, err := parseFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to include '%s': %v", path, err)
+			}
+
+			// Flatten: Append included root's children to current node's new children list
+			// We skip the 'root' node of the included file and take its content
+			newChildren = append(newChildren, includedRoot.Children...)
+		} else {
+			// Recurse for nested includes in other blocks
+			if err := resolveIncludes(child); err != nil {
+				return err
+			}
+			newChildren = append(newChildren, child)
+		}
+	}
+	node.Children = newChildren
+	return nil
 }

@@ -36,15 +36,14 @@ func BenchmarkZenoVM(b *testing.B) {
 	compiler := NewCompiler()
 	chunk, _ := compiler.Compile(node)
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	ctx := context.Background()
+	vm := newStandaloneVM(scope)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		// In a real scenario, compilation happens once,
 		// so we only benchmark the Run step.
-		_ = vm.Run(ctx, chunk, scope)
+		_ = vm.Run(chunk)
 	}
 }

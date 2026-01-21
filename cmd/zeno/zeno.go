@@ -50,6 +50,8 @@ func main() {
 			cli.HandleMakeAuth()
 		case "key:generate":
 			cli.HandleKeyGenerate()
+		case "compile":
+			cli.HandleCompile(os.Args[2:])
 		case "version":
 			cli.HandleVersion()
 		default:

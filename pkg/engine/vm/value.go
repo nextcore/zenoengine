@@ -2,6 +2,7 @@ package vm
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 )
@@ -46,9 +47,22 @@ func (v Value) Serialize(w io.Writer) error {
 		_, err := w.Write([]byte(s))
 		return err
 	case ValObject:
-		return fmt.Errorf("cannot serialize complex objects yet")
+		// Serialize complex objects (maps, arrays) as JSON
+		jsonData, err := json.Marshal(v.AsPtr)
+		if err != nil {
+			return fmt.Errorf("failed to serialize object: %v", err)
+		}
+		if err := binary.Write(w, binary.LittleEndian, uint32(len(jsonData))); err != nil {
+			return err
+		}
+		_, err = w.Write(jsonData)
+		return err
+	case ValFunction:
+		// Functions (Chunks) cannot be serialized as constants in bytecode
+		// They should be compiled separately and referenced by index
+		return fmt.Errorf("cannot serialize function chunks as constants")
 	default:
-		return fmt.Errorf("unknown value type")
+		return fmt.Errorf("unknown value type: %d (value: %v)", v.Type, v)
 	}
 }
 
@@ -85,6 +99,20 @@ func DeserializeValue(r io.Reader) (Value, error) {
 			return Value{}, err
 		}
 		return NewString(string(buf)), nil
+	case ValObject:
+		var l uint32
+		if err := binary.Read(r, binary.LittleEndian, &l); err != nil {
+			return Value{}, err
+		}
+		buf := make([]byte, l)
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return Value{}, err
+		}
+		var obj interface{}
+		if err := json.Unmarshal(buf, &obj); err != nil {
+			return Value{}, fmt.Errorf("failed to deserialize object: %v", err)
+		}
+		return NewObject(obj), nil
 	default:
 		return Value{}, fmt.Errorf("unsupported value type: %d", vt)
 	}

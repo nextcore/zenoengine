@@ -10,6 +10,20 @@ import (
 	"zeno/pkg/utils/coerce"
 )
 
+// Helper to create VM with engine bridge
+func newTestVM(eng *engine.Engine, scope *engine.Scope) *VM {
+	handler := engine.NewEngineCallHandler(context.Background(), eng, scope)
+	scopeAdapter := engine.NewScopeAdapter(scope)
+	return NewVM(handler, scopeAdapter)
+}
+
+// Helper to create standalone VM (no engine)
+func newStandaloneVM(scope *engine.Scope) *VM {
+	handler := &NoOpExternalHandler{}
+	scopeAdapter := engine.NewScopeAdapter(scope)
+	return NewVM(handler, scopeAdapter)
+}
+
 func TestVMArithmetic(t *testing.T) {
 	// 1 + 2
 	chunk := &Chunk{
@@ -25,9 +39,9 @@ func TestVMArithmetic(t *testing.T) {
 		},
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	err := vm.Run(context.Background(), chunk, scope)
+	vm := newStandaloneVM(scope)
+	err := vm.Run(chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,9 +65,9 @@ func TestVMCompilerVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	err = vm.Run(context.Background(), chunk, scope)
+	vm := newStandaloneVM(scope)
+	err = vm.Run(chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +126,10 @@ func TestVMComplexSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	ctx := context.WithValue(context.Background(), "engine", eng)
+	vm := newTestVM(eng, scope)
 
-	err = vm.Run(ctx, chunk, scope)
+	err = vm.Run(chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,12 +170,11 @@ func TestVMControlFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
-
 	// Case 1: x == 10
 	scope1 := engine.NewScope(nil)
 	scope1.Set("x", 10.0)
-	err = vm.Run(context.Background(), chunk, scope1)
+	vm1 := newStandaloneVM(scope1)
+	err = vm1.Run(chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +186,8 @@ func TestVMControlFlow(t *testing.T) {
 	// Case 2: x != 10
 	scope2 := engine.NewScope(nil)
 	scope2.Set("x", 20.0)
-	err = vm.Run(context.Background(), chunk, scope2)
+	vm2 := newStandaloneVM(scope2)
+	err = vm2.Run(chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,11 +257,10 @@ func TestVMInternalFunctions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	ctx := context.WithValue(context.Background(), "engine", &engine.Engine{})
+	vm := newStandaloneVM(scope)
 
-	if err := vm.Run(ctx, chunk, scope); err != nil {
+	if err := vm.Run(chunk); err != nil {
 		t.Fatal(err)
 	}
 
@@ -351,11 +363,10 @@ func TestVMIteration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	ctx := context.WithValue(context.Background(), "engine", &engine.Engine{})
+	vm := newStandaloneVM(scope)
 
-	if err := vm.Run(ctx, chunk, scope); err != nil {
+	if err := vm.Run(chunk); err != nil {
 		t.Fatal(err)
 	}
 
@@ -397,11 +408,10 @@ func TestVMIterationItem(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	ctx := context.WithValue(context.Background(), "engine", &engine.Engine{})
+	vm := newStandaloneVM(scope)
 
-	if err := vm.Run(ctx, chunk, scope); err != nil {
+	if err := vm.Run(chunk); err != nil {
 		t.Fatal(err)
 	}
 
@@ -461,12 +471,11 @@ func TestVMPOSStress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	eng := engine.NewEngine()
-	ctx := context.WithValue(context.Background(), "engine", eng)
 	scope := engine.NewScope(nil)
+	vm := newTestVM(eng, scope)
 
-	err = vm.Run(ctx, chunk, scope)
+	err = vm.Run(chunk)
 	if err != nil {
 		chunk.Disassemble("POSStressTest")
 		t.Fatal(err)
@@ -512,10 +521,10 @@ func TestVMStringConcat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
+	vm := newStandaloneVM(scope)
 
-	err = vm.Run(context.Background(), chunk, scope)
+	err = vm.Run(chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +542,7 @@ func TestVMTryCatch(t *testing.T) {
 	src1 := `
 	$res: "init"
 	try {
-	   call: nonExistentSlot
+	   nonExistentSlot
 	   $res: "not reached"
 	} catch {
 	   $res: "caught"
@@ -645,11 +654,10 @@ func TestVMNestedSlotArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
 	scope := engine.NewScope(nil)
-	ctx := context.WithValue(context.Background(), "engine", eng)
+	vm := newTestVM(eng, scope)
 
-	err = vm.Run(ctx, chunk, scope)
+	err = vm.Run(chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -669,12 +677,11 @@ func runTestScriptReturnVM(t *testing.T, src string) (*VM, *engine.Scope) {
 		t.Fatal(err)
 	}
 
-	vm := NewVM()
-	scope := engine.NewScope(nil)
 	eng := engine.NewEngine()
-	ctx := context.WithValue(context.Background(), "engine", eng)
+	scope := engine.NewScope(nil)
+	vm := newTestVM(eng, scope)
 
-	err = vm.Run(ctx, chunk, scope)
+	err = vm.Run(chunk)
 	if err != nil {
 		t.Fatalf("VM Error: %v", err)
 	}

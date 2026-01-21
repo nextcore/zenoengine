@@ -42,10 +42,25 @@ func HandleRun(args []string) {
 	logger.Setup("development")
 
 	path := scriptArgs[0]
-	root, err := engine.LoadScript(path)
-	if err != nil {
-		fmt.Printf("❌ Syntax Error: %v\n", err)
-		os.Exit(1)
+	var root *engine.Node
+	var chunk *vm.Chunk
+	var err error
+
+	// A. Check for Bytecode File (.zbc) -> FAST PATH
+	if strings.HasSuffix(path, ".zbc") {
+		useVM = true // Force VM mode for bytecode
+		chunk, err = vm.LoadFromFile(path)
+		if err != nil {
+			fmt.Printf("❌ Load Bytecode Error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// B. Standard Source File (.zl) -> Parse AST
+		root, err = engine.LoadScript(path)
+		if err != nil {
+			fmt.Printf("❌ Syntax Error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	dbMgr := dbmanager.NewDBManager()
@@ -145,11 +160,15 @@ func HandleRun(args []string) {
 
 	if useVM {
 		fmt.Println("🚀 Running in VM Mode (Experimental)")
-		compiler := vm.NewCompiler()
-		chunk, err := compiler.Compile(root)
-		if err != nil {
-			fmt.Printf("❌ Compilation Error: %v\n", err)
-			os.Exit(1)
+		// If chunk not loaded from file (meaning we came from .zl), compile now
+		if chunk == nil {
+			compiler := vm.NewCompiler()
+			var err error
+			chunk, err = compiler.Compile(root)
+			if err != nil {
+				fmt.Printf("❌ Compilation Error: %v\n", err)
+				os.Exit(1)
+			}
 		}
 
 		virtualMachine := vm.NewVM()
