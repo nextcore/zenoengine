@@ -3,13 +3,13 @@ package console
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"zeno/pkg/apidoc"
 	"zeno/pkg/engine"
 
 	"github.com/go-chi/chi/v5"
@@ -22,15 +22,6 @@ type FileNode struct {
 	Type     string      `json:"type"`
 	Ext      string      `json:"ext"`
 	Children []*FileNode `json:"children"`
-}
-
-// Struktur Data API Doc
-type ApiDocItem struct {
-	FilePath string `json:"file_path"`
-	Route    string `json:"route"`
-	Method   string `json:"method"`
-	Summary  string `json:"summary"`
-	Params   string `json:"params"`
 }
 
 const htmlUI = `
@@ -125,7 +116,7 @@ const htmlUI = `
 
         <div id="tab-api" class="tab-content">
              <div style="padding:10px; display:flex; justify-content:space-between; align-items:center;">
-                 <span style="font-size:11px; font-weight:bold; color:#888">ENDPOINTS</span>
+                 <span style="font-size:11px; font-weight:bold; color:#888">ENDPOINTS (Auto)</span>
                  <span style="cursor:pointer; font-size:11px; color:#666" onclick="loadApiDocs()" title="Refresh">↻</span>
             </div>
             <div id="api-list">Scanning...</div>
@@ -213,12 +204,13 @@ const htmlUI = `
             return wrap;
         }
 
-        // --- 2. API DOCS LOGIC ---
+        // --- 2. API DOCS LOGIC (UPDATED) ---
         async function loadApiDocs() {
             const container = document.getElementById('api-list');
+            container.innerHTML = 'Loading...';
             try {
                 const res = await fetch('/console/api/endpoints');
-                const endpoints = await res.json();
+                const endpoints = await res.json(); // Now returns list of RouteDoc from Registry via proxy
 
                 if(!endpoints || endpoints.length === 0) {
                     container.innerHTML = '<div style="padding:20px; text-align:center; color:#666">No endpoints found.</div>';
@@ -229,18 +221,30 @@ const htmlUI = `
                 endpoints.forEach(api => {
                     html += '<div class="api-item">';
                     html += '<div class="api-header" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
-                    html += '<span class="method '+api.method+'">'+api.method+'</span>';
-                    html += '<span class="route">'+api.route+'</span>';
-                    html += '<span class="summary">'+api.summary+'</span>';
+                    html += '<span class="method '+api.method.toUpperCase()+'">'+api.method.toUpperCase()+'</span>';
+                    html += '<span class="route">'+api.path+'</span>';
+                    html += '<span class="summary">'+(api.summary || 'No summary')+'</span>';
                     html += '</div>';
+                    
                     html += '<div class="api-details">';
-                    html += '<div class="detail-row"><span class="detail-label">FILE</span> <span class="file-link" onclick="openFile(\''+api.file_path+'\')">'+api.file_path+'</span></div>';
-                    html += '<div class="detail-row"><span class="detail-label">DESC</span> '+api.summary+'</div>';
-                    if(api.params) html += '<div class="detail-row"><span class="detail-label">PARAMS</span> '+api.params+'</div>';
+                    html += '<div class="detail-row"><span class="detail-label">DESC</span> '+(api.description || '-')+'</div>';
+                    
+                    if(api.tags && api.tags.length > 0) {
+                        html += '<div class="detail-row"><span class="detail-label">TAGS</span> '+api.tags.join(', ')+'</div>';
+                    }
+
+                    if(api.parameters && api.parameters.length > 0) {
+                         let paramStr = api.parameters.map(p => p.name + ' ('+p.in+')').join(', ');
+                         html += '<div class="detail-row"><span class="detail-label">PARAMS</span> '+paramStr+'</div>';
+                    }
+                    
                     html += '</div></div>';
                 });
                 container.innerHTML = html;
-            } catch(e) { container.innerHTML = "Error loading API docs"; }
+            } catch(e) { 
+                console.error(e);
+                container.innerHTML = "Error loading API docs"; 
+            }
         }
 
         // --- 3. SLOTS DOCS LOGIC ---
@@ -329,7 +333,7 @@ const htmlUI = `
 </html>
 `
 
-// --- HELPERS (Scan Directory & Script) ---
+// --- HELPERS (Scan Directory) ---
 
 func scanDirectory(rootPath string) (*FileNode, error) {
 	info, err := os.Stat(rootPath)
@@ -363,34 +367,6 @@ func scanDirectory(rootPath string) (*FileNode, error) {
 	return node, nil
 }
 
-func scanScriptForDocs(root *engine.Node) *ApiDocItem {
-	if root.Name == "doc.api" {
-		doc := &ApiDocItem{Method: "GET"}
-		for _, c := range root.Children {
-			val := fmt.Sprintf("%v", c.Value)
-			switch c.Name {
-			case "route":
-				doc.Route = val
-			case "method":
-				doc.Method = strings.ToUpper(val)
-			case "summary", "desc":
-				doc.Summary = val
-			case "params":
-				doc.Params = val
-			}
-		}
-		if doc.Route != "" {
-			return doc
-		}
-	}
-	for _, child := range root.Children {
-		if found := scanScriptForDocs(child); found != nil {
-			return found
-		}
-	}
-	return nil
-}
-
 // --- REGISTER ROUTES ---
 
 func RegisterRoutes(r chi.Router, eng *engine.Engine) {
@@ -412,22 +388,19 @@ func RegisterRoutes(r chi.Router, eng *engine.Engine) {
 			json.NewEncoder(w).Encode(roots)
 		})
 
-		// 2. ENDPOINTS API (SCANNER)
+		// 2. ENDPOINTS API (NOW USES AUTOMATED REGISTRY)
 		r.Get("/api/endpoints", func(w http.ResponseWriter, r *http.Request) {
-			var docs []ApiDocItem
-			filepath.Walk("src", func(path string, info os.FileInfo, err error) error {
-				if err == nil && !info.IsDir() && strings.HasSuffix(path, ".zl") {
-					root, err := engine.LoadScript(path)
-					if err == nil {
-						if doc := scanScriptForDocs(root); doc != nil {
-							doc.FilePath = filepath.ToSlash(path)
-							docs = append(docs, *doc)
-						}
-					}
-				}
-				return nil
+			// Mengambil data dari Global Registry (sama dengan source Swagger)
+			// Gunakan helper method untuk thread-safe access
+			routes := apidoc.Registry.GetRoutes()
+
+			// Sort by path
+			sort.Slice(routes, func(i, j int) bool {
+				return routes[i].Path < routes[j].Path
 			})
-			json.NewEncoder(w).Encode(docs)
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(routes)
 		})
 
 		// 3. SLOTS DOCS API (METADATA)

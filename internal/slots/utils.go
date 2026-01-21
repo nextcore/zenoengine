@@ -444,8 +444,6 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		},
 	})
 
-	eng.Register("doc.api", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error { return nil }, engine.SlotMeta{})
-
 	// SLOT: VAR
 	eng.Register("var", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		rawName := coerce.ToString(node.Value)

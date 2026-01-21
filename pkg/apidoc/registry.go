@@ -80,7 +80,7 @@ func (r *APIRegistry) GenerateOpenAPI() map[string]interface{} {
 		}
 
 		method := strings.ToLower(route.Method)
-		
+
 		operation := map[string]interface{}{
 			"summary":     route.Summary,
 			"description": route.Description,
@@ -91,7 +91,7 @@ func (r *APIRegistry) GenerateOpenAPI() map[string]interface{} {
 		if len(route.Params) > 0 {
 			operation["parameters"] = route.Params
 		}
-		
+
 		if route.RequestBody != nil {
 			operation["requestBody"] = route.RequestBody
 		}
@@ -114,4 +114,16 @@ func (r *APIRegistry) GenerateOpenAPI() map[string]interface{} {
 func (r *APIRegistry) ToJSON() ([]byte, error) {
 	spec := r.GenerateOpenAPI()
 	return json.MarshalIndent(spec, "", "  ")
+}
+
+// GetRoutes returns a thread-safe slice of all registered routes
+func (r *APIRegistry) GetRoutes() []*RouteDoc {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	routes := make([]*RouteDoc, 0, len(r.Routes))
+	for _, doc := range r.Routes {
+		routes = append(routes, doc)
+	}
+	return routes
 }
