@@ -314,11 +314,7 @@ Loop:
 					nameVal := vm.pop()
 					name := nameVal.AsPtr.(string)
 
-					mockNode.Children[i] = &engine.Node{
-						Name:   name,
-						Value:  val.ToNative(),
-						Parent: mockNode,
-					}
+					mockNode.Children[i] = vm.expandToNode(name, val.ToNative(), mockNode)
 				}
 			}
 
@@ -591,4 +587,20 @@ func (vm *VM) isTruthy(v Value) bool {
 	default:
 		return true
 	}
+}
+
+func (vm *VM) expandToNode(name string, val interface{}, parent *engine.Node) *engine.Node {
+	node := &engine.Node{Name: name, Parent: parent}
+
+	if m, ok := val.(map[string]interface{}); ok {
+		// Map -> Children
+		for k, v := range m {
+			child := vm.expandToNode(k, v, node)
+			node.Children = append(node.Children, child)
+		}
+	} else {
+		// Leaf value
+		node.Value = val
+	}
+	return node
 }

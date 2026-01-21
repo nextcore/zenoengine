@@ -288,7 +288,7 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 			c.emitByte(byte(OpConstant))
 			c.emitByte(c.addConstant(NewString(child.Name)))
 			// Push Value
-			if err := c.compileValue(child.Value); err != nil {
+			if err := c.compileNodeAsValue(child); err != nil {
 				return err
 			}
 		}

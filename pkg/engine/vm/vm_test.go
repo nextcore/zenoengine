@@ -585,6 +585,79 @@ func runTestScript(t *testing.T, src string, expectedGlobals map[string]interfac
 	}
 }
 
+func TestVMNestedSlotArgs(t *testing.T) {
+	// mock.func:
+	//   config:
+	//     nested: "found"
+	node := &engine.Node{
+		Name: "mock.func",
+		Children: []*engine.Node{
+			{
+				Name: "config",
+				Children: []*engine.Node{
+					{Name: "nested", Value: "found"},
+				},
+			},
+		},
+	}
+
+	called := false
+	eng := engine.NewEngine()
+	eng.Register("mock.func", func(ctx context.Context, n *engine.Node, s *engine.Scope) error {
+		called = true
+		// Verify we can find "nested" inside "config"
+		// 1. Find config
+		var configNode *engine.Node
+		for _, child := range n.Children {
+			if child.Name == "config" {
+				configNode = child
+				break
+			}
+		}
+		if configNode == nil {
+			t.Errorf("Config argument not found")
+			return nil
+		}
+
+		// 2. We expect configNode to have Children if it was reconstructed,
+		// OR we expect configNode.Value to be a Map if we accept that (but standard slots use Children).
+		// Let's assume we want to support the Standard Zeno Node traversal (Children).
+		if len(configNode.Children) == 0 {
+			// Check if it's in Value
+			if _, ok := configNode.Value.(map[string]interface{}); ok {
+				t.Logf("Warning: Nested data found in Value as Map, but Children is empty. Slots expecting Children will fail.")
+				t.Fail()
+			} else {
+				t.Errorf("Config node has no children and no map value")
+			}
+		} else {
+			// Verify Child
+			if configNode.Children[0].Name != "nested" || configNode.Children[0].Value != "found" {
+				t.Errorf("Unexpected nested structure")
+			}
+		}
+		return nil
+	}, engine.SlotMeta{})
+
+	compiler := NewCompiler()
+	chunk, err := compiler.Compile(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	scope := engine.NewScope(nil)
+	ctx := context.WithValue(context.Background(), "engine", eng)
+
+	err = vm.Run(ctx, chunk, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Error("Slot not called")
+	}
+}
+
 func runTestScriptReturnVM(t *testing.T, src string) (*VM, *engine.Scope) {
 	node, err := engine.ParseString(src)
 	if err != nil {

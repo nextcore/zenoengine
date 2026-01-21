@@ -8,6 +8,7 @@ import (
 	"zeno/internal/app"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
+	"zeno/pkg/engine/vm"
 	"zeno/pkg/logger"
 	"zeno/pkg/worker"
 
@@ -16,13 +17,31 @@ import (
 )
 
 func HandleRun(args []string) {
-	if len(args) < 1 {
-		fmt.Println("Usage: zeno run <path/to/script.zl>")
+	// 1. Load .env FIRST to check configuration
+	godotenv.Load()
+
+	// 2. Check VM Toggle (Env Priority, then Flag Override)
+	useVM := os.Getenv("ZENO_VM_ENABLED") == "true"
+	var scriptArgs []string
+
+	// Simple Flag Parsing
+	for _, arg := range args {
+		if arg == "--vm" {
+			useVM = true
+		} else {
+			scriptArgs = append(scriptArgs, arg)
+		}
+	}
+
+	if len(scriptArgs) < 1 {
+		fmt.Println("Usage: zeno run <path/to/script.zl> [--vm]")
 		os.Exit(1)
 	}
-	godotenv.Load()
+
+	// 3. Setup Logger
 	logger.Setup("development")
-	path := args[0]
+
+	path := scriptArgs[0]
 	root, err := engine.LoadScript(path)
 	if err != nil {
 		fmt.Printf("❌ Syntax Error: %v\n", err)
@@ -124,9 +143,30 @@ func HandleRun(args []string) {
 	r := chi.NewRouter()
 	app.RegisterAllSlots(eng, r, dbMgr, queue, nil)
 
-	if err := eng.Execute(context.Background(), root, engine.NewScope(nil)); err != nil {
-		fmt.Printf("❌ Execution Error: %v\n", err)
-		os.Exit(1)
+	if useVM {
+		fmt.Println("🚀 Running in VM Mode (Experimental)")
+		compiler := vm.NewCompiler()
+		chunk, err := compiler.Compile(root)
+		if err != nil {
+			fmt.Printf("❌ Compilation Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		virtualMachine := vm.NewVM()
+
+		// Map Engine Slots to Context
+		ctx := context.WithValue(context.Background(), "engine", eng)
+
+		// Run VM
+		if err := virtualMachine.Run(ctx, chunk, engine.NewScope(nil)); err != nil {
+			fmt.Printf("❌ Runtime Error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := eng.Execute(context.Background(), root, engine.NewScope(nil)); err != nil {
+			fmt.Printf("❌ Execution Error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 	os.Exit(0)
 }
