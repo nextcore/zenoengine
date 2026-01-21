@@ -37,6 +37,7 @@ const (
 	OpJump        // Jump forward
 	OpJumpIfFalse // Jump if stack top is false
 	OpLoop        // Jump backward
+	OpCall        // Call internal function
 
 	// Engine Specific
 	OpCallSlot // Call a ZenoEngine Slot (e.g., http.get)

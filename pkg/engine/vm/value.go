@@ -13,7 +13,8 @@ const (
 	ValBool
 	ValNumber
 	ValString
-	ValObject // Interface{} / Map / Pointer
+	ValObject   // Interface{} / Map / Pointer
+	ValFunction // [NEW] *Chunk
 )
 
 // Value represents any ZenoLang value in the VM.
@@ -118,7 +119,7 @@ func (v Value) ToNative() interface{} {
 		return v.AsNum > 0
 	case ValNumber:
 		return v.AsNum
-	case ValString, ValObject:
+	case ValString, ValObject, ValFunction:
 		return v.AsPtr
 	default:
 		return nil
@@ -136,3 +137,4 @@ func NewBool(b bool) Value {
 func NewString(s string) Value      { return Value{Type: ValString, AsPtr: s} }
 func NewNil() Value                 { return Value{Type: ValNil} }
 func NewObject(o interface{}) Value { return Value{Type: ValObject, AsPtr: o} }
+func NewFunction(c *Chunk) Value    { return Value{Type: ValFunction, AsPtr: c} }

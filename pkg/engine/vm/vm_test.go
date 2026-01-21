@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/utils/coerce"
 )
 
 func TestVMArithmetic(t *testing.T) {
@@ -208,5 +209,68 @@ func TestVMSerialization(t *testing.T) {
 	}
 	if len(chunk.LocalNames) != len(decoded.LocalNames) || decoded.LocalNames[0] != "var1" {
 		t.Error("LocalNames mismatch after serialization")
+	}
+}
+
+func TestVMInternalFunctions(t *testing.T) {
+	// fn: myFunc {
+	//   $x: 20
+	// }
+	// $x: 10
+	// call: myFunc
+	// $res: $x
+
+	rootNode := &engine.Node{
+		Name: "root",
+		Children: []*engine.Node{
+			{
+				Name:  "fn",
+				Value: "myFunc",
+				Children: []*engine.Node{
+					{Name: "$x", Value: 20},
+				},
+			},
+			{Name: "$x", Value: 10},
+			{Name: "call", Value: "myFunc"},
+			{Name: "$res", Value: "$x"},
+		},
+	}
+
+	compiler := NewCompiler()
+	chunk, err := compiler.Compile(rootNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm := NewVM()
+	scope := engine.NewScope(nil)
+	ctx := context.WithValue(context.Background(), "engine", &engine.Engine{})
+
+	if err := vm.Run(ctx, chunk, scope); err != nil {
+		t.Fatal(err)
+	}
+
+	res, _ := scope.Get("res")
+	// If dynamic scope is used, $x will be 20 after call.
+	// If static scope with isolation is used (standard function behavior),
+	// $x in the caller should remain 10 if $x in the function was local.
+	// Current implementation uses OpSetGlobal for fn (to match existing slot behavior)
+	// and OpSetLocal for $x if recognized.
+	// In the sub-compiler, $x will be a NEW local.
+	// OpSetGlobal should be updated to handle local synchronization.
+
+	// Wait, our OpCall implementation:
+	// vm.pushFrame(fnChunk, vm.sp-argCount)
+	// This means locals in myFunc start at some index.
+	// $x in the root: index 0
+	// $x in myFunc: index 0 (relative to frame base)
+
+	// When myFunc finishes, $x (20) is synced to scope.
+	// Then root resumes, and $res: $x happens.
+	// $x will be loaded from index 0 of root frame, which is still 10!
+
+	v, _ := coerce.ToInt(res)
+	if v != 10 {
+		t.Errorf("Expected $x to be 10 (isolated), got %v", res)
 	}
 }

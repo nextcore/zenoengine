@@ -9,12 +9,14 @@ import (
 )
 
 type Local struct {
-	Name string
+	Name  string
+	Depth int
 }
 
 type Compiler struct {
-	chunk  *Chunk
-	locals []Local
+	chunk      *Chunk
+	locals     []Local
+	scopeDepth int
 }
 
 func NewCompiler() *Compiler {
@@ -23,8 +25,13 @@ func NewCompiler() *Compiler {
 			Code:      []byte{},
 			Constants: []Value{},
 		},
-		locals: []Local{},
+		locals:     []Local{},
+		scopeDepth: 0,
 	}
+}
+
+func NewFunctionCompiler() *Compiler {
+	return NewCompiler()
 }
 
 func (c *Compiler) Compile(node *engine.Node) (*Chunk, error) {
@@ -61,10 +68,53 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 			c.emitByte(byte(idx))
 		} else {
 			// Add as a new local
-			c.locals = append(c.locals, Local{Name: varName})
+			c.locals = append(c.locals, Local{Name: varName, Depth: c.scopeDepth})
 			c.emitByte(byte(OpSetLocal))
 			c.emitByte(byte(len(c.locals) - 1))
 		}
+		return nil
+	}
+
+	// Function Definition?
+	if node.Name == "fn" {
+		funcName := coerce.ToString(node.Value)
+		// Compile children as a separate function chunk
+		subCompiler := NewFunctionCompiler()
+		// Function arguments handling (optional for now, ZenoLang uses dynamic scope)
+		for _, child := range node.Children {
+			if err := subCompiler.compileNode(child); err != nil {
+				return err
+			}
+		}
+		subCompiler.emitByte(byte(OpReturn))
+
+		// Push the compiled function as a constant
+		fnChunk := subCompiler.chunk
+		// Sync local names for the sub-chunk
+		fnChunk.LocalNames = make([]string, len(subCompiler.locals))
+		for i, l := range subCompiler.locals {
+			fnChunk.LocalNames[i] = l.Name
+		}
+
+		c.emitByte(byte(OpConstant))
+		c.emitByte(c.addConstant(NewFunction(fnChunk)))
+
+		// Set as global (for now, to match existing behavior)
+		c.emitByte(byte(OpSetGlobal))
+		c.emitByte(c.addConstant(NewString(funcName)))
+		return nil
+	}
+
+	// Native Call?
+	if node.Name == "call" {
+		funcName := coerce.ToString(node.Value)
+		// Get function from global
+		c.emitByte(byte(OpGetGlobal))
+		c.emitByte(c.addConstant(NewString(funcName)))
+		// For now, native call doesn't pass explicit arguments through stack
+		// (Dynamic scope is used)
+		c.emitByte(byte(OpCall))
+		c.emitByte(0) // 0 arguments
 		return nil
 	}
 
@@ -150,6 +200,13 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 		c.emitByte(c.addConstant(NewString(node.Name)))
 		c.emitByte(byte(len(node.Children))) // Argument count
 		return nil
+	}
+
+	// Default: Compile children (Container node)
+	for _, child := range node.Children {
+		if err := c.compileNode(child); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -10,11 +10,20 @@ import (
 )
 
 const StackMax = 256
+const FramesMax = 64
+
+// CallFrame represents a single function execution context.
+type CallFrame struct {
+	chunk *Chunk
+	ip    int // Instruction Pointer for this frame
+	base  int // Index in the global stack where this frame's locals begin
+}
 
 // VM is the bytecode execution engine.
 type VM struct {
-	chunk *Chunk
-	ip    int // Instruction Pointer
+	frames     [FramesMax]CallFrame
+	frameCount int
+
 	stack [StackMax]Value
 	sp    int // Stack Pointer
 }
@@ -175,25 +184,46 @@ func (vm *VM) peek(distance int) Value {
 	return vm.stack[vm.sp-1-distance]
 }
 
+func (vm *VM) frame() *CallFrame {
+	return &vm.frames[vm.frameCount-1]
+}
+
 func (vm *VM) syncLocals(scope *engine.Scope) {
-	for i, name := range vm.chunk.LocalNames {
-		if i < vm.sp {
-			scope.Set(name, vm.stack[i].ToNative())
+	frame := vm.frame()
+	for i, name := range frame.chunk.LocalNames {
+		stackIdx := frame.base + i
+		if stackIdx < vm.sp {
+			scope.Set(name, vm.stack[stackIdx].ToNative())
 		}
 	}
 }
 
+func (vm *VM) pushFrame(chunk *Chunk, base int) {
+	frame := &vm.frames[vm.frameCount]
+	frame.chunk = chunk
+	frame.ip = 0
+	frame.base = base
+	vm.frameCount++
+}
+
 func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error {
-	vm.chunk = chunk
-	vm.ip = 0
+	// Root Frame
+	vm.frameCount = 0
 	vm.sp = 0
+	vm.pushFrame(chunk, 0)
 
 	for {
 		instruction := OpCode(vm.readByte())
 		switch instruction {
 		case OpReturn:
 			vm.syncLocals(scope)
-			return nil
+			vm.frameCount--
+			if vm.frameCount == 0 {
+				return nil
+			}
+			// When returning from a function, we usually pop the call frame
+			// and continue in the previous one.
+			// Internal function return logic will be refined in OpCall implementation.
 
 		case OpConstant:
 			constant := vm.readConstant()
@@ -210,7 +240,11 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			name := vm.readConstant().AsPtr.(string)
 			val, ok := scope.Get(name)
 			if ok {
-				vm.push(NewObject(val))
+				if c, ok := val.(*Chunk); ok {
+					vm.push(NewFunction(c))
+				} else {
+					vm.push(NewObject(val))
+				}
 			} else {
 				vm.push(NewNil())
 			}
@@ -304,33 +338,45 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 			a := vm.pop()
 			vm.push(NewBool(a.AsNum <= b.AsNum))
 
+		case OpCall:
+			argCount := int(vm.readByte())
+			fnVal := vm.stack[vm.sp-1-argCount]
+			if fnVal.Type != ValFunction {
+				return fmt.Errorf("can only call functions, got %v", fnVal.Type)
+			}
+			fnChunk := fnVal.AsPtr.(*Chunk)
+			// Base of new frame is the first argument's position
+			// The function value itself stays on stack below base (to be cleaned up on return)
+			vm.pushFrame(fnChunk, vm.sp-argCount)
+
 		case OpGetLocal:
 			index := vm.readByte()
-			vm.push(vm.stack[index])
+			vm.push(vm.stack[vm.frame().base+int(index)])
 
 		case OpSetLocal:
 			index := vm.readByte()
 			val := vm.peek(0)
-			vm.stack[index] = val
+			stackIdx := vm.frame().base + int(index)
+			vm.stack[stackIdx] = val
 			// Ensure sp covers the local slots
-			if int(index) >= vm.sp {
-				vm.sp = int(index) + 1
+			if stackIdx >= vm.sp {
+				vm.sp = stackIdx + 1
 			}
 
 		case OpJump:
 			offset := vm.readShort()
-			vm.ip += int(offset)
+			vm.frame().ip += int(offset)
 
 		case OpJumpIfFalse:
 			offset := vm.readShort()
 			condition := vm.pop()
 			if !vm.isTruthy(condition) {
-				vm.ip += int(offset)
+				vm.frame().ip += int(offset)
 			}
 
 		case OpLoop:
 			offset := vm.readShort()
-			vm.ip -= int(offset)
+			vm.frame().ip -= int(offset)
 
 		default:
 			return fmt.Errorf("unsupported opcode: %d", instruction)
@@ -339,19 +385,21 @@ func (vm *VM) Run(ctx context.Context, chunk *Chunk, scope *engine.Scope) error 
 }
 
 func (vm *VM) readByte() byte {
-	b := vm.chunk.Code[vm.ip]
-	vm.ip++
+	frame := vm.frame()
+	b := frame.chunk.Code[frame.ip]
+	frame.ip++
 	return b
 }
 
 func (vm *VM) readShort() uint16 {
-	vm.ip += 2
-	return uint16(vm.chunk.Code[vm.ip-2])<<8 | uint16(vm.chunk.Code[vm.ip-1])
+	frame := vm.frame()
+	frame.ip += 2
+	return uint16(frame.chunk.Code[frame.ip-2])<<8 | uint16(frame.chunk.Code[frame.ip-1])
 }
 
 func (vm *VM) readConstant() Value {
 	index := vm.readByte()
-	return vm.chunk.Constants[index]
+	return vm.frame().chunk.Constants[index]
 }
 
 func (vm *VM) isTruthy(v Value) bool {
