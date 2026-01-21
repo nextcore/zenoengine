@@ -171,13 +171,15 @@ func HandleRun(args []string) {
 			}
 		}
 
-		virtualMachine := vm.NewVM()
+		// Create dependencies
+		scope := engine.NewScope(nil)
+		callHandler := engine.NewEngineCallHandler(context.Background(), eng, scope)
+		scopeAdapter := engine.NewScopeAdapter(scope)
 
-		// Map Engine Slots to Context
-		ctx := context.WithValue(context.Background(), "engine", eng)
+		virtualMachine := vm.NewVM(callHandler, scopeAdapter)
 
 		// Run VM
-		if err := virtualMachine.Run(ctx, chunk, engine.NewScope(nil)); err != nil {
+		if err := virtualMachine.Run(chunk); err != nil {
 			fmt.Printf("❌ Runtime Error: %v\n", err)
 			os.Exit(1)
 		}

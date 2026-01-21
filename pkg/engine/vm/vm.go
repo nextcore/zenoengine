@@ -226,11 +226,10 @@ func (vm *VM) Run(chunk *Chunk) error {
 	// Reserve space for locals
 	vm.sp = len(chunk.LocalNames)
 
-	var err error
-
-Loop:
 	for {
 		instruction := OpCode(vm.readByte())
+		var err error
+
 		switch instruction {
 		case OpReturn:
 			vm.syncLocals()
@@ -259,7 +258,10 @@ Loop:
 			name, ok := nameVal.AsString()
 			if !ok {
 				err = fmt.Errorf("OpGetGlobal: expected string constant")
-				goto ErrorHandler
+				if vm.handleError(err) {
+					continue
+				}
+				return err
 			}
 			val, ok := vm.scope.Get(name)
 			if ok {
@@ -273,7 +275,10 @@ Loop:
 			name, ok := nameVal.AsString()
 			if !ok {
 				err = fmt.Errorf("OpSetGlobal: expected string constant")
-				goto ErrorHandler
+				if vm.handleError(err) {
+					continue
+				}
+				return err
 			}
 			val := vm.pop()
 			vm.scope.Set(name, val.ToNative())
@@ -313,7 +318,10 @@ Loop:
 			slotName, ok := nameVal.AsString()
 			if !ok {
 				err = fmt.Errorf("OpCallSlot: expected string slot name")
-				goto ErrorHandler
+				if vm.handleError(err) {
+					continue
+				}
+				return err
 			}
 			argCount := int(vm.readByte())
 
@@ -325,7 +333,10 @@ Loop:
 				argName, ok := argNameVal.AsString()
 				if !ok {
 					err = fmt.Errorf("OpCallSlot: argument name must be string")
-					goto ErrorHandler
+					if vm.handleError(err) {
+						continue
+					}
+					return err
 				}
 				args[argName] = val.ToNative()
 			}
@@ -336,7 +347,10 @@ Loop:
 			// Call external handler
 			_, err = vm.externalHandler.Call(slotName, args)
 			if err != nil {
-				goto ErrorHandler
+				if vm.handleError(err) {
+					continue
+				}
+				return err
 			}
 
 		case OpEqual:
@@ -382,7 +396,10 @@ Loop:
 			fnVal := vm.stack[vm.sp-1-argCount]
 			if fnVal.Type != ValFunction {
 				err = fmt.Errorf("can only call functions, got %v", fnVal.Type)
-				goto ErrorHandler
+				if vm.handleError(err) {
+					continue
+				}
+				return err
 			}
 			fnChunk, _ := fnVal.AsFunction()
 			// Base of new frame is the first argument's position
@@ -516,7 +533,10 @@ Loop:
 			name, ok := nameVal.AsString()
 			if !ok {
 				err = fmt.Errorf("OpAccessProperty: expected string property name")
-				goto ErrorHandler
+				if vm.handleError(err) {
+					continue
+				}
+				return err
 			}
 			obj := vm.pop()
 
@@ -565,11 +585,17 @@ Loop:
 
 		default:
 			err = fmt.Errorf("unsupported opcode: %d", instruction)
-			goto ErrorHandler
+			if vm.handleError(err) {
+				continue
+			}
+			return err
 		}
 	}
+}
 
-ErrorHandler:
+// handleError attempts to recover from an error using catch frames.
+// Returns true if recovered (jumped to catch block), false if fatal.
+func (vm *VM) handleError(err error) bool {
 	if len(vm.catchFrames) > 0 {
 		// Recover
 		catch := vm.catchFrames[len(vm.catchFrames)-1]
@@ -583,9 +609,9 @@ ErrorHandler:
 
 		vm.frame().ip = catch.Ip
 		// Continue execution from catch block
-		goto Loop
+		return true
 	}
-	return err
+	return false
 }
 
 func (vm *VM) readByte() byte {

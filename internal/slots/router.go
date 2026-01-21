@@ -218,8 +218,12 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 			var execErr error
 			if chunk != nil {
-				v := vm.NewVM()
-				execErr = v.Run(timeoutCtx, chunk, reqScope)
+				// Adapter Setup
+				callHandler := engine.NewEngineCallHandler(timeoutCtx, eng, reqScope)
+				scopeAdapter := engine.NewScopeAdapter(reqScope)
+
+				v := vm.NewVM(callHandler, scopeAdapter)
+				execErr = v.Run(chunk)
 			} else {
 				// Fallback to AST Walker if compiler fails
 				for _, child := range children {
