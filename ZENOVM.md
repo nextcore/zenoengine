@@ -129,3 +129,32 @@ To port ZenoLang to another language (e.g., Rust, Zig, C++):
 Existing implementations:
 -   **Go**: `pkg/engine/vm_bridge.go` (Adapts ZenoEngine's Registry & Scope to VM)
 -   **NoOp**: `pkg/engine/vm/external.go` (For isolated testing)
+
+### Embedding in Go
+To use the ZenoVM in your Go application, use the `NewZenoHost` adapter:
+
+```go
+package main
+
+import (
+    "context"
+    "zeno/pkg/engine"
+    "zeno/pkg/engine/vm"
+)
+
+func main() {
+    // 1. Initialize Engine & Scope
+    eng := engine.NewEngine(nil)
+    scope := engine.NewScope(nil)
+
+    // 2. Create Host Adapter
+    ctx := context.Background()
+    host := engine.NewZenoHost(ctx, eng, scope)
+
+    // 3. Create VM
+    virtualMachine := vm.NewVM(host)
+
+    // 4. Run Chunk
+    err := virtualMachine.Run(chunk)
+}
+```
