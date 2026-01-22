@@ -338,7 +338,7 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 	// For now, we handle single list iteration perfectly. Zip will be refined later.
 
 	// If it's a regular slot call (e.g., http.response)
-	if node.Name != "" && !strings.HasPrefix(node.Name, "$") && node.Name != "root" && node.Name != "else" && node.Name != "then" && node.Name != "try" && node.Name != "catch" {
+	if node.Name != "" && !strings.HasPrefix(node.Name, "$") && node.Name != "root" && node.Name != "do" && node.Name != "else" && node.Name != "then" && node.Name != "try" && node.Name != "catch" {
 		argCount := len(node.Children)
 
 		// [NEW] Handle implicit value (log: "msg")

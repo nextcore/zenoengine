@@ -31,6 +31,18 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{Description: "Halt execution of the current block/handler."})
 
 	// ==========================================
+	// SLOT: DO (Block execution)
+	// ==========================================
+	eng.Register("do", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		for _, child := range node.Children {
+			if err := eng.Execute(ctx, child, scope); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, engine.SlotMeta{Description: "Execute a block of code sequentially."})
+
+	// ==========================================
 	// SLOT: SCOPE SET (Legacy alias for 'var')
 	// ==========================================
 	eng.Register("scope.set", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
