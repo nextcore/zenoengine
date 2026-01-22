@@ -83,6 +83,7 @@ func (h *GoHostAdapter) HTTPSendResponse(ctx context.Context, status int, conten
 	if !ok {
 		return fmt.Errorf("host: not in http context")
 	}
+	fmt.Printf("DEBUG HOST: HTTPSendResponse status=%d type=%s bodyLen=%d body='%s'\n", status, contentType, len(body), string(body))
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(status)
 	w.Write(body)

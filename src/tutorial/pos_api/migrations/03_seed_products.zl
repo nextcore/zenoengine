@@ -7,11 +7,11 @@ log: "🌱 Starting POS API Seeder..."
 // 1. Get Active Tenants (Use Raw SQL for safety)
 db.select: "SELECT * FROM tenants WHERE is_active = 1" {
     db: "system"
-    as: $tenants
+    as: '$tenants'
 }
 
 for: $tenants {
-    as: $tenant
+    as: '$tenant'
     do: {
         scope.set: $TARGET_DB {
             val: $tenant.db_connection_name

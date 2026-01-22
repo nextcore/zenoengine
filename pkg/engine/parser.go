@@ -145,7 +145,7 @@ func parse(l *Lexer, filename string) (*Node, error) {
 			if len(valueParts) > 0 {
 				if lastNode != nil {
 					// Detect Raw String Literal
-					if len(valueParts) == 1 && valueParts[0].Type == TokenString {
+					if len(valueParts) == 1 && valueParts[0].Type == TokenIdentifier {
 						lastNode.Value = "\x00" + valueParts[0].Literal
 					} else {
 						// Join dengan spasi agar "1 + 2" tetap "1 + 2"
@@ -227,6 +227,12 @@ func resolveIncludes(node *Node) error {
 		if childName == "include" {
 			// Resolve path from Value
 			valStr := fmt.Sprintf("%v", child.Value)
+
+			// [FIX] Strip Parser's Raw String Prefix (\x00) if present
+			if strings.HasPrefix(valStr, "\x00") {
+				valStr = valStr[1:]
+			}
+
 			// Remove quotes if present ("src/file.zl" -> src/file.zl)
 			if len(valStr) >= 2 {
 				if (strings.HasPrefix(valStr, "\"") && strings.HasSuffix(valStr, "\"")) ||

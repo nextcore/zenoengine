@@ -127,7 +127,7 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 
 	// [NEW] Function Definition: fn: myFunc
 	if node.Name == "fn" {
-		funcName := coerce.ToString(node.Value)
+		funcName := c.normalizeIdentifier(node.Value)
 		// ALLOW ANONYMOUS: if funcName == "" { ... }
 
 		// Create separate compiler for function body
@@ -192,19 +192,29 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 
 	// [NEW] Function Call: call: myFunc
 	if node.Name == "call" {
-		funcName := coerce.ToString(node.Value)
-		if funcName == "" {
-			return fmt.Errorf("call node must have a function name value")
-		}
+		// 1. Resolve Function Name (Value or Attribute)
+		// It could be literal "login" or variable $func
+		if node.Value != nil {
+			s := c.normalizeIdentifier(node.Value)
 
-		// 1. Push Function (Get from Global)
-		c.emitConstantOperand(vm.OpGetGlobal, c.addConstant(vm.NewString(funcName)))
+			if strings.HasPrefix(s, "$") {
+				// Variable reference ($myfunc)
+				if err := c.compileValue(s); err != nil {
+					return err
+				}
+			} else {
+				// Treat as global function name (hello)
+				c.emitConstantOperand(vm.OpGetGlobal, c.addConstant(vm.NewString(s)))
+			}
+		} else {
+			return fmt.Errorf("call: function name or reference is required")
+		}
 
 		// 2. Compile arguments (Children)
 		argCount := 0
 		for _, child := range node.Children {
-			// Compile child value and push to stack
-			// Supports: arg: 10 or just raw values
+			// In ZenoLang tutorial, call: "name" doesn't usually pass args via stack,
+			// but we support it for future-proofing and first-class functions.
 			if err := c.compileNodeAsValue(child); err != nil {
 				return err
 			}
@@ -767,4 +777,17 @@ func (c *Compiler) emitCallSlot(name string, argCount int) {
 		c.emitByte(byte(idx))
 	}
 	c.emitByte(byte(argCount))
+}
+
+func (c *Compiler) normalizeIdentifier(v interface{}) string {
+	s := coerce.ToString(v)
+	// Strip \x00 prefix from raw identifiers
+	if strings.HasPrefix(s, "\x00") {
+		s = s[1:]
+	}
+	// Strip quotes from string literals
+	if len(s) >= 2 && ((s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'')) {
+		s = s[1 : len(s)-1]
+	}
+	return s
 }

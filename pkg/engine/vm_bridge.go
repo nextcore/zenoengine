@@ -52,10 +52,13 @@ func (h *ZenoHost) Call(slotName string, args map[string]interface{}) (interface
 	}
 
 	// 3. Execute handler
+	fmt.Printf("DEBUG BRIDGE: Executing slot '%s' with %d children\n", slotName, len(mockNode.Children))
 	err := handler(h.ctx, mockNode, h.scope)
 	if err != nil {
+		fmt.Printf("DEBUG BRIDGE: Slot '%s' FAILED: %v\n", slotName, err)
 		return nil, fmt.Errorf("slot '%s' execution failed: %w", slotName, err)
 	}
+	fmt.Printf("DEBUG BRIDGE: Slot '%s' SUCCESS\n", slotName)
 
 	// 4. Return result (slots typically modify scope, not return values because of legacy architecture)
 	return nil, nil

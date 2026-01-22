@@ -1,0 +1,7 @@
+fn: hello {
+    log: "HELLO FROM FUNCTION"
+}
+
+log: "Calling function..."
+call: "hello"
+log: "Done"

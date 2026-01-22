@@ -28,6 +28,11 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 
 	valStr := strings.TrimSpace(fmt.Sprintf("%v", n.Value))
 
+	// [FIX] Strip Parser's Raw String Prefix (\x00) if present
+	if strings.HasPrefix(valStr, "\x00") {
+		valStr = valStr[1:]
+	}
+
 	// 2. [PRIORITAS UTAMA] CEK STRING LITERAL (Kutip)
 	if len(valStr) >= 2 {
 		if (strings.HasPrefix(valStr, "\"") && strings.HasSuffix(valStr, "\"")) ||
@@ -108,6 +113,9 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 	}
 
 	// 4. FALLBACK (Nilai mentah)
+	if _, ok := n.Value.(string); ok {
+		return valStr
+	}
 	return n.Value
 }
 

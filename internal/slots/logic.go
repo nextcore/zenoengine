@@ -983,6 +983,14 @@ func RegisterLogicSlots(eng *engine.Engine) {
 			"do": {Description: "Blok kode yang dijalankan"},
 		},
 	})
+	// ==========================================
+	// SLOT: MIDDLEWARE REGISTER (No-op for Compatibility)
+	// ==========================================
+	eng.Register("middleware.register", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		// No-op. In ZenoEngine, middleware is typically configured via native Go Chi middleware
+		// or explicitly called using slots like auth.middleware.
+		return nil
+	}, engine.SlotMeta{Description: "No-operation slot for backward compatibility with middleware registration scripts."})
 }
 
 func evalSimpleCondition(expr string, scope *engine.Scope) bool {

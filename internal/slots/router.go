@@ -236,7 +236,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// Handle Errors
 			if execErr != nil {
 				// [NEW] Handle ErrReturn (Normal Halt)
-				if errors.Is(err, ErrReturn) || strings.Contains(err.Error(), "return") {
+				if errors.Is(execErr, ErrReturn) || strings.Contains(execErr.Error(), "return") {
 					return
 				}
 
@@ -245,7 +245,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 					http.Error(w, fmt.Sprintf("Request timeout exceeded (%s)", timeout), http.StatusRequestTimeout)
 					return
 				}
-				panic(err) // Will be caught by recovery middleware
+				panic(execErr) // Will be caught by recovery middleware
 			}
 		}
 	}
@@ -333,7 +333,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			jwtSecret := os.Getenv("JWT_SECRET")
 			if jwtSecret == "" {
 				// Fallback to .env default
-				jwtSecret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+				jwtSecret = "some_random_secret_key_1234567890"
 				fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
 			}
 			subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
@@ -343,8 +343,12 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		// Mount sub-router
 		getCurrentRouter(ctx).Mount(path, subRouter)
 
-		// Create new context with sub-router
+		// Calculate new prefix for documentation and nested routes
+		newPrefix := joinPath(getCurrentPath(ctx), path)
+
+		// Create new context with sub-router AND path prefix
 		groupCtx := context.WithValue(ctx, routerKey{}, subRouter)
+		groupCtx = context.WithValue(groupCtx, pathPrefixKey{}, newPrefix)
 
 		// Execute children in group context
 		for _, child := range childrenToExec {

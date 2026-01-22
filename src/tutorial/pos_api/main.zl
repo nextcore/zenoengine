@@ -7,9 +7,11 @@
 log: "🛍️  Loading POS API Module..."
 
 // 1. Register Middleware
+// 1. Register Middleware
 middleware.register: auth_tenant {
     file: "src/tutorial/pos_api/middleware/auth_tenant.zl"
 }
+
 
 // 2. Load Shared Modules (Auth, Products, Sales)
 include: src/tutorial/pos_api/modules/auth/routes.zl

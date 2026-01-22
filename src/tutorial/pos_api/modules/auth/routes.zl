@@ -19,7 +19,7 @@ http.group: /api/v1/auth {
         }
         
         do: {
-            call: login
+            call: "login"
         }
     }
 }

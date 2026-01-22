@@ -28,16 +28,17 @@ func (s *Scope) Set(key string, val interface{}) {
 // Get mengambil variabel dengan dukungan Dot Notation (user.id, form.judul)
 func (s *Scope) Get(key string) (interface{}, bool) {
 	s.mu.RLock()
+	val, ok := s.vars[key]
 
 	// 1. Cek Direct Key in current scope
-	if val, ok := s.vars[key]; ok {
+	if ok {
 		s.mu.RUnlock()
 		return val, true
 	}
 
 	// Store parent reference before unlocking
 	parent := s.parent
-	s.mu.RUnlock()
+	s.mu.RUnlock() // Unlock after checking current scope and getting parent reference
 
 	// 2. Check Parent Scope (after releasing lock to avoid deadlock)
 	if parent != nil {
