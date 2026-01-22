@@ -100,13 +100,32 @@ This allows chunks to effectively hold infinite constants (up to memory limits),
 
 ---
 
-## 🔄 Future Roadmap (Portability)
+## 🔌 Portability (Host Interface)
+(Implemented v1.1)
 
-The VM is architected for "Drop-in Replacement".
-The `pkg/engine/vm_bridge.go` file acts as the adapter between the Go Engine and the VM.
-To port to Rust/Zig:
-1. Rewrite `vm.go` and `compiler.go` in Rust.
-2. Expose a C-ABI from the Rust library.
-3. Use CGO in `vm_bridge.go` to call the Rust VM.
+ZenoVM uses a strictly decoupled **Hexagonal Architecture**. The VM does not know about the Engine, Database, or Operating System. It interacts with the world **only** through the `vm.HostInterface`.
 
-4. The rest of ZenoEngine remains untouched.
+### The Host Interface
+Defined in `pkg/engine/vm/external.go`:
+```go
+type HostInterface interface {
+    // Call executes an external slot/function (e.g. db.query, http.get)
+    Call(slotName string, args map[string]interface{}) (interface{}, error)
+
+    // Get retrieves a variable from the host environment
+    Get(key string) (interface{}, bool)
+
+    // Set stores a variable in the host environment
+    Set(key string, val interface{})
+}
+```
+
+### Porting ZenoVM
+To port ZenoLang to another language (e.g., Rust, Zig, C++):
+1.  **Rewrite the VM**: Implement the bytecode interpreter (`vm.go`) and compiler (`compiler.go`).
+2.  **Implement the Host Interface**: Create a bridge that satisfies `HostInterface` in the target language.
+3.  **Reuse Bytecode**: The `.zbc` format is standard and cross-platform.
+
+Existing implementations:
+-   **Go**: `pkg/engine/vm_bridge.go` (Adapts ZenoEngine's Registry & Scope to VM)
+-   **NoOp**: `pkg/engine/vm/external.go` (For isolated testing)

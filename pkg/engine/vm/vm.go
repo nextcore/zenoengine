@@ -43,26 +43,21 @@ type VM struct {
 	catchFrames []CatchFrame
 
 	// External dependencies (injected, not owned)
-	externalHandler ExternalCallHandler
-	scope           ScopeInterface
+	host HostInterface
 }
 
-// NewVM creates a new VM instance with given dependencies.
+// NewVM creates a new VM instance with given host environment.
 //
-// PRECONDITION: handler and scope must be non-nil
+// PRECONDITION: host must be non-nil
 // POSTCONDITION: VM is ready for Run() calls
-func NewVM(handler ExternalCallHandler, scope ScopeInterface) *VM {
-	if handler == nil {
-		panic("NewVM: handler must not be nil")
-	}
-	if scope == nil {
-		panic("NewVM: scope must not be nil")
+func NewVM(host HostInterface) *VM {
+	if host == nil {
+		panic("NewVM: host must not be nil")
 	}
 
 	return &VM{
-		catchFrames:     make([]CatchFrame, 0),
-		externalHandler: handler,
-		scope:           scope,
+		catchFrames: make([]CatchFrame, 0),
+		host:        host,
 	}
 }
 
@@ -206,7 +201,7 @@ func (vm *VM) syncLocals() {
 	frame := vm.frame()
 	for i, name := range frame.chunk.LocalNames {
 		stackIdx := frame.base + i
-		vm.scope.Set(name, vm.stack[stackIdx].ToNative())
+		vm.host.Set(name, vm.stack[stackIdx].ToNative())
 	}
 }
 
@@ -624,7 +619,7 @@ func (vm *VM) getGlobal(nameVal Value) Value {
 		// I'll stick to simple implementation here assuming nameVal is valid if compiler did job.
 		return NewNil()
 	}
-	val, ok := vm.scope.Get(name)
+	val, ok := vm.host.Get(name)
 	if ok {
 		return NewValue(val)
 	}
@@ -637,7 +632,7 @@ func (vm *VM) setGlobal(nameVal Value) error {
 		return fmt.Errorf("OpSetGlobal: expected string constant")
 	}
 	val := vm.pop()
-	vm.scope.Set(name, val.ToNative())
+	vm.host.Set(name, val.ToNative())
 	return nil
 }
 
@@ -660,7 +655,7 @@ func (vm *VM) callSlot(nameVal Value) error {
 	}
 
 	vm.syncLocals()
-	_, err := vm.externalHandler.Call(slotName, args)
+	_, err := vm.host.Call(slotName, args)
 	return err
 }
 

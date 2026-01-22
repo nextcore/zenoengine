@@ -177,10 +177,9 @@ func HandleRun(args []string) {
 
 		// Create dependencies
 		scope := engine.NewScope(nil)
-		callHandler := engine.NewEngineCallHandler(context.Background(), eng, scope)
-		scopeAdapter := engine.NewScopeAdapter(scope)
+		host := engine.NewZenoHost(context.Background(), eng, scope)
 
-		virtualMachine := vm.NewVM(callHandler, scopeAdapter)
+		virtualMachine := vm.NewVM(host)
 
 		// Run VM
 		if err := virtualMachine.Run(chunk); err != nil {

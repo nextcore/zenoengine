@@ -2,63 +2,43 @@ package vm
 
 import "fmt"
 
-// ExternalCallHandler adalah interface untuk memanggil slot eksternal dari VM.
-// Implementasi konkret akan disediakan oleh engine package.
+// HostInterface defines the boundary between the VM and the host environment.
+// This interface follows the Hexagonal Architecture pattern, allowing the VM
+// to run in any environment that provides this interface (e.g. Go Engine, separate CLI, Rust, etc.).
 //
 // OWNERSHIP: VM does NOT own this interface, only borrows it.
 // THREAD-SAFETY: Implementation must be thread-safe if VM is used concurrently.
-type ExternalCallHandler interface {
-	// Call executes an external slot with given arguments.
-	// Returns the result value and any error that occurred.
-	//
-	// PRECONDITION: slotName must be non-empty
-	// POSTCONDITION: If error is non-nil, result is undefined
+type HostInterface interface {
+	// Call executes an external slot/function.
 	Call(slotName string, args map[string]interface{}) (interface{}, error)
-}
 
-// ScopeInterface adalah abstraksi untuk variable storage.
-// Ini memungkinkan VM untuk get/set variables tanpa dependency ke engine.Scope.
-//
-// OWNERSHIP: VM does NOT own this interface, only borrows it.
-// THREAD-SAFETY: Implementation must handle concurrent access if needed.
-type ScopeInterface interface {
-	// Get retrieves a variable by key.
-	// Returns (value, true) if found, (nil, false) if not found.
+	// Get retrieves a variable from the host environment.
 	Get(key string) (interface{}, bool)
 
-	// Set stores a variable with given key and value.
-	// Overwrites existing value if key already exists.
+	// Set stores a variable in the host environment.
 	Set(key string, val interface{})
 }
 
-// NoOpExternalHandler is a stub implementation that returns errors for all calls.
-// Useful for testing VM in isolation without engine dependencies.
-type NoOpExternalHandler struct{}
-
-func (h *NoOpExternalHandler) Call(slotName string, args map[string]interface{}) (interface{}, error) {
-	return nil, fmt.Errorf("external calls not supported (slot: %s)", slotName)
-}
-
-// MemoryScope is a simple in-memory implementation of ScopeInterface.
-// Useful for testing VM in isolation.
-//
-// THREAD-SAFETY: NOT thread-safe. Use mutex if concurrent access needed.
-type MemoryScope struct {
+// NoOpHost is a stub implementation for testing the VM in isolation.
+type NoOpHost struct {
 	vars map[string]interface{}
 }
 
-// NewMemoryScope creates a new in-memory scope.
-func NewMemoryScope() *MemoryScope {
-	return &MemoryScope{
+func NewNoOpHost() *NoOpHost {
+	return &NoOpHost{
 		vars: make(map[string]interface{}),
 	}
 }
 
-func (s *MemoryScope) Get(key string) (interface{}, bool) {
-	val, ok := s.vars[key]
+func (h *NoOpHost) Call(slotName string, args map[string]interface{}) (interface{}, error) {
+	return nil, fmt.Errorf("external calls not supported (slot: %s)", slotName)
+}
+
+func (h *NoOpHost) Get(key string) (interface{}, bool) {
+	val, ok := h.vars[key]
 	return val, ok
 }
 
-func (s *MemoryScope) Set(key string, val interface{}) {
-	s.vars[key] = val
+func (h *NoOpHost) Set(key string, val interface{}) {
+	h.vars[key] = val
 }

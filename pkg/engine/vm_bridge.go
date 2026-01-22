@@ -5,29 +5,29 @@ import (
 	"fmt"
 )
 
-// EngineCallHandler implements vm.ExternalCallHandler using ZenoEngine's slot registry.
+// ZenoHost implements vm.HostInterface using ZenoEngine's slot registry and scope.
 //
 // OWNERSHIP: Does NOT own engine or scope, only borrows them.
-// THREAD-SAFETY: Safe if underlying engine.Registry is not modified during execution.
-type EngineCallHandler struct {
+// THREAD-SAFETY: Safe if underlying engine.Registry and Scope are not modified concurrently in unsafe ways.
+type ZenoHost struct {
 	engine *Engine
 	scope  *Scope
 	ctx    context.Context
 }
 
-// NewEngineCallHandler creates a new bridge between VM and Engine.
+// NewZenoHost creates a new host adapter for the VM.
 //
-// PRECONDITION: engine and scope must be non-nil and remain valid during VM execution.
-func NewEngineCallHandler(ctx context.Context, engine *Engine, scope *Scope) *EngineCallHandler {
-	return &EngineCallHandler{
+// PRECONDITION: engine and scope must be non-nil.
+func NewZenoHost(ctx context.Context, engine *Engine, scope *Scope) *ZenoHost {
+	return &ZenoHost{
 		engine: engine,
 		scope:  scope,
 		ctx:    ctx,
 	}
 }
 
-// Call implements vm.ExternalCallHandler.Call
-func (h *EngineCallHandler) Call(slotName string, args map[string]interface{}) (interface{}, error) {
+// Call implements vm.HostInterface.Call
+func (h *ZenoHost) Call(slotName string, args map[string]interface{}) (interface{}, error) {
 	// 1. Lookup handler in registry
 	handler, exists := h.engine.Registry[slotName]
 	if !exists {
@@ -57,13 +57,22 @@ func (h *EngineCallHandler) Call(slotName string, args map[string]interface{}) (
 		return nil, fmt.Errorf("slot '%s' execution failed: %w", slotName, err)
 	}
 
-	// 4. Return result (slots typically modify scope, not return values)
+	// 4. Return result (slots typically modify scope, not return values because of legacy architecture)
 	return nil, nil
 }
 
+// Get implements vm.HostInterface.Get
+func (h *ZenoHost) Get(key string) (interface{}, bool) {
+	return h.scope.Get(key)
+}
+
+// Set implements vm.HostInterface.Set
+func (h *ZenoHost) Set(key string, val interface{}) {
+	h.scope.Set(key, val)
+}
+
 // expandToNode converts a key-value pair to a Node tree.
-// This is the inverse of vm.expandToNode - it converts VM data back to Engine format.
-func (h *EngineCallHandler) expandToNode(name string, val interface{}, parent *Node) *Node {
+func (h *ZenoHost) expandToNode(name string, val interface{}, parent *Node) *Node {
 	node := &Node{Name: name, Parent: parent}
 
 	if m, ok := val.(map[string]interface{}); ok {
@@ -79,27 +88,4 @@ func (h *EngineCallHandler) expandToNode(name string, val interface{}, parent *N
 	}
 
 	return node
-}
-
-// ScopeAdapter implements vm.ScopeInterface using engine.Scope.
-//
-// OWNERSHIP: Does NOT own scope, only borrows it.
-// THREAD-SAFETY: Delegates to engine.Scope's thread-safety.
-type ScopeAdapter struct {
-	scope *Scope
-}
-
-// NewScopeAdapter creates a new adapter for engine.Scope.
-func NewScopeAdapter(scope *Scope) *ScopeAdapter {
-	return &ScopeAdapter{scope: scope}
-}
-
-// Get implements vm.ScopeInterface.Get
-func (s *ScopeAdapter) Get(key string) (interface{}, bool) {
-	return s.scope.Get(key)
-}
-
-// Set implements vm.ScopeInterface.Set
-func (s *ScopeAdapter) Set(key string, val interface{}) {
-	s.scope.Set(key, val)
 }

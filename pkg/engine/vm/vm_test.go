@@ -11,17 +11,35 @@ import (
 )
 
 // Helper to create VM with engine bridge
+// Helper to create VM with engine bridge
 func newTestVM(eng *engine.Engine, scope *engine.Scope) *VM {
-	handler := engine.NewEngineCallHandler(context.Background(), eng, scope)
-	scopeAdapter := engine.NewScopeAdapter(scope)
-	return NewVM(handler, scopeAdapter)
+	host := engine.NewZenoHost(context.Background(), eng, scope)
+	return NewVM(host)
 }
 
 // Helper to create standalone VM (no engine)
 func newStandaloneVM(scope *engine.Scope) *VM {
-	handler := &NoOpExternalHandler{}
-	scopeAdapter := engine.NewScopeAdapter(scope)
-	return NewVM(handler, scopeAdapter)
+	// For tests that need a real scope but no engine, we can use ZenoHost with nil engine?
+	// Or we can use NoOpHost if scope isn't needed?
+	// Actually most tests DO need scope.
+	// We can use a simple Host implementation for tests that just wraps a scope.
+	return NewVM(&TestHost{scope: scope})
+}
+
+type TestHost struct {
+	scope *engine.Scope
+}
+
+func (h *TestHost) Call(slotName string, args map[string]interface{}) (interface{}, error) {
+	return nil, fmt.Errorf("external calls not supported in TestHost")
+}
+
+func (h *TestHost) Get(key string) (interface{}, bool) {
+	return h.scope.Get(key)
+}
+
+func (h *TestHost) Set(key string, val interface{}) {
+	h.scope.Set(key, val)
 }
 
 func TestVMArithmetic(t *testing.T) {
