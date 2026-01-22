@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"zeno/pkg/compiler"
 	"zeno/pkg/engine"
-	"zeno/pkg/engine/vm"
 )
 
 func HandleCompile(args []string) {
@@ -38,8 +38,8 @@ func HandleCompile(args []string) {
 	}
 
 	// 2. Compilation (AST -> Bytecode)
-	compiler := vm.NewCompiler()
-	chunk, err := compiler.Compile(root)
+	comp := compiler.NewCompiler()
+	chunk, err := comp.Compile(root)
 	if err != nil {
 		fmt.Printf("❌ Compilation Error: %v\n", err)
 		os.Exit(1)

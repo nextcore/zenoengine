@@ -7,6 +7,7 @@ import (
 	"strings"
 	"zeno/internal/app"
 	"zeno/pkg/adapters"
+	"zeno/pkg/compiler"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
 	"zeno/pkg/engine/vm"
@@ -166,9 +167,9 @@ func HandleRun(args []string) {
 		fmt.Println("🚀 Running in VM Mode (Experimental)")
 		// If chunk not loaded from file (meaning we came from .zl), compile now
 		if chunk == nil {
-			compiler := vm.NewCompiler()
+			comp := compiler.NewCompiler()
 			var err error
-			chunk, err = compiler.Compile(root)
+			chunk, err = comp.Compile(root)
 			if err != nil {
 				fmt.Printf("❌ Compilation Error: %v\n", err)
 				os.Exit(1)

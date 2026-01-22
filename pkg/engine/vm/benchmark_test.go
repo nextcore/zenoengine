@@ -1,8 +1,9 @@
-package vm
+package vm_test
 
 import (
 	"context"
 	"testing"
+	"zeno/pkg/compiler"
 	"zeno/pkg/engine"
 )
 
@@ -33,17 +34,17 @@ func BenchmarkZenoVM(b *testing.B) {
 		Name:  "$x",
 		Value: "10 + 20",
 	}
-	compiler := NewCompiler()
-	chunk, _ := compiler.Compile(node)
+	c := compiler.NewCompiler()
+	chunk, _ := c.Compile(node)
 
 	scope := engine.NewScope(nil)
-	vm := newStandaloneVM(scope)
+	v := newStandaloneVM(scope)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		// In a real scenario, compilation happens once,
 		// so we only benchmark the Run step.
-		_ = vm.Run(chunk)
+		_ = v.Run(chunk)
 	}
 }

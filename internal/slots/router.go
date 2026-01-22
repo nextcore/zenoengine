@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"zeno/pkg/apidoc"
+	"zeno/pkg/compiler"
 	"zeno/pkg/engine"
 	"zeno/pkg/engine/vm"
 	"zeno/pkg/middleware"
@@ -190,8 +191,8 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 				// 3. Compile and Save if still no chunk
 				if chunk == nil {
-					compiler := vm.NewCompiler()
-					if c, err := compiler.Compile(rootNode); err == nil {
+					comp := compiler.NewCompiler()
+					if c, err := comp.Compile(rootNode); err == nil {
 						chunk = c
 						rootNode.Bytecode = chunk
 						// Save for next time (Async might be better, but sync is safer for now)
@@ -203,8 +204,8 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				if rootNode.Bytecode != nil {
 					chunk = rootNode.Bytecode.(*vm.Chunk)
 				} else {
-					compiler := vm.NewCompiler()
-					if c, err := compiler.Compile(rootNode); err == nil {
+					comp := compiler.NewCompiler()
+					if c, err := comp.Compile(rootNode); err == nil {
 						chunk = c
 						rootNode.Bytecode = chunk
 					}
@@ -510,4 +511,37 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			return nil
 		}, engine.SlotMeta{})
 	}
+
+	// ==========================================
+	// 3. SERVER START (Blocking)
+	// ==========================================
+	eng.Register("http.server", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		port := "3000" // Default port
+
+		// Check args for port
+		if node.Value != nil {
+			port = coerce.ToString(resolveValue(node.Value, scope))
+		} else {
+			for _, c := range node.Children {
+				if c.Name == "port" {
+					port = coerce.ToString(resolveValue(c.Value, scope))
+				}
+			}
+		}
+
+		if port == "" {
+			port = "3000"
+		}
+
+		// Ensure port starts with :
+		addr := port
+		if !strings.Contains(port, ":") {
+			addr = ":" + port
+		}
+
+		fmt.Printf("🚀 Starting Zeno Server on http://localhost%s\n", addr)
+
+		// Use rootRouter which was closed over from RegisterRouterSlots
+		return http.ListenAndServe(addr, rootRouter)
+	}, engine.SlotMeta{Description: "Start the HTTP server (Blocking)"})
 }
