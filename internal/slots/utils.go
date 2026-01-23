@@ -212,19 +212,16 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		target := "contains_result"
 
 		for _, c := range node.Children {
-			fmt.Printf("DEBUG STRING.CONTAINS CHILD: Name='%s' Value='%v'\n", c.Name, c.Value)
 			val := parseNodeValue(c, scope)
 			if c.Name == "substr" || c.Name == "val" {
 				substr = coerce.ToString(val)
 			}
 			if c.Name == "as" {
 				target = coerce.ToString(c.Value)
-				fmt.Printf("DEBUG STRING.CONTAINS TARGET: raw='%v' target='%s'\n", c.Value, target)
 			}
 		}
 
 		result := strings.Contains(input, substr)
-		fmt.Printf("DEBUG STRING.CONTAINS: input='%s' substr='%s' result=%v\n", input, substr, result)
 		scope.Set(target, result)
 		return nil
 	}, engine.SlotMeta{
@@ -365,7 +362,6 @@ func RegisterUtilSlots(eng *engine.Engine) {
 	// 9. IF (UPGRADED: Support ==, !=, >, <, >=, <=)
 	eng.Register("if", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		expression := coerce.ToString(node.Value)
-		fmt.Printf("DEBUG IF START: expression='%s' raw_value=%v\n", expression, node.Value)
 		isTrue := false
 
 		// Helper untuk parsing bagian kiri dan kanan operator

@@ -237,10 +237,8 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("DEBUG HTTP: Using Host.HTTPSendResponse (bodyLen=%d)\n", len(bodyBytes))
 			return eng.Host.HTTPSendResponse(ctx, statusCode, "application/json", bodyBytes)
 		}
-		fmt.Printf("DEBUG HTTP: Host is NIL (eng_nil=%v host_nil=%v)\n", eng == nil, (eng != nil && eng.Host == nil))
 
 		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
 		if !ok {

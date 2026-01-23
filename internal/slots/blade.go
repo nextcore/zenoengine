@@ -9,11 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"encoding/gob"
 	"strings"
-	"zeno/pkg/compiler"
 	"zeno/pkg/engine"
-	"zeno/pkg/engine/vm"
 	"zeno/pkg/utils/coerce"
 
 	"html"
@@ -21,13 +18,13 @@ import (
 	"github.com/gorilla/csrf"
 )
 
-// Blade Template Cache
+// Blade Template Cache (AST-based)
 var (
 	bladeCache sync.Map // map[string]*cachedTemplate
 )
 
 type cachedTemplate struct {
-	chunk   *vm.Chunk
+	ast     *engine.Node
 	modTime time.Time
 }
 
@@ -101,23 +98,26 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		}
 
 		if viewFile == "" {
-			return fmt.Errorf("view.blade.native: file required")
+			return fmt.Errorf("view.blade: file required")
 		}
 
 		fullPath := filepath.Join("views", ensureBladeExt(viewFile))
 
 		// Use cache for performance
-		chunk, err := getCachedOrCompile(fullPath)
+		ast, err := getCachedOrParse(fullPath)
 		if err != nil {
 			return err
 		}
 
-		// Execute using VM
-		host := engine.NewZenoHost(ctx, eng, scope)
-		v := vm.NewVM(host)
-		return v.Run(chunk)
+		// Execute using AST interpreter
+		for _, child := range ast.Children {
+			if err := eng.Execute(ctx, child, scope); err != nil {
+				return err
+			}
+		}
+		return nil
 
-	}, engine.SlotMeta{Description: "Render Blade natively using ZenoVM."})
+	}, engine.SlotMeta{Description: "Render Blade template using AST interpreter."})
 
 	// 3. Section System (Layouts)
 	eng.Register("section.define", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -159,45 +159,6 @@ func RegisterBladeSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{Description: "Define a layout section"})
 
 	eng.Register("section.yield", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		// Just a slot call?
-		// In Host implementation (vm_bridge), we will need to handle this.
-		// If "section.yield" is called, it should execute the stored function.
-		//
-		// Wait, `vm_bridge.go` `ZenoHost` just calls `eng.Execute`?
-		// No, `ZenoHost` logic calls `ExternalCallHandler` or `Engine`.
-		//
-		// If I register `section.yield` here, the VM calls it via `Host.Call`.
-		// `Host.Call` executes this Go function.
-		// This Go function needs to access `__sections` from scope (which works).
-		// And then EXECUTE the body.
-		// The body is now a `ValFunction` (VM Chunk), not `*engine.Node` (AST).
-		//
-		// So `section.define` stores a `ValFunction`.
-		// `section.yield` retrieves `ValFunction` and executes it?
-		// How does a "Host Slot" execute a "VM Function"?
-		//
-		// It can't directly. The VM is running the host slot.
-		// The host slot can't easily say "VM, run this function now".
-		// Unless... `HostInterface` allows callback?
-		//
-		// Or `section.yield` is implemented IN VM (Internal function)?
-		// No, it handles scope.
-		//
-		// Alternative: `section.yield` returns the function, and the VM calls it?
-		// No, `yield` implies immediate execution.
-		//
-		// Maybe `section.yield` should be a `OpCall` to the stored function?
-		// But the function is in a Map `__section`.
-		// `call: $__sections.name`?
-		//
-		// This is getting complex for a quick refactor.
-		// Simpler approach for sections:
-		// Keep them as AST for now? No, everything must be compiled.
-		//
-		// If `section.define` parses body and compiles it to a chunk.
-		// It stores `*vm.Chunk` in `__sections`.
-		// `section.yield` gets `*vm.Chunk` and runs it using... a new VM?
-		// `v := vm.NewVM(host)` inside `section.yield`.
 		name := coerce.ToString(resolveValue(node.Value, scope))
 
 		sectionsRaw, ok := scope.Get("__sections")
@@ -216,19 +177,12 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		}
 
 		if body, found := sections[name]; found {
-			// VM Mode (Direct Chunk)
-			if fnChunk, ok := body.(*vm.Chunk); ok {
-				host := engine.NewZenoHost(ctx, eng, scope)
-				v := vm.NewVM(host)
-				return v.Run(fnChunk)
-			}
-
 			// AST Mode (*engine.Node)
 			if nodeBody, ok := body.(*engine.Node); ok {
 				// Handle both "fn" wrapping and old "do" wrapping
 				children := nodeBody.Children
-				if nodeBody.Name == "fn" {
-					// "fn" wrapper, contents are children
+				if nodeBody.Name == "fn" || nodeBody.Name == "do" {
+					// "fn"/"do" wrapper, contents are children
 					children = nodeBody.Children
 				}
 
@@ -251,15 +205,18 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		fullPath := filepath.Join("views", ensureBladeExt(layoutFile))
 
 		// Use cache for performance
-		chunk, err := getCachedOrCompile(fullPath)
+		ast, err := getCachedOrParse(fullPath)
 		if err != nil {
 			return err
 		}
 
-		// Run VM
-		host := engine.NewZenoHost(ctx, eng, scope)
-		v := vm.NewVM(host)
-		return v.Run(chunk)
+		// Execute using AST interpreter
+		for _, child := range ast.Children {
+			if err := eng.Execute(ctx, child, scope); err != nil {
+				return err
+			}
+		}
+		return nil
 	}, engine.SlotMeta{Description: "Extend a layout"})
 
 	eng.Register("view.component", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -285,76 +242,40 @@ func RegisterBladeSlots(eng *engine.Engine) {
 }
 
 // ==========================================
-// BLADE TEMPLATE CACHE HELPERS
+// BLADE TEMPLATE CACHE HELPERS (AST-based)
 // ==========================================
 
-// getCachedOrCompile retrieves a cached template or parses it if not cached/outdated
-func getCachedOrCompile(fullPath string) (*vm.Chunk, error) {
+// getCachedOrParse retrieves a cached template or parses it if not cached/outdated
+func getCachedOrParse(fullPath string) (*engine.Node, error) {
 	// Check cache
 	if cached, ok := bladeCache.Load(fullPath); ok {
 		ct := cached.(*cachedTemplate)
 
 		// In production, always use cache
 		if os.Getenv("APP_ENV") == "production" {
-			return ct.chunk, nil
+			return ct.ast, nil
 		}
 
 		// In development, check if file changed
 		fileInfo, err := os.Stat(fullPath)
 		if err == nil && fileInfo.ModTime().Equal(ct.modTime) {
-			return ct.chunk, nil // Cache hit
+			return ct.ast, nil // Cache hit
 		}
 	}
 
 	// Cache miss or file changed - parse
-	return compileAndCache(fullPath)
+	return parseAndCache(fullPath)
 }
 
-// compileAndCache reads, parses, compiles, and caches a Blade template
-func compileAndCache(fullPath string) (*vm.Chunk, error) {
-	// 1. Check for .zbc file
-	zbcPath := fullPath[:len(fullPath)-len(filepath.Ext(fullPath))] + ".zbc"
-	// Actually fullPath is "views/foo.blade.zl". replacing .blade.zl with .zbc?
-	// ensureBladeExt ensures .blade.zl.
-	if strings.HasSuffix(fullPath, ".blade.zl") {
-		zbcPath = strings.TrimSuffix(fullPath, ".blade.zl") + ".zbc"
-	} else {
-		zbcPath = fullPath + ".zbc"
-	}
-
-	if info, err := os.Stat(zbcPath); err == nil && !info.IsDir() {
-		// Load ZBC
-		f, err := os.Open(zbcPath)
-		if err == nil {
-			defer f.Close()
-			var chunk vm.Chunk
-			dec := gob.NewDecoder(f)
-			if err := dec.Decode(&chunk); err == nil {
-				// Success load
-				fileInfo, _ := os.Stat(fullPath) // Original file mod time for consistency?
-				// Or just use ZBC mod time.
-				bladeCache.Store(fullPath, &cachedTemplate{
-					chunk:   &chunk,
-					modTime: fileInfo.ModTime(),
-				})
-				return &chunk, nil
-			}
-		}
-	}
-
+// parseAndCache reads, parses, and caches a Blade template
+func parseAndCache(fullPath string) (*engine.Node, error) {
 	contentBytes, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("view not found: %s", fullPath)
 	}
 
+	// Transpile Blade to AST
 	programNode, err := transpileBladeNative(string(contentBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	// COMPILE
-	comp := compiler.NewCompiler()
-	chunk, err := comp.Compile(programNode)
 	if err != nil {
 		return nil, err
 	}
@@ -364,11 +285,11 @@ func compileAndCache(fullPath string) (*vm.Chunk, error) {
 
 	// Store in cache
 	bladeCache.Store(fullPath, &cachedTemplate{
-		chunk:   chunk,
+		ast:     programNode,
 		modTime: fileInfo.ModTime(),
 	})
 
-	return chunk, nil
+	return programNode, nil
 }
 
 func ClearBladeCache() {

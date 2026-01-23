@@ -4,42 +4,37 @@ import (
 	"context"
 	"fmt"
 	"zeno/pkg/engine"
-	"zeno/pkg/engine/vm"
 )
 
-// RegisterDebugSlots mendaftarkan slot untuk inspeksi dan debugging VM
+// RegisterDebugSlots mendaftarkan slot untuk inspeksi dan debugging
 func RegisterDebugSlots(eng *engine.Engine) {
 
 	// ==========================================
-	// SLOT: debug.dump (Inspect Bytecode)
+	// SLOT: debug.dump (Inspect AST Node)
 	// ==========================================
-	// Melakukan disassembly terhadap bytecode dari sebuah fungsi atau node root saat ini.
+	// Melakukan dump terhadap AST node dari sebuah fungsi atau variabel.
 	// Contoh:
 	// debug.dump: "myFunc"
 	eng.Register("debug.dump", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		val := resolveValue(node.Value, scope)
 
-		// 1. Jika value adalah string, cari fungsi di scope
+		// 1. Jika value adalah string, cari di scope
 		if name, ok := val.(string); ok && name != "" {
 			fn, found := scope.Get(name)
 			if !found {
-				return fmt.Errorf("debug.dump: function '%s' not found", name)
+				return fmt.Errorf("debug.dump: '%s' not found in scope", name)
 			}
 
-			if chunk, ok := fn.(*vm.Chunk); ok {
-				chunk.Disassemble(name)
-				return nil
-			}
-			return fmt.Errorf("debug.dump: '%s' is not a compiled function", name)
+			// Dump value
+			fmt.Printf("   🔍 [DEBUG] %s = %+v (type: %T)\n", name, fn, fn)
+			return nil
 		}
 
-		// 2. Default: Dump root node bytecode jika ada
-		// Kita butuh akses ke rootNode yang sedang dieksekusi.
-		// Untuk kemudahan, jika tidak ada argumen, beri instruksi cara pakai.
-		fmt.Println("   🔍 [DEBUG] Usage: debug.dump: \"functionName\"")
+		// 2. Default: Dump current node
+		fmt.Printf("   🔍 [DEBUG] Node: %+v\n", node)
 		return nil
 	}, engine.SlotMeta{
-		Description: "Melakukan disassembly bytecode dari fungsi yang ditentukan.",
-		Example:     "debug.dump: \"hitung_gaji\"",
+		Description: "Melakukan dump AST node atau variabel untuk debugging.",
+		Example:     "debug.dump: \"myVariable\"",
 	})
 }

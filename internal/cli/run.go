@@ -7,10 +7,8 @@ import (
 	"strings"
 	"zeno/internal/app"
 	"zeno/pkg/adapters"
-	"zeno/pkg/compiler"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
-	"zeno/pkg/engine/vm"
 	"zeno/pkg/logger"
 	"zeno/pkg/worker"
 
@@ -19,59 +17,34 @@ import (
 )
 
 func HandleRun(args []string) {
-	// 1. Load .env FIRST to check configuration
+	// 1. Load .env
 	godotenv.Load()
 
-	// 2. Check VM Toggle (Env Priority, then Flag Override)
-	useVM := os.Getenv("ZENO_VM_ENABLED") == "true"
-	var scriptArgs []string
-
-	// Simple Flag Parsing
-	for _, arg := range args {
-		if arg == "--vm" {
-			useVM = true
-		} else {
-			scriptArgs = append(scriptArgs, arg)
-		}
-	}
-
-	if len(scriptArgs) < 1 {
-		fmt.Println("Usage: zeno run <path/to/script.zl> [--vm]")
+	if len(args) < 1 {
+		fmt.Println("Usage: zeno run <path/to/script.zl>")
 		os.Exit(1)
 	}
 
-	// 3. Setup Logger
+	// 2. Setup Logger
 	logger.Setup("development")
 
-	path := scriptArgs[0]
-	var root *engine.Node
-	var chunk *vm.Chunk
-	var err error
+	path := args[0]
 
-	// A. Check for Bytecode File (.zbc) -> FAST PATH
-	if strings.HasSuffix(path, ".zbc") {
-		useVM = true // Force VM mode for bytecode
-		chunk, err = vm.LoadFromFile(path)
-		if err != nil {
-			fmt.Printf("❌ Load Bytecode Error: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		// B. Standard Source File (.zl) -> Parse AST
-		root, err = engine.LoadScript(path)
-		if err != nil {
-			fmt.Printf("❌ Syntax Error: %v\n", err)
-			os.Exit(1)
-		}
+	// 3. Parse ZenoLang Script
+	root, err := engine.LoadScript(path)
+	if err != nil {
+		fmt.Printf("❌ Syntax Error: %v\n", err)
+		os.Exit(1)
 	}
 
+	// 4. Setup Database Manager
 	dbMgr := dbmanager.NewDBManager()
 
 	// [PORTABILITY] Inject GoHostAdapter
 	adapter := adapters.NewGoHostAdapter(dbMgr)
 	eng := engine.NewEngine(adapter)
 
-	// Setup DB Connection
+	// 5. Setup Primary DB Connection
 	dbDriver := os.Getenv("DB_DRIVER")
 	if dbDriver == "" {
 		dbDriver = "mysql"
@@ -91,7 +64,7 @@ func HandleRun(args []string) {
 		os.Exit(1)
 	}
 
-	// Auto-detect additional DBs
+	// 6. Auto-detect additional DBs
 	envVars := os.Environ()
 	detectedDBs := make(map[string]bool)
 	suffixes := []string{"_DRIVER", "_HOST", "_NAME", "_USER", "_PASS"}
@@ -158,40 +131,16 @@ func HandleRun(args []string) {
 		}
 	}
 
-	// Use the newly created helper registry
+	// 7. Register all slots
 	queue := worker.NewDBQueue(dbMgr, "default")
 	r := chi.NewRouter()
 	app.RegisterAllSlots(eng, r, dbMgr, queue, nil)
 
-	if useVM {
-		fmt.Println("🚀 Running in VM Mode (Experimental)")
-		// If chunk not loaded from file (meaning we came from .zl), compile now
-		if chunk == nil {
-			comp := compiler.NewCompiler()
-			var err error
-			chunk, err = comp.Compile(root)
-			if err != nil {
-				fmt.Printf("❌ Compilation Error: %v\n", err)
-				os.Exit(1)
-			}
-		}
-
-		// Create dependencies
-		scope := engine.NewScope(nil)
-		host := engine.NewZenoHost(context.Background(), eng, scope)
-
-		virtualMachine := vm.NewVM(host)
-
-		// Run VM
-		if err := virtualMachine.Run(chunk); err != nil {
-			fmt.Printf("❌ Runtime Error: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		if err := eng.Execute(context.Background(), root, engine.NewScope(nil)); err != nil {
-			fmt.Printf("❌ Execution Error: %v\n", err)
-			os.Exit(1)
-		}
+	// 8. Execute ZenoLang Script (AST Interpreter)
+	if err := eng.Execute(context.Background(), root, engine.NewScope(nil)); err != nil {
+		fmt.Printf("❌ Execution Error: %v\n", err)
+		os.Exit(1)
 	}
+
 	os.Exit(0)
 }

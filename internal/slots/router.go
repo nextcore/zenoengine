@@ -10,9 +10,7 @@ import (
 	"strings"
 	"time"
 	"zeno/pkg/apidoc"
-	"zeno/pkg/compiler"
 	"zeno/pkg/engine"
-	"zeno/pkg/engine/vm"
 	"zeno/pkg/middleware"
 	"zeno/pkg/utils/coerce"
 
@@ -40,18 +38,6 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// 1. Get Arena from pool for this request
 			arena := engine.GetArena()
 			defer engine.PutArena(arena)
-
-			fmt.Printf("DEBUG HANDLER START: %s %s (Children: %d)\n", r.Method, r.URL.Path, len(children))
-
-			// DEBUG: Show what's in baseScope
-			fmt.Printf("DEBUG SCOPE KEYS: ")
-			if baseScope != nil {
-				scopeMap := baseScope.ToMap()
-				for k := range scopeMap {
-					fmt.Printf("%s, ", k)
-				}
-			}
-			fmt.Printf("\n")
 
 			// 2. Create Request Scope in the Arena
 			reqScope := arena.AllocScope(baseScope)
@@ -172,93 +158,13 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// [NEW] 7. Inject Auth from Chi middleware context to ZenoLang scope
 			// This bridges native Chi middleware (MultiTenantAuth) to ZenoLang scope
 			middleware.InjectAuthToScope(r, reqScope)
-			// [NEW] 8. EXECUTION (ZenoVM with Caching & AST Fallback)
-			// Root node for this route's logic
-			rootNode := &engine.Node{Name: "root", Children: children}
 
-			// Check if VM is enabled
-			useVM := os.Getenv("ZENO_VM_ENABLED") == "true"
-
-			// [NEW] AOT: Try to load from .zbc file if available
-			var chunk *vm.Chunk
-			var zbcApplied bool
-
-			// Only attempt VM compilation if VM is enabled
-			if useVM {
-				// Check if first child has a filename (for .zbc caching)
-				if len(children) > 0 && children[0].Filename != "" {
-					zbcFile := strings.TrimSuffix(children[0].Filename, ".zl") + ".zbc"
-
-					// 1. Try to load existing .zbc
-					if c, err := vm.LoadFromFile(zbcFile); err == nil {
-						chunk = c
-						zbcApplied = true
-					} else {
-						// 2. Check if .zbc is stale (source file newer)
-						if srcInfo, err := os.Stat(children[0].Filename); err == nil {
-							if zbcInfo, err := os.Stat(zbcFile); err == nil {
-								if srcInfo.ModTime().After(zbcInfo.ModTime()) {
-									// Recompile if source is newer
-									comp := compiler.NewCompiler()
-									if c, err := comp.Compile(rootNode); err == nil {
-										chunk = c
-										rootNode.Bytecode = chunk
-										chunk.SaveToFile(zbcFile)
-									}
-								}
-							}
-						}
-					}
-
-					// 3. Compile and Save if still no chunk
-					if chunk == nil {
-						comp := compiler.NewCompiler()
-						if c, err := comp.Compile(rootNode); err == nil {
-							chunk = c
-							rootNode.Bytecode = chunk
-							// Save for next time (Async might be better, but sync is safer for now)
-							chunk.SaveToFile(zbcFile)
-						}
-					}
-				} else {
-					// Fallback for dynamic nodes without filenames
-					if rootNode.Bytecode != nil {
-						chunk = rootNode.Bytecode.(*vm.Chunk)
-					} else {
-						comp := compiler.NewCompiler()
-						if c, err := comp.Compile(rootNode); err == nil {
-							chunk = c
-							rootNode.Bytecode = chunk
-						}
-					}
-				}
-
-				if zbcApplied {
-					// Log once per route for visibility (optional)
-					// fmt.Printf("   🚀 [AOT] Loaded %s.zbc\n", children[0].Filename)
-				}
-			}
-
+			// 8. EXECUTION (AST Interpreter)
 			var execErr error
-			if chunk != nil && useVM {
-				// Adapter Setup
-				host := engine.NewZenoHost(timeoutCtx, eng, reqScope)
-
-				v := vm.NewVM(host)
-				execErr = v.Run(chunk)
-			} else {
-				// Fallback to AST Walker if compiler fails or VM disabled
-				for _, child := range children {
-					if execErr = eng.Execute(timeoutCtx, child, reqScope); execErr != nil {
-						break
-					}
+			for _, child := range children {
+				if execErr = eng.Execute(timeoutCtx, child, reqScope); execErr != nil {
+					break
 				}
-			}
-
-			if execErr != nil {
-				fmt.Printf("DEBUG HANDLER EXEC ERROR: %v\n", execErr)
-			} else {
-				fmt.Printf("DEBUG HANDLER EXEC SUCCESS\n")
 			}
 
 			// Handle Errors
@@ -399,7 +305,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 			// Resolve Full Path for Documentation
 			fullDocPath := joinPath(getCurrentPath(ctx), path)
-			fmt.Printf("DEBUG REGISTER: %s %s (Node Children: %d)\n", m, fullDocPath, len(node.Children))
+			// Route registration
 
 			routeDoc := &apidoc.RouteDoc{
 				Method:    m,
@@ -504,12 +410,10 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// Prepare execution children (filtering config nodes)
 			var execChildren []*engine.Node
 			if doNode != nil {
-				fmt.Printf("DEBUG REGISTER: Found 'do' node with %d children\n", len(doNode.Children))
 				for _, child := range doNode.Children {
 					execChildren = append(execChildren, child)
 				}
 			} else {
-				fmt.Printf("DEBUG REGISTER: No 'do' node found, scanning children directly\n")
 				for _, child := range node.Children {
 					name := child.Name
 					if name == "do" || name == "summary" || name == "desc" || name == "tags" || name == "body" || name == "query" || name == "middleware" {
