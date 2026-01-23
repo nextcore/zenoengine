@@ -59,6 +59,7 @@ func RegisterFunctionSlots(eng *engine.Engine) {
 	// Contoh: call: my_func
 	eng.Register("call", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		funcName := coerce.ToString(resolveValue(node.Value, scope))
+		fmt.Printf("[DEBUG CALL] node.Value='%v', resolved funcName='%s'\n", node.Value, funcName)
 		if funcName == "" {
 			return fmt.Errorf("call: function name is required")
 		}

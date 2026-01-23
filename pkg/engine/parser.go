@@ -129,7 +129,7 @@ func parse(l *Lexer, filename string) (*Node, error) {
 				peek := l.PeekToken()
 				// Berhenti jika EOF, baris baru, atau ketemu pembuka blok { murni
 				// TokenLBrace di Lexer baru skrg hanya murni standalone "{"
-				if peek.Type == TokenEOF || peek.Line != currentLine || peek.Type == TokenLBrace || peek.Type == TokenColon {
+				if peek.Type == TokenEOF || peek.Line != currentLine || peek.Type == TokenLBrace || peek.Type == TokenColon || peek.Type == TokenSemicolon {
 					break
 				}
 				// Kasus penutup blok murni "}" di baris yang sama juga stop
@@ -165,6 +165,11 @@ func parse(l *Lexer, filename string) (*Node, error) {
 						lastNode.Value = fullVal
 					}
 				}
+			}
+
+			// Consume semicolon if it was the break reason
+			if l.PeekToken().Type == TokenSemicolon {
+				l.NextToken()
 			}
 
 			// Cek apakah selanjutnya adalah blok {

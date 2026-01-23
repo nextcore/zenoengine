@@ -5,6 +5,10 @@ fn: login {
     $email : $request.body.email
     $password : $request.body.password
     
+    $email : $request.body.email
+    $password : $request.body.password
+    log: "DEBUG CONTROLLER: Email=" $email " Password=" $password
+
     // 1. Input Validation
     if: $email == "" || $password == "" {
         then: {

@@ -205,6 +205,37 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		},
 	})
 
+	// 2.7 STRINGS CONTAINS
+	eng.Register("string.contains", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		input := coerce.ToString(resolveValue(node.Value, scope))
+		var substr string
+		target := "contains_result"
+
+		for _, c := range node.Children {
+			fmt.Printf("DEBUG STRING.CONTAINS CHILD: Name='%s' Value='%v'\n", c.Name, c.Value)
+			val := parseNodeValue(c, scope)
+			if c.Name == "substr" || c.Name == "val" {
+				substr = coerce.ToString(val)
+			}
+			if c.Name == "as" {
+				target = coerce.ToString(c.Value)
+				fmt.Printf("DEBUG STRING.CONTAINS TARGET: raw='%v' target='%s'\n", c.Value, target)
+			}
+		}
+
+		result := strings.Contains(input, substr)
+		fmt.Printf("DEBUG STRING.CONTAINS: input='%s' substr='%s' result=%v\n", input, substr, result)
+		scope.Set(target, result)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Mengecek apakah string mengandung substring tertentu.",
+		Example:     "string.contains: $text { substr: '@'; as: $has_at }",
+		Inputs: map[string]engine.InputMeta{
+			"substr": {Description: "Substring yang dicari", Required: true},
+			"as":     {Description: "Variabel penyimpan hasil (bool)", Required: false},
+		},
+	})
+
 	// 3. TEXT SLUGIFY
 	eng.Register("text.slugify", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		input := coerce.ToString(resolveValue(node.Value, scope))
@@ -334,6 +365,7 @@ func RegisterUtilSlots(eng *engine.Engine) {
 	// 9. IF (UPGRADED: Support ==, !=, >, <, >=, <=)
 	eng.Register("if", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		expression := coerce.ToString(node.Value)
+		fmt.Printf("DEBUG IF START: expression='%s' raw_value=%v\n", expression, node.Value)
 		isTrue := false
 
 		// Helper untuk parsing bagian kiri dan kanan operator
@@ -387,12 +419,30 @@ func RegisterUtilSlots(eng *engine.Engine) {
 			}
 		} else {
 			// Logic: Truthy Check (Single Value)
-			val := resolveValue(node.Value, scope)
-			if b, err := coerce.ToBool(val); err == nil {
-				isTrue = b
+			// [NEW] Support Negation (!)
+			if strings.HasPrefix(expression, "!") {
+				key := strings.TrimPrefix(expression, "!")
+				// Resolve the variable part
+				res := resolveValue(key, scope)
+
+				// Convert to bool
+				b, err := coerce.ToBool(res)
+				fmt.Printf("DEBUG IF NEGATION: expr='%s' key='%s' res=%v bool=%v err=%v\n", expression, key, res, b, err)
+				if err == nil {
+					isTrue = !b
+				} else {
+					// Check other truthy conditions
+					s := coerce.ToString(res)
+					isTrue = !(s != "" && s != "false" && s != "0" && s != "<nil>" && s != "nil")
+				}
 			} else {
-				s := coerce.ToString(val)
-				isTrue = (s != "" && s != "false" && s != "0" && s != "<nil>")
+				val := resolveValue(node.Value, scope)
+				if b, err := coerce.ToBool(val); err == nil {
+					isTrue = b
+				} else {
+					s := coerce.ToString(val)
+					isTrue = (s != "" && s != "false" && s != "0" && s != "<nil>")
+				}
 			}
 		}
 

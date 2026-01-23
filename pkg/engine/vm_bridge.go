@@ -66,11 +66,14 @@ func (h *ZenoHost) Call(slotName string, args map[string]interface{}) (interface
 
 // Get implements vm.HostInterface.Get
 func (h *ZenoHost) Get(key string) (interface{}, bool) {
-	return h.scope.Get(key)
+	val, ok := h.scope.Get(key)
+	fmt.Printf("DEBUG BRIDGE GET: key='%s' found=%v val='%v'\n", key, ok, val)
+	return val, ok
 }
 
 // Set implements vm.HostInterface.Set
 func (h *ZenoHost) Set(key string, val interface{}) {
+	fmt.Printf("DEBUG BRIDGE SET: key='%s' val='%v'\n", key, val)
 	h.scope.Set(key, val)
 }
 

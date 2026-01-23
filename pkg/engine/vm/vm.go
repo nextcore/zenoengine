@@ -656,6 +656,18 @@ func (vm *VM) callSlot(nameVal Value) error {
 
 	vm.syncLocals()
 	_, err := vm.host.Call(slotName, args)
+
+	// [FIX] Restore locals from Host (Scope) because slot might have updated them (e.g. via 'as' param)
+	if err == nil {
+		frame := vm.frame()
+		for i, name := range frame.chunk.LocalNames {
+			if val, ok := vm.host.Get(name); ok {
+				stackIdx := frame.base + i
+				// We trust NewValue to handle native types correctly
+				vm.stack[stackIdx] = NewValue(val)
+			}
+		}
+	}
 	return err
 }
 

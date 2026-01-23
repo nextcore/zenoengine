@@ -367,9 +367,17 @@ func (c *Compiler) compileNode(node *engine.Node) error {
 		for _, child := range node.Children {
 			// Push Name
 			c.emitConstantOperand(vm.OpConstant, c.addConstant(vm.NewString(child.Name)))
-			// Push Value
-			if err := c.compileNodeAsValue(child); err != nil {
-				return err
+
+			// [FIX] 'as' attribute usually implies variable assignment, so pass the raw string name
+			// instead of evaluating the variable's current value.
+			if child.Name == "as" && child.Value != nil {
+				s := fmt.Sprintf("%v", child.Value)
+				c.emitConstantOperand(vm.OpConstant, c.addConstant(vm.NewString(s)))
+			} else {
+				// Push Value
+				if err := c.compileNodeAsValue(child); err != nil {
+					return err
+				}
 			}
 		}
 

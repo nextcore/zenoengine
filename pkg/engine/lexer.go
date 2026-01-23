@@ -9,6 +9,7 @@ type TokenType string
 const (
 	TokenIdentifier TokenType = "IDENTIFIER"
 	TokenColon      TokenType = "COLON"
+	TokenSemicolon  TokenType = "SEMICOLON"
 	TokenString     TokenType = "STRING"
 	TokenLBrace     TokenType = "LBRACE"
 	TokenRBrace     TokenType = "RBRACE"
@@ -58,6 +59,8 @@ func (l *Lexer) NextToken() Token {
 	switch l.ch {
 	case ':':
 		tok = l.newToken(TokenColon, string(l.ch))
+	case ';':
+		tok = l.newToken(TokenSemicolon, string(l.ch))
 	case ',':
 		tok = l.newToken(TokenComma, string(l.ch))
 	case '"', '\'':
