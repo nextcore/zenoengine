@@ -129,7 +129,11 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+				raw := coerce.ToString(c.Value)
+				if strings.HasPrefix(raw, "\x00") {
+					raw = raw[1:]
+				}
+				target = strings.TrimPrefix(raw, "$")
 			}
 		}
 
@@ -162,7 +166,11 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+				raw := coerce.ToString(c.Value)
+				if strings.HasPrefix(raw, "\x00") {
+					raw = raw[1:]
+				}
+				target = strings.TrimPrefix(raw, "$")
 			}
 		}
 
@@ -185,7 +193,11 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+				raw := coerce.ToString(c.Value)
+				if strings.HasPrefix(raw, "\x00") {
+					raw = raw[1:]
+				}
+				target = strings.TrimPrefix(raw, "$")
 			}
 		}
 
@@ -205,7 +217,11 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 		target := "host"
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+				raw := coerce.ToString(c.Value)
+				if strings.HasPrefix(raw, "\x00") {
+					raw = raw[1:]
+				}
+				target = strings.TrimPrefix(raw, "$")
 			}
 		}
 

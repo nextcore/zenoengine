@@ -87,9 +87,4 @@ log: "🔐 Demo Credentials:"
 log: "   Admin: admin@demo.com / password123"
 log: "   User:  john@demo.com / password123"
 
-// ==========================================
-// 10. START SERVER
-// ==========================================
-http.server: {
-  port: 3000
-}
+

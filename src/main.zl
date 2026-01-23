@@ -8,13 +8,22 @@ include: src/tutorial/max/main.zl
 // ==========================================
 // OTHER TUTORIALS (Uncomment to enable)
 // ==========================================
-// include: src/tutorial/pos_api/main.zl
+include: src/tutorial/pos_api/main.zl
 // include: src/tutorial/inertia_demo/main.zl
 include: src/tutorial/gocms/main.zl
 
 // 404 Handler
 http.get: /* {
   do: {
+    // If accessing static files (public folder), serve them and return
+    string.starts_with: $path { prefix: "/public/" ; as: $is_public }
+    if: $is_public {
+      then: {
+        http.serve_static
+        return
+      }
+    }
+    
     // If accessing root, /max, or /max/, redirect to the tutorial dashboard
     if: $path == "/" {
         then: {
@@ -41,4 +50,11 @@ http.get: /* {
       body: "Halaman tidak ditemukan."
     }
   }
+}
+
+// ==========================================
+// START HTTP SERVER (Blocking)
+// ==========================================
+http.server: {
+  port: 3000
 }

@@ -2,12 +2,13 @@
 
 fn: login {
     log: "🔐 Login attempt started"
-    $email : $request.body.email
-    $password : $request.body.password
+    log: "Check Request:"
+    log: $request
     
-    $email : $request.body.email
-    $password : $request.body.password
-    log: "DEBUG CONTROLLER: Email=" $email " Password=" $password
+    var: $email { val: $request.body.email }
+    log: "Email Value:"
+    log: $email
+    var: $password { val: $request.body.password }
 
     // 1. Input Validation
     if: $email == "" || $password == "" {
@@ -17,7 +18,7 @@ fn: login {
                 message: "Email and Password required",
                 error: "MISSING_CREDENTIALS"
             }
-            stop
+            return
         }
     }
     
@@ -30,7 +31,7 @@ fn: login {
                 message: "Invalid email format",
                 error: "INVALID_EMAIL"
             }
-            stop
+            return
         }
     }
     
@@ -54,7 +55,7 @@ fn: login {
                 message: "Tenant ID missing (Header X-Tenant-ID or Subdomain)",
                 error: "TENANT_ID_REQUIRED"
             }
-            stop
+            return
         }
     }
     
@@ -77,7 +78,7 @@ fn: login {
                 message: "Invalid Tenant",
                 error: "TENANT_NOT_FOUND"
             }
-            stop
+            return
         }
     }
     
@@ -101,7 +102,7 @@ fn: login {
                 message: "Invalid credentials",
                 error: "INVALID_CREDENTIALS"
             }
-            stop
+            return
         }
     }
     
@@ -120,7 +121,7 @@ fn: login {
                         message: "Invalid credentials",
                         error: "INVALID_CREDENTIALS"
                     }
-                    stop
+                    return
                 }
             }
         }
@@ -130,7 +131,7 @@ fn: login {
                 message: "Authentication error",
                 error: "PASSWORD_VERIFICATION_ERROR"
             }
-            stop
+            return
         }
     }
     
@@ -166,7 +167,7 @@ fn: login {
                 message: "Failed to generate authentication token",
                 error: "TOKEN_GENERATION_FAILED"
             }
-            stop
+            return
         }
     }
     
