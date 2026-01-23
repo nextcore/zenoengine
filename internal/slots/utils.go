@@ -57,7 +57,6 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 		}
 
 		key := strings.TrimPrefix(valStr, "$")
-		// fmt.Println("DEBUG RESOLVE:", key)
 
 		// A. Check Dot Notation OR Bracket Notation
 		if strings.Contains(key, ".") || strings.Contains(key, "[") {
@@ -423,7 +422,7 @@ func RegisterUtilSlots(eng *engine.Engine) {
 
 				// Convert to bool
 				b, err := coerce.ToBool(res)
-				fmt.Printf("DEBUG IF NEGATION: expr='%s' key='%s' res=%v bool=%v err=%v\n", expression, key, res, b, err)
+
 				if err == nil {
 					isTrue = !b
 				} else {
