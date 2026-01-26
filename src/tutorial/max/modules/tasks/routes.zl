@@ -16,30 +16,29 @@ http.get: /tutorial/max/tasks {
       secret: $jwt_secret
       redirect: "/tutorial/max/login"
       do: {
-        // Get current user
-        auth.user: { as: $current_user }
+        auth.user: { as: current_user }
+        
+        // Initialize inputs to nil
+        var: $filter_status { val: nil }
+        var: $filter_priority { val: nil }
+        var: $search_term { val: nil }
+        var: $page_param { val: nil }
         
         // Get filter parameters
-        http.query: "status" { as: $filter_status }
-        http.query: "priority" { as: $filter_priority }
-        http.query: "search" { as: $search_term }
-        http.query: "page" { as: $page_param }
+        http.query: "status" { as: filter_status }
+        http.query: "priority" { as: filter_priority }
+        http.query: "search" { as: search_term }
+        http.query: "page" { as: page_param }
         
-        // Sanitize filters (empty string -> nil)
-        if: $filter_status == "" { 
-            then: { 
-                var: $filter_status { val: nil } 
-            }
+        // Sanitize filters
+        if: $filter_status == "" || $filter_status == "nil" { 
+            then: { var: $filter_status { val: nil } }
         }
-        if: $filter_priority == "" { 
-            then: { 
-                var: $filter_priority { val: nil } 
-            }
+        if: $filter_priority == "" || $filter_priority == "nil" { 
+            then: { var: $filter_priority { val: nil } }
         }
-        if: $search_term == "" { 
-            then: { 
-                var: $search_term { val: nil } 
-            }
+        if: $search_term == "" || $search_term == "nil" { 
+            then: { var: $search_term { val: nil } }
         }
         
         // Default page logic
@@ -47,7 +46,7 @@ http.get: /tutorial/max/tasks {
         
         if: $page_param != "" && $page_param != nil {
              then: {
-                 cast.to_int: $page_param { as: $page_int }
+                 cast.to_int: $page_param { as: page_int }
                  if: $page_int > 0 {
                       then: {
                           var: $page { val: $page_int }
@@ -58,8 +57,8 @@ http.get: /tutorial/max/tasks {
         
         // Calculate pagination
         var: $per_page { val: 10 }
-        math.calc: ($page - 1) * $per_page { as: $offset }
-        cast.to_int: $offset { as: $offset }
+        math.calc: ($page - 1) * $per_page { as: offset }
+        cast.to_int: $offset { as: offset }
         
         // Build query
         db.table: tutorial_tasks {
@@ -67,24 +66,51 @@ http.get: /tutorial/max/tasks {
         }
         
         // Apply filters
-        isset: $filter_status {
+        if: $filter_status != nil {
           then: {
              db.where: { col: "status"; val: $filter_status }
           }
         }
-        isset: $filter_priority {
+        if: $filter_priority != nil {
           then: {
              db.where: { col: "priority"; val: $filter_priority }
           }
         }
-        isset: $search_term {
+        if: $search_term != nil {
            then: {
              db.where: { col: "title"; op: "LIKE"; val: "%" + $search_term + "%" }
            }
         }
         
-        // Get total count for pagination
-        db.count: { as: $total_tasks }
+        // Initialize outputs
+        var: $total_tasks { val: 0 }
+        db.count: { as: total_tasks }
+        
+        // Get tasks with pagination
+        db.table: tutorial_tasks {
+          db: tutorial
+        }
+        
+        // Re-apply filters
+        if: $filter_status != nil {
+          then: {
+             db.where: { col: "status"; val: $filter_status }
+          }
+        }
+        if: $filter_priority != nil {
+          then: {
+             db.where: { col: "priority"; val: $filter_priority }
+          }
+        }
+        if: $search_term != nil {
+           then: {
+             db.where: { col: "title"; op: "LIKE"; val: "%" + $search_term + "%" }
+           }
+        }
+        
+        // Initialize outputs
+        var: $total_tasks { val: 0 }
+        db.count: { as: total_tasks }
         
         // Get tasks with pagination
         db.table: tutorial_tasks {
@@ -111,17 +137,23 @@ http.get: /tutorial/max/tasks {
         db.order_by: "created_at DESC"
         db.limit: $per_page
         db.offset: $offset
-        db.get: { as: $tasks }
-        len: $tasks { as: $tasks_count }
+        
+        var: $tasks { val: [] }
+        db.get: { as: tasks }
+        
+        var: $tasks_count { val: 0 }
+        len: $tasks { as: tasks_count }
         
         // Calculate total pages
-        math.calc: ceil($total_tasks / $per_page) { as: $total_pages }
+        // Fix: Use explicit variables without $ for expr engine just to remain clean
+        math.calc: ceil(total_tasks / per_page) { as: total_pages }
         
         // Get teams for filter dropdown
         db.table: tutorial_teams {
           db: tutorial
         }
-        db.get: { as: $teams }
+        var: $teams { val: [] }
+        db.get: { as: teams }
         
         // Render view
         view.blade: "tutorial/max/tasks/index.blade.zl" {
@@ -151,19 +183,21 @@ http.get: /tutorial/max/tasks/create {
       secret: $jwt_secret
       redirect: "/tutorial/max/login"
       do: {
-        auth.user: { as: $current_user }
+        auth.user: { as: current_user }
         
         // Get teams for dropdown
         db.table: tutorial_teams {
           db: tutorial
         }
-        db.get: { as: $teams }
+        var: $teams { val: [] }
+        db.get: { as: teams }
         
         // Get users for assignment
         db.table: tutorial_users {
           db: tutorial
         }
-        db.get: { as: $users }
+        var: $users { val: [] }
+        db.get: { as: users }
         
         view.blade: "tutorial/max/tasks/create.blade.zl" {
           teams: $teams

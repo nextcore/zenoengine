@@ -1,0 +1,81 @@
+﻿Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFkbWluQGRlbW8uY29tIiwiZXhwIjoxNzY4MTQ2MTc3LCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.AlciBi0WkvhYytgvMfCipzLH5C5HLa3i7L_bbmhRWxE
+{
+    "data":  [
+                 {
+                     "assigned_to":  2,
+                     "attachment":  null,
+                     "completed_at":  null,
+                     "created_at":  "2026-01-08T14:54:37Z",
+                     "description":  "Add JWT-based authentication to the API endpoints",
+                     "due_date":  "2026-01-10T17:00:00Z",
+                     "id":  1,
+                     "priority":  "high",
+                     "status":  "in_progress",
+                     "team_id":  1,
+                     "title":  "Implement User Authentication",
+                     "updated_at":  "2026-01-08T14:54:37Z"
+                 },
+                 {
+                     "assigned_to":  3,
+                     "attachment":  null,
+                     "completed_at":  null,
+                     "created_at":  "2026-01-08T14:54:37Z",
+                     "description":  "Create a modern, responsive landing page design",
+                     "due_date":  "2026-01-12T17:00:00Z",
+                     "id":  2,
+                     "priority":  "medium",
+                     "status":  "pending",
+                     "team_id":  2,
+                     "title":  "Design Landing Page",
+                     "updated_at":  "2026-01-08T14:54:37Z"
+                 },
+                 {
+                     "assigned_to":  2,
+                     "attachment":  null,
+                     "completed_at":  "2026-01-05T14:30:00Z",
+                     "created_at":  "2026-01-08T14:54:37Z",
+                     "description":  "Configure local development environment with all necessary tools",
+                     "due_date":  null,
+                     "id":  3,
+                     "priority":  "high",
+                     "status":  "completed",
+                     "team_id":  1,
+                     "title":  "Setup Development Environment",
+                     "updated_at":  "2026-01-08T14:54:37Z"
+                 },
+                 {
+                     "assigned_to":  2,
+                     "attachment":  null,
+                     "completed_at":  null,
+                     "created_at":  "2026-01-08T14:54:37Z",
+                     "description":  "Update API documentation with latest endpoints",
+                     "due_date":  "2026-01-15T17:00:00Z",
+                     "id":  4,
+                     "priority":  "low",
+                     "status":  "pending",
+                     "team_id":  1,
+                     "title":  "Update Documentation",
+                     "updated_at":  "2026-01-08T14:54:37Z"
+                 },
+                 {
+                     "assigned_to":  3,
+                     "attachment":  null,
+                     "completed_at":  null,
+                     "created_at":  "2026-01-08T14:54:37Z",
+                     "description":  "Plan and execute social media marketing campaign",
+                     "due_date":  "2026-01-08T17:00:00Z",
+                     "id":  5,
+                     "priority":  "medium",
+                     "status":  "in_progress",
+                     "team_id":  2,
+                     "title":  "Create Social Media Campaign",
+                     "updated_at":  "2026-01-08T14:54:37Z"
+                 }
+             ],
+    "pagination":  {
+                       "page":  0,
+                       "per_page":  0,
+                       "total":  5
+                   },
+    "success":  true
+}

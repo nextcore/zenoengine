@@ -1,0 +1,154 @@
+{
+    "scopeName": "source.zenolang",
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#control_keywords"
+        },
+        {
+            "include": "#operators"
+        },
+        {
+            "include": "#slots"
+        },
+        {
+            "include": "#variables"
+        },
+        {
+            "include": "#punctuation"
+        }
+    ],
+    "repository": {
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.double-slash.zenolang",
+                    "match": "//.*$"
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.zenolang",
+                    "begin": "\"",
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.zenolang",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.single.zenolang",
+                    "begin": "'",
+                    "end": "'"
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.float.zenolang",
+                    "match": "\\b\\d+\\.\\d+\\b"
+                },
+                {
+                    "name": "constant.numeric.integer.zenolang",
+                    "match": "\\b\\d+\\b"
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.zenolang",
+                    "match": "\\b(if|else|try|catch|while|include)\\b"
+                },
+                {
+                    "name": "keyword.other.zenolang",
+                    "match": "\\b(as|do|then|in)\\b"
+                },
+                {
+                    "name": "storage.type.zenolang",
+                    "match": "\\b(var|val|const)\\b"
+                },
+                {
+                    "name": "constant.language.zenolang",
+                    "match": "\\b(true|false|nil|null)\\b"
+                }
+            ]
+        },
+        "operators": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.arithmetic.zenolang",
+                    "match": "\\+|\\-|\\*|\\/|%"
+                },
+                {
+                    "name": "keyword.operator.comparison.zenolang",
+                    "match": "==|!=|<=|>=|<|>"
+                },
+                {
+                    "name": "keyword.operator.assignment.zenolang",
+                    "match": "="
+                }
+            ]
+        },
+        "variables": {
+            "patterns": [
+                {
+                    "name": "variable.other.zenolang",
+                    "match": "\\$[a-zA-Z0-9_\\.]+"
+                }
+            ]
+        },
+        "slots": {
+            "patterns": [
+                {
+                    "match": "\\b(http|db|view|sec|io|os|strings|math|validator|log|template|array|map|loop|crypto|job|image|mail|monitor|system|cast|validate)\\.[a-zA-Z0-9_\\.]+(?=:)",
+                    "captures": {
+                        "0": {
+                            "name": "support.function.builtin.zenolang"
+                        }
+                    }
+                },
+                {
+                    "match": "\\b([a-zA-Z0-9_\\.]+)(?=:)",
+                    "captures": {
+                        "1": {
+                            "name": "support.function.zenolang"
+                        }
+                    }
+                },
+                {
+                    "name": "punctuation.separator.key-value.zenolang",
+                    "match": ":"
+                }
+            ]
+        },
+        "punctuation": {
+            "patterns": [
+                {
+                    "name": "punctuation.section.block.begin.zenolang",
+                    "match": "\\{"
+                },
+                {
+                    "name": "punctuation.section.block.end.zenolang",
+                    "match": "\\}"
+                }
+            ]
+        }
+    }
+}

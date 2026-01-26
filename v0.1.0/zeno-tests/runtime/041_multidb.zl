@@ -1,0 +1,58 @@
+// Test 041: Multi-Database Support
+// Tests db.config, and routing queries to different databases
+
+http.post: "/api/setup-multi" {
+    summary: "Setup multiple databases"
+    
+    // Configure connections
+    db.config {
+        default: "Data Source=main.db"
+        analytics: "Data Source=stats.db"
+    }
+    
+    // Create tables in default DB
+    db.exec: "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)"
+    db.exec: "DELETE FROM users"
+    
+    db.exec: "INSERT INTO users (name) VALUES ('Alice')" 
+    
+    // Create tables in analytics DB
+    db.exec: "CREATE TABLE IF NOT EXISTS page_views (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT)" {
+        connection: "analytics"
+    }
+    db.exec: "DELETE FROM page_views" {
+        connection: "analytics"
+    }
+    
+    db.exec: "INSERT INTO page_views (url) VALUES ('/home')" {
+        connection: "analytics"
+    }
+
+    http.ok {
+        message: "Multi-DB setup complete"
+    }
+}
+
+http.get: "/api/check-multi" {
+    summary: "Check data from both DBs"
+    
+    // Query default
+    db.query: "SELECT * FROM users" {
+        as: $users
+    }
+    
+    // Query analytics
+    db.query: "SELECT * FROM page_views" {
+        connection: "analytics"
+        as: $views
+    }
+    
+    // This should FAIL if we try to query page_views from default
+    // or users from analytics (assuming isolation logic works and they are files)
+    // Note: In SQLite, files are distinct. Dapper ensures we talk to correct conn.
+    
+    http.ok {
+        users: $users
+        views: $views
+    }
+}

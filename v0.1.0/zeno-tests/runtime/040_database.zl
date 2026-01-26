@@ -1,0 +1,48 @@
+// Test 040: Database Integration
+// Tests db.exec and db.query with SQLite
+
+http.post: "/api/setup" {
+    summary: "Setup database"
+    
+    db.exec: "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT)"
+    db.exec: "DELETE FROM users" // Clean up
+    
+    db.exec: "INSERT INTO users (name, email) VALUES (@name, @email)" {
+        name: "Alice"
+        email: "alice@example.com"
+    }
+    
+    db.exec: "INSERT INTO users (name, email) VALUES (@name, @email)" {
+        name: "Bob"
+        email: "bob@example.com"
+    }
+    
+    http.ok {
+        message: "Database setup complete"
+    }
+}
+
+http.get: "/api/users" {
+    summary: "Get all users"
+    
+    db.query: "SELECT * FROM users" {
+        as: $users
+    }
+    
+    http.ok {
+        items: $users
+    }
+}
+
+http.get: "/api/users/:id" {
+    summary: "Get user by ID"
+    
+    db.query: "SELECT * FROM users WHERE id = @id" {
+        id: $id
+        as: $result
+    }
+    
+    http.ok {
+        data: $result // Should be a list with 1 item
+    }
+}

@@ -1,0 +1,16 @@
+// Test 001: Basic HTTP Routing
+// This test verifies that basic HTTP GET routing works identically across all platforms
+
+http.get: "/api/test" {
+    summary: "Basic test endpoint"
+    tags: ["Tests"]
+    
+    $message: "Hello from ZenoLang"
+    $version: "1.0.0"
+    
+    http.ok {
+        message: $message
+        version: $version
+        platform: "compatible"
+    }
+}

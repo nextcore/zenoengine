@@ -1,0 +1,38 @@
+http.post: "/api/test/integration"
+  # Complete authentication flow test
+  
+  $user_input: {
+    email: "admin@example.com"
+    password: "SecurePass123"
+  }
+
+  # Step 1: Hash the password (simulating user registration)
+  crypto.hash: $user_input.password
+    as: $stored_hash
+
+  # Step 2: Verify password (simulating login)
+  crypto.verify:
+    hash: $stored_hash
+    text: $user_input.password
+    as: $password_valid
+
+  # Step 3: Generate JWT if password valid
+  jwt.sign:
+    secret: "integration-test-secret"
+    claims: { email: $user_input.email, role: "admin" }
+    expires_in: 3600
+    as: $auth_token
+
+  # Step 4: Generate CSRF token
+  sec.csrf_token: $csrf_token
+
+  http.json:
+    success: true
+    authentication_flow:
+      password_hashed: true
+      password_verified: $password_valid
+      jwt_generated: true
+      csrf_generated: true
+    tokens:
+      jwt: $auth_token
+      csrf: $csrf_token

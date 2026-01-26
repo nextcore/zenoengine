@@ -1,0 +1,31 @@
+// Test 030: API Documentation
+// This script tests dynamic API documentation generation
+
+http.get: "/api/products" {
+    summary: "List all products"
+    description: "Returns a list of products with pagination"
+    tags: ["Products", "Public"]
+    
+    http.ok {
+        items: []
+        count: 0
+    }
+}
+
+http.post: "/api/products" {
+    summary: "Create a product"
+    tags: ["Products", "Admin"]
+    
+    http.created {
+        id: "new-id"
+    }
+}
+
+http.get: "/api/users/:userId/orders" {
+    summary: "Get user orders"
+    tags: ["Users", "Orders"]
+    
+    http.ok {
+        orders: []
+    }
+}

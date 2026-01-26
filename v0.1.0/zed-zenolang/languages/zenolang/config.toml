@@ -1,0 +1,14 @@
+name = "ZenoLang"
+grammar = "zenolang"
+path_suffixes = ["zl"]
+line_comments = ["//"]
+block_comments = [] // ZenoLang doesn't have block comments yet
+output_to_input_pair = [
+    ["{", "}"],
+    ["\"", "\""],
+    ["'", "'"],
+]
+
+[indentation]
+tab_width = 2
+soft_tabs = true

@@ -1,0 +1,23 @@
+// Test 020: Basic Server
+// This script defines a simple HTTP server
+
+http.get: "/" {
+    http.ok {
+        message: "Welcome to ZenoEngine .NET"
+        status: "running"
+    }
+}
+
+http.get: "/api/hello" {
+    $name: "World"
+    http.ok {
+        message: "Hello $name"
+    }
+}
+
+http.post: "/api/data" {
+    // In future: read body
+    http.created {
+        received: true
+    }
+}

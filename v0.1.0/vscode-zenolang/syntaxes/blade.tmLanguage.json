@@ -1,0 +1,64 @@
+{
+	"scopeName": "source.zenolang.blade",
+	"patterns": [
+		{
+			"include": "#blade-comment"
+		},
+		{
+			"include": "#blade-directives"
+		},
+		{
+			"include": "#blade-echo"
+		},
+		{
+			"include": "text.html.basic"
+		}
+	],
+	"repository": {
+		"blade-comment": {
+			"begin": "\\{\\{--",
+			"end": "--\\}\\}",
+			"name": "comment.block.blade"
+		},
+		"blade-echo": {
+			"begin": "\\{\\{",
+			"end": "\\}\\}",
+			"name": "meta.embedded.zenolang",
+			"patterns": [
+				{
+					"include": "source.zenolang"
+				}
+			]
+		},
+		"blade-directives": {
+			"patterns": [
+				{
+					"name": "keyword.control.directive.blade",
+					"match": "@(if|else|elseif|endif|foreach|endforeach|for|endfor|while|endwhile|switch|case|default|endswitch|break|continue|extends|section|endsection|yield|include|stack|push|endpush|prepend|endprepend|props|csrf|method)\\b"
+				},
+				{
+					"begin": "(@[a-zA-Z_]\\w*)(\\()",
+					"beginCaptures": {
+						"1": {
+							"name": "keyword.control.directive.blade"
+						},
+						"2": {
+							"name": "punctuation.definition.parameters.begin.blade"
+						}
+					},
+					"end": "\\)",
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.parameters.end.blade"
+						}
+					},
+					"patterns": [
+						{
+							"include": "source.zenolang"
+						}
+					]
+				}
+			]
+		}
+	}
+}

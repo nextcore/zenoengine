@@ -1,0 +1,48 @@
+// Test 011: File Upload
+// This test verifies that file upload works identically
+
+http.post: "/api/upload" {
+    summary: "Upload file"
+    tags: ["Files"]
+    
+    // Validate uploaded file
+    filesystem.validate: $request.file {
+        max_size: "10MB"
+        allowed_types: ["image/jpeg", "image/png", "application/pdf"]
+        allowed_extensions: ["jpg", "jpeg", "png", "pdf"]
+        as: $validated_file
+    }
+    
+    // Generate unique filename
+    $timestamp: "$now"
+    $extension: "$validated_file.extension"
+    $filename: "upload_$timestamp.$extension"
+    
+    // Save file
+    filesystem.save: $validated_file {
+        path: "uploads/$filename"
+        as: $saved_file
+    }
+    
+    http.created {
+        filename: $filename
+        original_name: $validated_file.original_name
+        size: $validated_file.size
+        mime_type: $validated_file.mime_type
+        url: "/api/files/$filename"
+    }
+}
+
+http.get: "/api/files/{filename}" {
+    summary: "Download file"
+    tags: ["Files"]
+    
+    params: {
+        filename: "Filename|string|required"
+    }
+    
+    // Serve file
+    filesystem.download: "uploads/$filename" {
+        mime_type: "application/octet-stream"
+    }
+}

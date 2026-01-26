@@ -1,0 +1,46 @@
+// Smoke Test for ZenoLang Syntax Highlighting
+
+// Comments
+// This is a comment
+
+// Strings
+"This is a double quoted string"
+'This is a single quoted string'
+
+// Numbers
+123
+123.456
+
+// Keywords
+if: true {
+  then: {
+    log: "It is true"
+  }
+  else: {
+    log: "It is false"
+  }
+}
+
+// Variables
+$var1
+$user.name
+
+// Operators
+$a + $b
+$x - $y
+$p * $q
+$m / $n
+$val1 == $val2
+$val3 != $val4
+$count > 10
+$size <= 5
+
+// Slots
+http.get: /path {
+  do: {
+    db.connect: {
+      host: "localhost"
+      port: 5432
+    }
+  }
+}

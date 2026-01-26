@@ -1,0 +1,59 @@
+// ==========================================
+// SYSTEM DATABASE MIGRATION
+// Target DB: pos_system
+// ==========================================
+
+log: "Migrating System Database..."
+
+db.execute: "CREATE TABLE IF NOT EXISTS tenants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    db_connection_name TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)" { db: "system" } // Refers to DB_SYSTEM in .env
+
+// 1. Tenant ABC (ABC Clothing Store)
+db.table: tenants { db: "system" }
+db.where: {
+    col: "code"
+    val: "abc"
+}
+db.count: { as: $abc_count }
+
+if: $abc_count == 0 {
+    then: {
+        db.table: tenants { db: "system" }
+        db.insert: {
+            code: "abc"
+            name: "ABC Clothing Store"
+            db_connection_name: "tenant_abc"  // Matches DB_TENANT_ABC_* in .env
+            is_active: 1
+        }
+        log: "Seeded Tenant: ABC (Connection: tenant_abc)"
+    }
+}
+
+// 2. Tenant XYZ (XYZ Coffee Shop)
+db.table: tenants { db: "system" }
+db.where: {
+    col: "code"
+    val: "xyz"
+}
+db.count: { as: $xyz_count }
+
+if: $xyz_count == 0 {
+    then: {
+        db.table: tenants { db: "system" }
+        db.insert: {
+            code: "xyz"
+            name: "XYZ Coffee Shop"
+            db_connection_name: "tenant_xyz"  // Matches DB_TENANT_XYZ_* in .env
+            is_active: 1
+        }
+        log: "Seeded Tenant: XYZ (Connection: tenant_xyz)"
+    }
+}
+
+log: "System Migration Completed."

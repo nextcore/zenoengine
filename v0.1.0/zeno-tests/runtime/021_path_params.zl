@@ -1,0 +1,23 @@
+// Test 021: Path Parameters
+// This script tests routing with path parameters
+
+http.get: "/api/users/:id" {
+    summary: "Get user by ID"
+    
+    // Path parameters should be available in $params object or directly
+    // Let's assume they are injected as variables for key matches, 
+    // or inside a $params object. 
+    // Convention: usually specific variables like $id if it matches :id
+    
+    http.ok {
+        user_id: $id
+        status: "found"
+    }
+}
+
+http.get: "/api/posts/:postId/comments/:commentId" {
+    http.ok {
+        post: $postId
+        comment: $commentId
+    }
+}

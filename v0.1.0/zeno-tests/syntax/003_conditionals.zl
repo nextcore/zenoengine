@@ -1,0 +1,44 @@
+// Test 003: Conditionals (if-then-else)
+// This test verifies that conditional logic works identically
+
+http.get: "/api/conditionals" {
+    summary: "Test conditional logic"
+    tags: ["Tests"]
+    
+    $age: 25
+    $status: "unknown"
+    
+    // Test if-then-else
+    if: "$age >= 18" {
+        then: {
+            $status: "adult"
+        }
+        else: {
+            $status: "minor"
+        }
+    }
+    
+    // Test nested conditionals
+    $category: "unknown"
+    if: "$age < 13" {
+        then: {
+            $category: "child"
+        }
+        else: {
+            if: "$age < 18" {
+                then: {
+                    $category: "teenager"
+                }
+                else: {
+                    $category: "adult"
+                }
+            }
+        }
+    }
+    
+    http.ok {
+        age: $age
+        status: $status
+        category: $category
+    }
+}

@@ -1,0 +1,38 @@
+// Test 002: Variables and Type Coercion
+// This test verifies that variable assignment and type coercion work identically
+
+http.get: "/api/variables" {
+    summary: "Test variables and type coercion"
+    tags: ["Tests"]
+    
+    // String variables
+    $name: "ZenoEngine"
+    $version: "1.0.0"
+    
+    // Number variables
+    $count: 42
+    $price: 99.99
+    
+    // Boolean variables
+    $is_active: true
+    $is_beta: false
+    
+    // Null variable
+    $empty: null
+    
+    // Type coercion - numbers
+    $x: "10"
+    $y: "5"
+    $sum: "$x + $y"  // Should be 15 (number addition)
+    
+    http.ok {
+        name: $name
+        version: $version
+        count: $count
+        price: $price
+        is_active: $is_active
+        is_beta: $is_beta
+        empty: $empty
+        sum: $sum
+    }
+}

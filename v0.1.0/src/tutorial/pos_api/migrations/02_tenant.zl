@@ -1,0 +1,97 @@
+// ==========================================
+// TENANT DATABASE SCHEMA
+// This is the schema template that will be run on EVERY tenant DB
+// ==========================================
+
+log: "Migrating Tenant DB: " + $TARGET_DB
+
+// 1. USERS TABLE
+db.execute: "CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT DEFAULT 'cashier',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)" { db: $TARGET_DB }
+
+// 2. PRODUCTS TABLE
+db.execute: "CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sku TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    price DECIMAL(15,2) NOT NULL,
+    stock INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)" { db: $TARGET_DB }
+
+// 3. SALES HEADER
+db.execute: "CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_number TEXT UNIQUE NOT NULL,
+    user_id INTEGER NOT NULL,
+    total_amount DECIMAL(15,2) DEFAULT 0,
+    status TEXT DEFAULT 'completed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
+)" { db: $TARGET_DB }
+
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at)" { db: $TARGET_DB }
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sales_user_id ON sales(user_id)" { db: $TARGET_DB }
+
+// 4. SALE ITEMS
+db.execute: "CREATE TABLE IF NOT EXISTS sale_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    price_at_sale DECIMAL(15,2) NOT NULL,
+    subtotal DECIMAL(15,2) NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+)" { db: $TARGET_DB }
+
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id)" { db: $TARGET_DB }
+db.execute: "CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON sale_items(product_id)" { db: $TARGET_DB }
+
+log: "✓ Database schema created with indexes and foreign keys"
+
+
+// ==========================================
+// SEEDER (Default Data per Tenant)
+// ==========================================
+
+// CLEANUP: Delete old admin data (if any) to ensure fresh data is inserted correctly
+db.execute: "DELETE FROM users WHERE email = 'admin@pos.com'" { db: $TARGET_DB }
+
+db.table: users { db: $TARGET_DB }
+db.where: {
+    col: "email"
+    val: "admin@pos.com"
+}
+db.count: { as: $admin_count }
+
+if: $admin_count == 0 {
+    then: {
+        // Generate Hash
+        crypto.hash: "password" { as: $hash }
+        
+        // Create admin name (Concat string)
+        strings.concat {
+            val: "Admin "
+            val: $TARGET_DB
+            as: $admin_name
+        }
+
+        db.table: users { db: $TARGET_DB }
+        db.insert: {
+            name: $admin_name
+            email: "admin@pos.com"
+            password: $hash
+            role: "admin"
+        }
+        log: "Seeded Admin User for " + $TARGET_DB
+    }
+}
+
+log: "Migration Completed for " + $TARGET_DB

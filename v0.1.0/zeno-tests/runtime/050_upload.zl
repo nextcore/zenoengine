@@ -1,0 +1,27 @@
+// Test 050: File Upload
+// Tests receiving a file and saving it
+
+http.post: "/api/upload" {
+    summary: "Upload a file"
+    
+    // Check if file exists
+    // $request.files["doc"] should be a ZenoFile object
+    
+    if: "$file_doc == null" {
+        http.bad_request {
+            error: "No file uploaded"
+        }
+    }
+    
+    // Save file
+    file.save {
+        file: $file_doc
+        to: "uploads/uploaded_test.txt"
+    }
+    
+    http.ok {
+        message: "File saved successfully"
+        filename: $file_doc.FileName
+        size: $file_doc.Length
+    }
+}

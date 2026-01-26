@@ -1,0 +1,45 @@
+// Test 042: Middleware Pipeline
+// Tests http.use for logging and authentication
+
+// 1. Logging Middleware (Pass-through)
+http.use {
+    // Should print to console but let request continue
+    // Note: 'print' is not yet standard in server? We'll use a variable set to verify.
+    // For now, let's just allow it to pass.
+}
+
+// 2. Auth Middleware (Blocking if no header)
+http.use {
+    // Check for Authorization header
+    // Currently $headers is a dictionary injected by server
+    
+    // Logic: if path starts with "/api/protected" AND auth is missing -> 401
+    // We need simpler string check.
+    
+    if: "$headers['Authorization'] == null" {
+        // Only block if trying to access protected route?
+        // Or block everything for this test?
+        // Let's block everything except /api/public
+        
+        // Wait, current IsTruthy for string handles null/empty.
+        // But scope.Get returns null if key missing.
+        
+        http.unauthorized {
+            message: "Middleware blocked you"
+        }
+    }
+}
+
+http.get: "/api/protected" {
+    summary: "Protected Endpoint"
+    http.ok {
+        message: "You are allowed in"
+    }
+}
+
+http.get: "/api/public" {
+    summary: "Public Endpoint"
+    http.ok {
+        message: "Welcome"
+    }
+}

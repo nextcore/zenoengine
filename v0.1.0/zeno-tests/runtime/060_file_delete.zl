@@ -1,0 +1,12 @@
+// Test 060: File Delete
+http.post: "/api/delete_file" {
+    summary: "Delete a file"
+    
+    // We expect a query param ?path=uploads/filename
+    io.file.delete: $request.query.path
+    
+    http.ok {
+        message: "File deleted"
+        file: $request.query.path
+    }
+}

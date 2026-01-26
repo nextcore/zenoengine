@@ -1,0 +1,67 @@
+// Test 010: Database Query (Raw SQL)
+// This test verifies that database queries work identically
+
+http.get: "/api/users" {
+    summary: "Get all users"
+    tags: ["Database"]
+    
+    // Raw SQL query with parameters
+    db.query: "SELECT id, name, email FROM users WHERE status = ? LIMIT 10" {
+        params: ["active"]
+        as: $users
+    }
+    
+    http.ok {
+        data: $users
+        total: $users.length
+    }
+}
+
+http.get: "/api/users/{id}" {
+    summary: "Get user by ID"
+    tags: ["Database"]
+    
+    params: {
+        id: "User ID|integer|required"
+    }
+    
+    // Parameterized query
+    db.query: "SELECT * FROM users WHERE id = ?" {
+        params: [$id]
+        as: $user
+    }
+    
+    if: "$user == null" {
+        then: {
+            http.not_found {
+                message: "User not found"
+            }
+        }
+        else: {
+            http.ok {
+                data: $user
+            }
+        }
+    }
+}
+
+http.post: "/api/users" {
+    summary: "Create user"
+    tags: ["Database"]
+    
+    body: {
+        name: "User name|string|required"
+        email: "Email|email|required"
+    }
+    
+    // Insert query
+    db.exec: "INSERT INTO users (name, email, created_at) VALUES (?, ?, NOW())" {
+        params: [$request.body.name, $request.body.email]
+        as: $result
+    }
+    
+    http.created {
+        id: $result.last_insert_id
+        message: "User created"
+    }
+}

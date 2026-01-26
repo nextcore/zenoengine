@@ -1,0 +1,30 @@
+// JWT Authentication Test
+// Tests jwt.sign, jwt.verify, and jwt.refresh
+
+http.post: "/api/test/jwt"
+  # Test data
+  $secret: "test-secret-key"
+  $user_id: "123"
+  $email: "test@example.com"
+
+  // Step 1: Sign JWT token
+  jwt.sign:
+    secret: $secret
+    claims: { user_id: $user_id, email: $email }
+    expires_in: 3600
+    as: $token
+
+  # Step 2: Verify the token
+  jwt.verify: $token
+    secret: $secret
+    as: $claims
+
+  // Step 3: Refresh the token
+  jwt.refresh: $token
+    secret: $secret
+    expiry: 7200
+    as: $new_token
+
+  http.ok:
+    message: "JWT test successful"
+    token_generated: true

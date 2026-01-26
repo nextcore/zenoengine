@@ -1,0 +1,12 @@
+http.post: "/api/resize_test" {
+    $path: $request.query.path
+    image.resize {
+        file: $path
+        width: 100
+        height: 100
+        to: "uploads/resized.png"
+    }
+    http.ok {
+        message: "Resized"
+    }
+}

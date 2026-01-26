@@ -1,0 +1,78 @@
+// ============================================
+// Products Controller
+// ============================================
+// Handles product CRUD operations for POS API
+
+// ============================================
+// Get Products List
+// ============================================
+fn: get_products {
+    // Get tenant database
+    $db_name: $CURRENT_TENANT_DB
+    
+    // Select all products
+    // Select all products
+    db.select: {
+        sql: "SELECT * FROM products"
+        db: $db_name
+        as: $products
+    }
+    
+    // Return JSON response
+    http.json: {
+        success: true
+        data: $products
+    }
+}
+
+// ============================================
+// Create New Product
+// ============================================
+fn: create_product {
+    // Get form data
+    http.form: {
+        as: $form
+    }
+    
+    // Validate required fields
+    if: !$form.name || !$form.price {
+        then: {
+            http.bad_request: {
+                success: false
+                error: "VALIDATION_ERROR"
+                message: "Name and price are required"
+            }
+            stop
+        }
+    }
+    
+    // Get tenant database
+    $db_name: $CURRENT_TENANT_DB
+    
+    // Insert product
+    db.execute: "INSERT INTO products (sku, name, price, stock) VALUES (?, ?, ?, ?)" {
+        db: $db_name
+        bind: {
+            val: $form.sku
+            val: $form.name
+            val: $form.price
+            val: $form.stock
+        }
+    }
+    // Fetch the created product using LastInsertId
+    // Fetch the created product using LastInsertId
+    db.select: {
+        sql: "SELECT * FROM products WHERE id = ?"
+        db: $db_name
+        bind: { val: $db_last_id }
+        first: true
+        as: $product
+    }
+    
+    // Return success response
+    http.json: {
+        success: true
+        message: "Product created successfully"
+        sku: $form.sku
+    }
+}

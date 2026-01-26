@@ -1,0 +1,91 @@
+// ==========================================
+// ZENOLANG TUTORIAL - MAIN ENTRY POINT
+// ==========================================
+// Task Management & Team Collaboration Platform
+// Demonstrates ZenoLang's maximum potential
+
+log: "🚀 Loading ZenoLang Tutorial Demo (MAX)..."
+
+// ==========================================
+// 1. DATABASE MIGRATIONS
+// ==========================================
+log: "📦 Running migrations..."
+include: src/tutorial/max/migrations/001_users.zl
+include: src/tutorial/max/migrations/002_teams.zl
+include: src/tutorial/max/migrations/003_tasks.zl
+include: src/tutorial/max/migrations/004_notifications.zl
+
+// ==========================================
+// 2. SEED DEMO DATA (Only if tables are empty)
+// ==========================================
+db.table: tutorial_users {
+  db: tutorial
+}
+db.count: { as: user_count }
+if: $user_count == 0 {
+  then: {
+    log: "🌱 No users found, seeding demo data..."
+    include: src/tutorial/max/seeders/demo_data.zl
+  }
+  else: {
+    log: "✅ Database already seeded"
+  }
+}
+
+// ==========================================
+// 3. UTILITIES & HELPERS
+// ==========================================
+include: src/tutorial/max/utils/helpers.zl
+
+// ==========================================
+// 4. AUTHENTICATION MODULE
+// ==========================================
+include: src/tutorial/max/modules/auth/routes.zl
+
+// ==========================================
+// 5. TASK MANAGEMENT MODULE
+// ==========================================
+include: src/tutorial/max/modules/tasks/routes.zl
+
+// ==========================================
+// 6. TEAM COLLABORATION MODULE
+// ==========================================
+include: src/tutorial/max/modules/teams/routes.zl
+
+// ==========================================
+// 7. REAL-TIME FEATURES
+// ==========================================
+include: src/tutorial/max/modules/realtime/notifications.zl
+include: src/tutorial/max/modules/realtime/dashboard.zl
+
+// ==========================================
+// 8. API ENDPOINTS
+// ==========================================
+include: src/tutorial/max/api/v1/tasks.zl
+include: src/tutorial/max/api/v1/teams.zl
+include: src/tutorial/max/api/v1/test_token.zl
+
+// ==========================================
+// 9. BACKGROUND JOBS CONFIGURATION
+// ==========================================
+// Configure worker queues
+worker.config: ["notifications", "emails", "default"]
+
+log: "✅ ZenoLang Tutorial Demo (MAX) loaded successfully!"
+log: "🌐 Visit: http://localhost:3000/tutorial/max"
+log: "📚 API Endpoints:"
+log: "   - GET    /api/v1/tasks"
+log: "   - POST   /api/v1/tasks"
+log: "   - GET    /api/v1/tasks/{id}"
+log: "   - PUT    /api/v1/tasks/{id}"
+log: "   - DELETE /api/v1/tasks/{id}"
+log: "   - GET    /api/v1/teams"
+log: "   - POST   /api/v1/teams"
+log: ""
+log: "🔐 Demo Credentials:"
+log: "   Admin: admin@demo.com / password123"
+log: "   User:  john@demo.com / password123"
+
+
+
+

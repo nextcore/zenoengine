@@ -1,0 +1,20 @@
+// Test 004: While Loops
+// This test verifies that while loops work correctly
+
+http.get: "/api/loops/while" {
+    summary: "Test while loops"
+    tags: ["Tests"]
+    
+    $count: 0
+    $sum: 0
+    
+    while: "$count < 5" {
+        $count: "$count + 1"
+        $sum: "$sum + $count"
+    }
+    
+    http.ok {
+        count: $count
+        sum: $sum
+    }
+}

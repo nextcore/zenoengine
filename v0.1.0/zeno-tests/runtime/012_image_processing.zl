@@ -1,0 +1,68 @@
+// Test 012: Image Processing
+// This test verifies that image processing works identically
+
+http.post: "/api/images/upload" {
+    summary: "Upload and process image"
+    tags: ["Images"]
+    
+    // Validate image file
+    filesystem.validate: $request.file {
+        max_size: "5MB"
+        allowed_types: ["image/jpeg", "image/png"]
+        allowed_extensions: ["jpg", "jpeg", "png"]
+        as: $image_file
+    }
+    
+    // Validate dimensions
+    image.validate: $image_file {
+        min_width: 100
+        max_width: 4000
+        min_height: 100
+        max_height: 4000
+        as: $validated_image
+    }
+    
+    // Resize image
+    image.resize: $validated_image {
+        max_width: 1920
+        max_height: 1080
+        maintain_aspect: true
+        quality: 85
+        as: $resized_image
+    }
+    
+    // Generate thumbnail
+    image.thumbnail: $validated_image {
+        width: 200
+        height: 200
+        crop: "center"
+        quality: 80
+        as: $thumbnail
+    }
+    
+    // Save files
+    $timestamp: "$now"
+    $filename: "img_$timestamp.jpg"
+    $thumb_filename: "thumb_$timestamp.jpg"
+    
+    filesystem.save: $resized_image {
+        path: "uploads/images/$filename"
+    }
+    
+    filesystem.save: $thumbnail {
+        path: "uploads/thumbnails/$thumb_filename"
+    }
+    
+    http.created {
+        image: {
+            url: "/api/images/$filename"
+            width: $resized_image.width
+            height: $resized_image.height
+        }
+        thumbnail: {
+            url: "/api/images/thumbnails/$thumb_filename"
+            width: 200
+            height: 200
+        }
+    }
+}

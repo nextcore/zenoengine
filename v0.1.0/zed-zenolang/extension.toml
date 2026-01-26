@@ -1,0 +1,12 @@
+id = "zenolang"
+name = "ZenoLang"
+version = "0.1.0"
+license = "MIT"
+schema_version = 1
+authors = ["Your Name <your.email@example.com>"]
+description = "ZenoLang support for Zed"
+repository = "https://github.com/your/repo"
+
+[grammars.zenolang]
+repository = "https://github.com/your/tree-sitter-zenolang"
+commit = "master"

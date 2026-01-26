@@ -1,0 +1,25 @@
+// Auth Routes
+log: "DEBUG: Including Auth Controller"
+
+fn: test_function {
+    log: "TEST FUNCTION CALLED"
+}
+
+include: "src/tutorial/pos_api/modules/auth/controller.zl"
+
+http.group: /api/v1/auth {
+    
+    http.post: /login {
+        summary: "Tenant Login"
+        desc: "Login ke spesifik tenant via X-Tenant-ID Header"
+        tags: ["Auth"]
+        body: {
+            email: "admin@pos.com|email|required"
+            password: "password|required"
+        }
+        
+        do: {
+            call: login
+        }
+    }
+}

@@ -1,0 +1,60 @@
+{
+    "HTTP Get": {
+        "prefix": "http.get",
+        "body": [
+            "http.get: ${1:/path} {",
+            "  do: {",
+            "    ${2:// code...}",
+            "    http.ok: {",
+            "      message: \"${3:Success}\"",
+            "    }",
+            "  }",
+            "}"
+        ],
+        "description": "Create a GET route"
+    },
+    "HTTP Post": {
+        "prefix": "http.post",
+        "body": [
+            "http.post: ${1:/path} {",
+            "  do: {",
+            "    ${2:// code...}",
+            "    http.created: {",
+            "      message: \"${3:Created}\"",
+            "    }",
+            "  }",
+            "}"
+        ],
+        "description": "Create a POST route"
+    },
+    "DB Select": {
+        "prefix": "db.select",
+        "body": [
+            "db.table: ${1:table}",
+            "db.where: { col: ${2:col}, val: ${3:$val} }",
+            "db.first: { as: ${4:$result} }"
+        ],
+        "description": "Database Select"
+    },
+    "Log": {
+        "prefix": "log",
+        "body": [
+            "log: \"${1:Message}\""
+        ],
+        "description": "Log message"
+    },
+    "If Block": {
+        "prefix": "if",
+        "body": [
+            "if: ${1:condition} {",
+            "  then: {",
+            "    ${2:// code...}",
+            "  }",
+            "  else: {",
+            "    ${3:// code...}",
+            "  }",
+            "}"
+        ],
+        "description": "If-Else Block"
+    }
+}

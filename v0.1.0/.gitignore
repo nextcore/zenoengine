@@ -1,0 +1,33 @@
+# Binaries
+bin/
+/zeno
+/zeno.exe
+
+# OS generated files
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Icon?
+Thumbs.db
+
+# Environment variables
+.env
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# IDEs
+.vscode/
+.idea/
+
+# Temp/Uploads
+uploads/*
+!uploads/.gitkeep
+temp_xlsx/
+wwwroot/dist/
+
+# Logs
+*.log

@@ -1,0 +1,25 @@
+// ============================================
+// POS API TUTORIAL ENTRY POINT
+// ============================================
+// This file loads all components for the POS API tutorial.
+// It effectively acts as a sub-application router.
+
+log: "🛍️  Loading POS API Module..."
+
+// 1. Register Middleware
+middleware.register: auth_tenant {
+    file: "src/tutorial/pos_api/middleware/auth_tenant.zl"
+}
+
+// 2. Load Shared Modules (Auth, Products, Sales)
+include: src/tutorial/pos_api/modules/auth/routes.zl
+include: src/tutorial/pos_api/modules/products/routes.zl
+include: src/tutorial/pos_api/modules/sales/routes.zl
+
+// 3. Load API Documentation (Optional for this tutorial context, usually auto-generated)
+http.get: /api/pos/docs {
+    summary: "POS API Documentation"
+    do: {
+        http.ok: { message: "Access swagger UI at /api/docs" }
+    }
+}

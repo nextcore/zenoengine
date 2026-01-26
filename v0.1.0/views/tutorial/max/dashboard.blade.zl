@@ -1,0 +1,99 @@
+@extends('tutorial/max/layout')
+
+@section('content')
+<div class="container">
+    <div class="dashboard-header">
+        <h1>Dashboard</h1>
+        <p>Welcome back, {{ $current_user.username }}!</p>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-content">
+                <h3>{{ $total_tasks }}</h3>
+                <p>Total Tasks</p>
+            </div>
+        </div>
+        
+        <div class="stat-card stat-success">
+            <div class="stat-icon">✅</div>
+            <div class="stat-content">
+                <h3>{{ $completed_tasks }}</h3>
+                <p>Completed</p>
+            </div>
+        </div>
+        
+        <div class="stat-card stat-warning">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-content">
+                <h3>{{ $in_progress_tasks }}</h3>
+                <p>In Progress</p>
+            </div>
+        </div>
+        
+        <div class="stat-card stat-info">
+            <div class="stat-icon">⏸️</div>
+            <div class="stat-content">
+                <h3>{{ $pending_tasks }}</h3>
+                <p>Pending</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-content">
+                <h3>{{ $total_teams }}</h3>
+                <p>Teams</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">👤</div>
+            <div class="stat-content">
+                <h3>{{ $total_users }}</h3>
+                <p>Users</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="dashboard-content">
+        <div class="dashboard-section">
+            <h2>My Tasks</h2>
+            @if($my_tasks_count > 0)
+                @foreach($my_tasks as $task)
+                    <div class="task-item priority-{{ $task.priority }}">
+                        <div class="task-header">
+                            <h4>{{ $task.title }}</h4>
+                            <span class="badge badge-{{ $task.status }}">{{ $task.status }}</span>
+                        </div>
+                        <p>{{ $task.description }}</p>
+                        @if($task.due_date)
+                            <small>Due: {{ $task.due_date }}</small>
+                        @endif
+                    </div>
+                @endforeach
+            @else
+                <p class="empty-state">No tasks assigned to you</p>
+            @endif
+        </div>
+        
+        <div class="dashboard-section">
+            <h2>Recent Activity</h2>
+            @if($recent_tasks_count > 0)
+                @foreach($recent_tasks as $task)
+                    <div class="activity-item">
+                        <div class="activity-icon">📝</div>
+                        <div class="activity-content">
+                            <p><strong>{{ $task.title }}</strong></p>
+                            <small>{{ $task.status }} - {{ $task.created_at }}</small>
+                        </div>
+                    </div>
+                @endforeach
+            @else
+                <p class="empty-state">No recent activity</p>
+            @endif
+        </div>
+    </div>
+</div>
+@endsection

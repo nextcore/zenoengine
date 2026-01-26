@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ $title ?? 'ZenoLang Demo' }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/public/tutorial/max/css/app.css">
+</head>
+<body>
+    @auth
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h2>⚡ ZenoLang Demo</h2>
+            </div>
+            <div class="nav-menu">
+                <a href="/tutorial/max/dashboard" class="nav-link">Dashboard</a>
+                <a href="/tutorial/max/tasks" class="nav-link">Tasks</a>
+                <a href="/tutorial/max/teams" class="nav-link">Teams</a>
+                
+                <div class="nav-user">
+                    <span class="user-name">{{ $current_user.username ?? 'User' }}</span>
+                    @if($current_user.role == 'admin')
+                        <span class="badge badge-admin">Admin</span>
+                    @endif
+                    
+                    <form action="/tutorial/max/auth/logout" method="POST" style="display: inline;">
+                        @csrf
+                        <button type="submit" class="btn btn-sm btn-outline">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+    @endauth
+    
+    <main class="main-content">
+        @yield('content')
+    </main>
+    
+    <script src="/public/tutorial/max/js/app.js"></script>
+</body>
+</html>
