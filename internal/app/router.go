@@ -63,16 +63,27 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 		[]byte(os.Getenv("CSRF_TOKEN")),
 		csrf.Secure(false),
 		csrf.Path("/"),
-		csrf.TrustedOrigins([]string{
-			"localhost",
-			"localhost:3000",
-			"http://localhost",
-			"http://localhost:" + port,
-			"127.0.0.1",
-			"127.0.0.1:" + port,
-			"http://127.0.0.1",
-			"http://127.0.0.1:" + port,
-		}),
+		csrf.TrustedOrigins(func() []string {
+			origins := []string{
+				"localhost",
+				"localhost:3000",
+				"http://localhost",
+				"http://localhost:" + port,
+				"127.0.0.1",
+				"127.0.0.1:" + port,
+				"http://127.0.0.1",
+				"http://127.0.0.1:" + port,
+			}
+			if envOrigins := os.Getenv("TRUSTED_ORIGINS"); envOrigins != "" {
+				for _, origin := range strings.Split(envOrigins, ",") {
+					origin = strings.TrimSpace(origin)
+					if origin != "" {
+						origins = append(origins, origin)
+					}
+				}
+			}
+			return origins
+		}()),
 		csrf.SameSite(csrf.SameSiteLaxMode),
 	)
 
