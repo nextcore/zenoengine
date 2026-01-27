@@ -260,7 +260,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			jwtSecret := os.Getenv("JWT_SECRET")
 			if jwtSecret == "" {
 				// Fallback to .env default
-				jwtSecret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+				jwtSecret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar"
 				fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
 			}
 			subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
@@ -421,7 +421,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				jwtSecret := os.Getenv("JWT_SECRET")
 				if jwtSecret == "" {
 					// Fallback to .env default
-					jwtSecret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+					jwtSecret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar"
 					fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
 				}
 				targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))

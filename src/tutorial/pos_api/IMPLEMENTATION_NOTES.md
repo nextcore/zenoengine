@@ -66,18 +66,18 @@ http.post: /api/v1/sales/ {
 **1. auth.go** (3 locations):
 ```go
 // auth.login
-jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+jwtSecret := "ini_contoh_token_di_zenolang_!@#_jgn_disebar"
 
 // auth.middleware  
-jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+jwtSecret := "ini_contoh_token_di_zenolang_!@#_jgn_disebar"
 
 // jwt.verify
-secret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+secret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar"
 ```
 
 **2. .env**:
 ```bash
-JWT_SECRET=rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar
+JWT_SECRET=ini_contoh_token_di_zenolang_!@#_jgn_disebar
 ```
 
 **3. ZenoLang**:

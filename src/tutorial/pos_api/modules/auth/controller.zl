@@ -133,14 +133,15 @@ fn: login {
     log: "Password verified successfully"
     
     // 4. Validate JWT Secret
-    $jwt_secret : env("JWT_SECRET")
-    if: !$jwt_secret || $jwt_secret == "" {
-        then: {
-            // Placeholder for production
-            $jwt_secret : "replace_this_with_a_secure_key"
-            log: "Using default JWT_SECRET placeholder"
-        }
-    }
+    $jwt_secret : "super_secret_pos_key_2026"
+    // $jwt_secret : env("JWT_SECRET")
+    // if: !$jwt_secret || $jwt_secret == "" {
+    //    then: {
+    //        // Placeholder for production
+    //        $jwt_secret : "replace_this_with_a_secure_key"
+    //        log: "Using default JWT_SECRET placeholder"
+    //    }
+    // }
     
     // 5. Generate JWT Token
     jwt.sign: {

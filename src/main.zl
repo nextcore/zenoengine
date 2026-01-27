@@ -8,7 +8,7 @@ include: src/tutorial/max/main.zl
 // ==========================================
 // OTHER TUTORIALS (Uncomment to enable)
 // ==========================================
-// include: src/tutorial/pos_api/main.zl
+include: src/tutorial/pos_api/main.zl
 // include: src/tutorial/inertia_demo/main.zl
 // include: src/tutorial/gocms/main.zl
 

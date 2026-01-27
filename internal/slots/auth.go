@@ -24,7 +24,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		table := "users"
 		colUser := "email"
 		colPass := "password"
-		jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+		jwtSecret := "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
 		target := "token"
 		dbName := "default"
 
@@ -132,7 +132,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 	// 2. AUTH.MIDDLEWARE (Guard) - Auto Multi-Tenant Detection
 	eng.Register("auth.middleware", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+		jwtSecret := "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
 		var doNode *engine.Node
 
 		// Parse parameters
@@ -309,7 +309,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				// or we could try to find it from env.
 				jwtSecret := os.Getenv("JWT_SECRET")
 				if jwtSecret == "" {
-					jwtSecret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+					jwtSecret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar"
 				}
 
 				token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -415,7 +415,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 		// Jika secret kosong, cari dari environment global atau default
 		if secret == "" {
-			secret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+			secret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -472,7 +472,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		if secret == "" {
-			secret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+			secret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
 		}
 
 		// Parse token (even if expired, we might want to allow refresh if within grace period - but here we require valid signature)
