@@ -12,7 +12,7 @@ import (
 
 func TestNativeRenderer(t *testing.T) {
 	// 1. Setup Engine
-	eng := engine.NewEngine(nil)
+	eng := engine.NewEngine()
 	RegisterBladeSlots(eng) // Updated function name
 	RegisterLogicSlots(eng)
 	

@@ -22,7 +22,6 @@ go run cmd/zeno/zeno.go
 
 ## 📂 Documentation
 - **Getting Started**: [GETTING_STARTED.md](GETTING_STARTED.md)
-- **Migration Guide**: [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
 - **Comprehensive Guide**: [DOCUMENTATION.md](DOCUMENTATION.md) (Recommended)
 - **Language Spec**: [LANGUAGE_SPECIFICATION.md](LANGUAGE_SPECIFICATION.md)
 - **Style Guide**: [ZENOLANG_STYLE_GUIDE.md](ZENOLANG_STYLE_GUIDE.md)

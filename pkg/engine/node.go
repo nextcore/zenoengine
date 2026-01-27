@@ -8,11 +8,10 @@ type Node struct {
 	Line     int
 	Col      int
 	Filename string
-
+	
 	// Inline caching: Pre-resolved handler and metadata
 	// Set on first execution, reused on subsequent calls
 	// Eliminates map lookup overhead (15-25% faster)
 	cachedHandler HandlerFunc
-	Bytecode      interface{} // Cache for ZenoVM Bytecode or other compiled forms
 	cachedMeta    *SlotMeta
 }

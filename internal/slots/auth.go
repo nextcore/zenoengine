@@ -49,11 +49,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				jwtSecret = coerce.ToString(val)
 			}
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 			if c.Name == "db" {
 				dbName = coerce.ToString(val)
@@ -354,11 +350,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				expiresIn, _ = coerce.ToInt64(parseNodeValue(c, scope))
 			}
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 			if c.Name == "claims" {
 				// Parse claims as map
@@ -417,11 +409,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				secret = coerce.ToString(val)
 			}
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 		}
 
@@ -479,11 +467,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				expirySeconds, _ = coerce.ToInt64(val)
 			}
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 		}
 

@@ -11,7 +11,7 @@ import (
 )
 
 func TestNativeLDX(t *testing.T) {
-	eng := engine.NewEngine(nil)
+	eng := engine.NewEngine()
 	RegisterBladeSlots(eng)
 
 	os.Mkdir("views", 0755)

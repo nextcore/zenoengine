@@ -7,7 +7,7 @@ import (
 
 // BenchmarkSlotExecutionWithCache measures performance with inline caching
 func BenchmarkSlotExecutionWithCache(b *testing.B) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	eng.Register("test.slot", func(ctx context.Context, node *Node, scope *Scope) error {
 		scope.Set("result", "cached")
 		return nil
@@ -30,7 +30,7 @@ func BenchmarkSlotExecutionWithCache(b *testing.B) {
 
 // BenchmarkSlotExecutionWithoutCache measures performance without caching
 func BenchmarkSlotExecutionWithoutCache(b *testing.B) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	eng.Register("test.slot", func(ctx context.Context, node *Node, scope *Scope) error {
 		scope.Set("result", "uncached")
 		return nil
@@ -51,7 +51,7 @@ func BenchmarkSlotExecutionWithoutCache(b *testing.B) {
 
 // BenchmarkComplexSlotWithCache tests caching with validation
 func BenchmarkComplexSlotWithCache(b *testing.B) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	eng.Register("complex.slot", func(ctx context.Context, node *Node, scope *Scope) error {
 		// Simulate some work
 		for _, child := range node.Children {
@@ -89,7 +89,7 @@ func BenchmarkComplexSlotWithCache(b *testing.B) {
 
 // TestInlineCachingCorrectness verifies caching doesn't break functionality
 func TestInlineCachingCorrectness(t *testing.T) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	
 	callCount := 0
 	eng.Register("counter.slot", func(ctx context.Context, node *Node, scope *Scope) error {
@@ -126,7 +126,7 @@ func TestInlineCachingCorrectness(t *testing.T) {
 
 // TestCacheIsolation verifies different nodes have independent caches
 func TestCacheIsolation(t *testing.T) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	
 	eng.Register("slot.a", func(ctx context.Context, node *Node, scope *Scope) error {
 		scope.Set("type", "A")

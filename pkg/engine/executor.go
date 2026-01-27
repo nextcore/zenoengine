@@ -30,14 +30,12 @@ type SlotMeta struct {
 type Engine struct {
 	Registry map[string]HandlerFunc
 	Docs     map[string]SlotMeta // <--- Database Dokumentasi
-	Host     HostInterface       // [BARU] Interface ke Host System
 }
 
-func NewEngine(host HostInterface) *Engine {
+func NewEngine() *Engine {
 	return &Engine{
 		Registry: make(map[string]HandlerFunc),
 		Docs:     make(map[string]SlotMeta),
-		Host:     host,
 	}
 }
 

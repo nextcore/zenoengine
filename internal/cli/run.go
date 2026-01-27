@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 	"zeno/internal/app"
-	"zeno/pkg/adapters"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
 	"zeno/pkg/logger"
@@ -17,34 +16,23 @@ import (
 )
 
 func HandleRun(args []string) {
-	// 1. Load .env
-	godotenv.Load()
-
 	if len(args) < 1 {
 		fmt.Println("Usage: zeno run <path/to/script.zl>")
 		os.Exit(1)
 	}
-
-	// 2. Setup Logger
+	godotenv.Load()
 	logger.Setup("development")
-
 	path := args[0]
-
-	// 3. Parse ZenoLang Script
 	root, err := engine.LoadScript(path)
 	if err != nil {
 		fmt.Printf("❌ Syntax Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// 4. Setup Database Manager
 	dbMgr := dbmanager.NewDBManager()
+	eng := engine.NewEngine()
 
-	// [PORTABILITY] Inject GoHostAdapter
-	adapter := adapters.NewGoHostAdapter(dbMgr)
-	eng := engine.NewEngine(adapter)
-
-	// 5. Setup Primary DB Connection
+	// Setup DB Connection
 	dbDriver := os.Getenv("DB_DRIVER")
 	if dbDriver == "" {
 		dbDriver = "mysql"
@@ -64,7 +52,7 @@ func HandleRun(args []string) {
 		os.Exit(1)
 	}
 
-	// 6. Auto-detect additional DBs
+	// Auto-detect additional DBs
 	envVars := os.Environ()
 	detectedDBs := make(map[string]bool)
 	suffixes := []string{"_DRIVER", "_HOST", "_NAME", "_USER", "_PASS"}
@@ -131,16 +119,14 @@ func HandleRun(args []string) {
 		}
 	}
 
-	// 7. Register all slots
+	// Use the newly created helper registry
 	queue := worker.NewDBQueue(dbMgr, "default")
 	r := chi.NewRouter()
 	app.RegisterAllSlots(eng, r, dbMgr, queue, nil)
 
-	// 8. Execute ZenoLang Script (AST Interpreter)
 	if err := eng.Execute(context.Background(), root, engine.NewScope(nil)); err != nil {
 		fmt.Printf("❌ Execution Error: %v\n", err)
 		os.Exit(1)
 	}
-
 	os.Exit(0)
 }

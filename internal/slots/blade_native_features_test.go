@@ -12,7 +12,7 @@ import (
 
 func TestNativeBladeFeatures(t *testing.T) {
 	// 1. Setup Engine
-	eng := engine.NewEngine(nil)
+	eng := engine.NewEngine()
 	RegisterBladeSlots(eng)
 	RegisterLogicSlots(eng) // For if/else/for
 

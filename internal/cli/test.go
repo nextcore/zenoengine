@@ -24,7 +24,7 @@ func HandleTest(args []string) {
 	// but for "Unit Testing" usually we want isolation.
 	// Let's assume using current env.
 
-	eng := engine.NewEngine(nil)
+	eng := engine.NewEngine()
 
 	// Register Standard Slots
 	// We need a way to register ALL slots without app machinery?

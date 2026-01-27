@@ -7,11 +7,19 @@ fn: test_function {
 
 include: "src/tutorial/pos_api/modules/auth/controller.zl"
 
-http.post: /api/v1/auth/login {
-    summary: "Tenant Login"
-    desc: "Login ke spesifik tenant via X-Tenant-ID Header"
+http.group: /api/v1/auth {
     
-    do: {
-        call: login
+    http.post: /login {
+        summary: "Tenant Login"
+        desc: "Login ke spesifik tenant via X-Tenant-ID Header"
+        tags: ["Auth"]
+        body: {
+            email: "admin@pos.com|email|required"
+            password: "password|required"
+        }
+        
+        do: {
+            call: login
+        }
     }
 }

@@ -31,18 +31,6 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{Description: "Halt execution of the current block/handler."})
 
 	// ==========================================
-	// SLOT: DO (Block execution)
-	// ==========================================
-	eng.Register("do", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		for _, child := range node.Children {
-			if err := eng.Execute(ctx, child, scope); err != nil {
-				return err
-			}
-		}
-		return nil
-	}, engine.SlotMeta{Description: "Execute a block of code sequentially."})
-
-	// ==========================================
 	// SLOT: SCOPE SET (Legacy alias for 'var')
 	// ==========================================
 	eng.Register("scope.set", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -983,14 +971,6 @@ func RegisterLogicSlots(eng *engine.Engine) {
 			"do": {Description: "Blok kode yang dijalankan"},
 		},
 	})
-	// ==========================================
-	// SLOT: MIDDLEWARE REGISTER (No-op for Compatibility)
-	// ==========================================
-	eng.Register("middleware.register", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		// No-op. In ZenoEngine, middleware is typically configured via native Go Chi middleware
-		// or explicitly called using slots like auth.middleware.
-		return nil
-	}, engine.SlotMeta{Description: "No-operation slot for backward compatibility with middleware registration scripts."})
 }
 
 func evalSimpleCondition(expr string, scope *engine.Scope) bool {

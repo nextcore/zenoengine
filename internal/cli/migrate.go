@@ -34,7 +34,7 @@ func HandleMigrate() {
 		os.Exit(1)
 	}
 
-	eng := engine.NewEngine(nil)
+	eng := engine.NewEngine()
 	// Init DBQueue for migration logic
 	queue := worker.NewDBQueue(dbMgr, "default")
 	app.RegisterAllSlots(eng, nil, dbMgr, queue, nil)

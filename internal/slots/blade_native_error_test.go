@@ -12,7 +12,7 @@ import (
 
 func TestNativeErrorDirective(t *testing.T) {
 	// Setup
-	eng := engine.NewEngine(nil)
+	eng := engine.NewEngine()
 	RegisterLogicSlots(eng)
 	RegisterBladeSlots(eng)
 	

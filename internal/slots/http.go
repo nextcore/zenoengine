@@ -2,7 +2,6 @@ package slots
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -129,11 +128,7 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 		}
 
@@ -166,11 +161,7 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 		}
 
@@ -193,11 +184,7 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 		}
 
@@ -217,11 +204,7 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 		target := "host"
 		for _, c := range node.Children {
 			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 		}
 
@@ -235,6 +218,11 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 	// Helper function to send JSON response with auto success field
 	sendJSONResponse := func(ctx context.Context, statusCode int, node *engine.Node, scope *engine.Scope, success bool) error {
+		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
+		if !ok {
+			return fmt.Errorf("http response helper: not in http context")
+		}
+
 		// Build response body
 		responseBody := make(map[string]interface{})
 		responseBody["success"] = success
@@ -243,22 +231,6 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 		for _, child := range node.Children {
 			val := parseNodeValue(child, scope)
 			responseBody[child.Name] = val
-		}
-
-		// [PORTABILITY] Attempt to use Host Interface
-		// [PORTABILITY] Attempt to use Host Interface
-		if eng != nil && eng.Host != nil {
-			// Serialize using standard json
-			bodyBytes, err := json.Marshal(responseBody)
-			if err != nil {
-				return err
-			}
-			return eng.Host.HTTPSendResponse(ctx, statusCode, "application/json", bodyBytes)
-		}
-
-		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
-		if !ok {
-			return fmt.Errorf("http response helper: not in http context")
 		}
 
 		// Send JSON response

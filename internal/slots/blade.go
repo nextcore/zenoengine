@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
@@ -18,7 +19,7 @@ import (
 	"github.com/gorilla/csrf"
 )
 
-// Blade Template Cache (AST-based)
+// Blade Template Cache
 var (
 	bladeCache sync.Map // map[string]*cachedTemplate
 )
@@ -98,59 +99,40 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		}
 
 		if viewFile == "" {
-			return fmt.Errorf("view.blade: file required")
+			return fmt.Errorf("view.blade.native: file required")
 		}
 
 		fullPath := filepath.Join("views", ensureBladeExt(viewFile))
 
 		// Use cache for performance
-		ast, err := getCachedOrParse(fullPath)
+		programNode, err := getCachedOrParse(fullPath)
 		if err != nil {
 			return err
 		}
 
-		// Execute using AST interpreter
-		for _, child := range ast.Children {
-			if err := eng.Execute(ctx, child, scope); err != nil {
-				return err
-			}
-		}
-		return nil
+		// Execute normally
+		return eng.Execute(ctx, programNode, scope)
 
-	}, engine.SlotMeta{Description: "Render Blade template using AST interpreter."})
+	}, engine.SlotMeta{Description: "Render Blade natively using ZenoLang AST."})
 
 	// 3. Section System (Layouts)
 	eng.Register("section.define", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		name := coerce.ToString(resolveValue(node.Value, scope))
-		var body interface{} // Can be *engine.Node (AST) or ValFunction (VM)
+		var body *engine.Node
 
 		for _, c := range node.Children {
-			if c.Name == "fn" || c.Name == "do" {
-				if c.Value != nil {
-					// VM Mode: Child name 'fn', Value is Chunk/Function
-					body = c.Value
-				} else {
-					// AST Mode: Child name 'fn'/'do', Children are statements
-					body = c
-				}
+			if c.Name == "do" {
+				body = c
 			}
 		}
 
 		if body != nil {
 			sectionsRaw, ok := scope.Get("__sections")
-			var sections map[string]interface{}
+			var sections map[string]*engine.Node
 			if !ok || sectionsRaw == nil {
-				sections = make(map[string]interface{})
+				sections = make(map[string]*engine.Node)
 			} else {
-				if m, ok := sectionsRaw.(map[string]interface{}); ok {
-					sections = m
-				} else if m, ok := sectionsRaw.(map[string]*engine.Node); ok {
-					// Convert legacy map
-					sections = make(map[string]interface{})
-					for k, v := range m {
-						sections[k] = v
-					}
-				}
+				sections = sectionsRaw.(map[string]*engine.Node)
 			}
 			sections[name] = body
 			scope.Set("__sections", sections)
@@ -166,30 +148,11 @@ func RegisterBladeSlots(eng *engine.Engine) {
 			return nil
 		}
 
-		var sections map[string]interface{}
-		if m, ok := sectionsRaw.(map[string]interface{}); ok {
-			sections = m
-		} else if m, ok := sectionsRaw.(map[string]*engine.Node); ok {
-			sections = make(map[string]interface{})
-			for k, v := range m {
-				sections[k] = v
-			}
-		}
-
+		sections := sectionsRaw.(map[string]*engine.Node)
 		if body, found := sections[name]; found {
-			// AST Mode (*engine.Node)
-			if nodeBody, ok := body.(*engine.Node); ok {
-				// Handle both "fn" wrapping and old "do" wrapping
-				children := nodeBody.Children
-				if nodeBody.Name == "fn" || nodeBody.Name == "do" {
-					// "fn"/"do" wrapper, contents are children
-					children = nodeBody.Children
-				}
-
-				for _, child := range children {
-					if err := eng.Execute(ctx, child, scope); err != nil {
-						return err
-					}
+			for _, child := range body.Children {
+				if err := eng.Execute(ctx, child, scope); err != nil {
+					return err
 				}
 			}
 		}
@@ -205,44 +168,186 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		fullPath := filepath.Join("views", ensureBladeExt(layoutFile))
 
 		// Use cache for performance
-		ast, err := getCachedOrParse(fullPath)
+		layoutRoot, err := getCachedOrParse(fullPath)
+		if err != nil {
+			return err
+		}
+		return eng.Execute(ctx, layoutRoot, scope)
+	}, engine.SlotMeta{Description: "Extend a layout"})
+
+	eng.Register("view.component", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		// Value: "component-name"
+		compName := coerce.ToString(resolveValue(node.Value, scope))
+		if compName == "" {
+			return nil
+		}
+
+		// Map name to path: x-alert -> components/alert.blade.zl
+		// x-user.profile -> components/user/profile.blade.zl
+		// Logic: replace . with /
+		compPath := strings.ReplaceAll(compName, ".", "/")
+		fullPath := filepath.Join("views", "components", compPath+".blade.zl")
+
+		// 1. Prepare Component Scope
+		// Use empty scope for isolation (Components must declare props)
+		newScope := engine.NewScope(nil)
+
+		// 2. Process Attributes
+		// Attributes are children with Name="attr" or similar?
+		// In transpile, we will map attributes to children nodes.
+		// e.g. <x-alert type="error"> -> Children: [ {Name:"type", Value:"error"} ]
+		// Also slots.
+
+		var slotContent string
+		slots := make(map[string]string)
+
+		for _, child := range node.Children {
+			if child.Name == "slot" {
+				// Named Slot
+				// Render it to string
+				// It shouldn't execute "do" immediately?
+				// We need to capture the output of this block.
+				// We can use a temporary recorder.
+				rec := httptest.NewRecorder()
+				subCtx := context.WithValue(ctx, "httpWriter", http.ResponseWriter(rec))
+
+				// Execute children of slot
+				for _, c := range child.Children {
+					eng.Execute(subCtx, c, scope) // Use OUTER scope for slot content! (Important: lexical scoping)
+				}
+				slots[child.Value.(string)] = rec.Body.String()
+
+			} else if child.Name == "default_slot" {
+				rec := httptest.NewRecorder()
+				subCtx := context.WithValue(ctx, "httpWriter", http.ResponseWriter(rec))
+				for _, c := range child.Children {
+					eng.Execute(subCtx, c, scope)
+				}
+				slotContent = rec.Body.String()
+
+			} else {
+				// Attribute
+				// Name=VarName, Value=Val
+				// Resolve Value
+				val := resolveValue(child.Value, scope)
+				newScope.Set(child.Name, val)
+			}
+		}
+
+		// Bind Slots
+		newScope.Set("slot", slotContent) // Htmlable technically, but string here.
+		for k, v := range slots {
+			newScope.Set(k, v) // $header, $footer
+		}
+
+		// 3. Render View (with caching)
+		compRoot, err := getCachedOrParse(fullPath)
 		if err != nil {
 			return err
 		}
 
-		// Execute using AST interpreter
-		for _, child := range ast.Children {
-			if err := eng.Execute(ctx, child, scope); err != nil {
-				return err
-			}
-		}
-		return nil
-	}, engine.SlotMeta{Description: "Extend a layout"})
-
-	eng.Register("view.component", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		// ... Similar update ...
-		return nil
+		return eng.Execute(ctx, compRoot, newScope)
 
 	}, engine.SlotMeta{Description: "Render a Blade Component"})
 
 	eng.Register("view.include", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		// ... Similar update ...
-		return nil
+		viewFile := coerce.ToString(resolveValue(node.Value, scope))
+		if viewFile == "" {
+			return nil
+		}
+
+		fullPath := filepath.Join("views", ensureBladeExt(viewFile))
+
+		// Parse Child Data
+		var includeData map[string]interface{}
+
+		if len(node.Children) > 0 {
+			dataNode := node.Children[0]
+			if dataNode.Name == "data_map" {
+				includeData = make(map[string]interface{})
+				for _, child := range dataNode.Children {
+					valStr := coerce.ToString(child.Value)
+					if strings.HasPrefix(valStr, "$") {
+						resolved, _ := scope.Get(strings.TrimPrefix(valStr, "$"))
+						includeData[child.Name] = resolved
+					} else {
+						includeData[child.Name] = valStr
+					}
+				}
+			} else if dataNode.Name == "data_var" {
+				val := resolveValue(dataNode.Value, scope)
+				if m, ok := val.(map[string]interface{}); ok {
+					includeData = m
+				}
+			}
+		}
+
+		// Create Inner Scope
+		innerScope := scope.Clone()
+		for k, v := range includeData {
+			innerScope.Set(k, v)
+		}
+
+		// Use cache for performance
+		transpiled, err := getCachedOrParse(fullPath)
+		if err != nil {
+			return err
+		}
+
+		return eng.Execute(ctx, transpiled, innerScope)
 	}, engine.SlotMeta{Description: "Include a partial view"})
 
 	eng.Register("view.push", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		// ... Similar update ...
+		name := coerce.ToString(resolveValue(node.Value, scope))
+		var body *engine.Node
+		for _, c := range node.Children {
+			if c.Name == "do" {
+				body = c
+			}
+		}
+
+		if body != nil {
+			stacksRaw, ok := scope.Get("__stacks")
+			var stacks map[string][]*engine.Node
+			if !ok || stacksRaw == nil {
+				stacks = make(map[string][]*engine.Node)
+			} else {
+				stacks = stacksRaw.(map[string][]*engine.Node)
+			}
+
+			// Append Body to Stack List
+			stacks[name] = append(stacks[name], body)
+			scope.Set("__stacks", stacks)
+		}
 		return nil
 	}, engine.SlotMeta{Description: "Push content to stack"})
 
 	eng.Register("view.stack", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		// ... Similar update ...
+		name := coerce.ToString(resolveValue(node.Value, scope))
+
+		stacksRaw, ok := scope.Get("__stacks")
+		if !ok || stacksRaw == nil {
+			return nil
+		}
+
+		stacks := stacksRaw.(map[string][]*engine.Node)
+		if nodes, found := stacks[name]; found {
+			for _, n := range nodes {
+				// Execute the pushed block
+				// Since push block is "do", iterate children
+				for _, child := range n.Children {
+					if err := eng.Execute(ctx, child, scope); err != nil {
+						return err
+					}
+				}
+			}
+		}
 		return nil
 	}, engine.SlotMeta{Description: "Render stack content"})
 }
 
 // ==========================================
-// BLADE TEMPLATE CACHE HELPERS (AST-based)
+// BLADE TEMPLATE CACHE HELPERS
 // ==========================================
 
 // getCachedOrParse retrieves a cached template or parses it if not cached/outdated
@@ -274,7 +379,6 @@ func parseAndCache(fullPath string) (*engine.Node, error) {
 		return nil, fmt.Errorf("view not found: %s", fullPath)
 	}
 
-	// Transpile Blade to AST
 	programNode, err := transpileBladeNative(string(contentBytes))
 	if err != nil {
 		return nil, err
@@ -292,14 +396,14 @@ func parseAndCache(fullPath string) (*engine.Node, error) {
 	return programNode, nil
 }
 
+// ClearBladeCache clears all cached Blade templates
+// This should be called when view files change during development
 func ClearBladeCache() {
 	bladeCache.Range(func(key, value interface{}) bool {
 		bladeCache.Delete(key)
 		return true
 	})
 }
-
-// ... transpileBladeNative (Keep existing logic for now, but need to consider section/body wrapping) ...
 
 // === NATIVE TRANSPILER ===
 // Converts Blade string to *engine.Node (Root "do" block)
@@ -533,7 +637,7 @@ func transpileBladeNative(content string) (*engine.Node, error) {
 					Name:  "section.define",
 					Value: nameRaw,
 					Children: []*engine.Node{
-						{Name: "fn", Children: bodyNode.Children}, // CHANGED: fn for VM support
+						{Name: "do", Children: bodyNode.Children},
 					},
 				}
 				root.Children = append(root.Children, sectionNode)
@@ -566,10 +670,10 @@ func transpileBladeNative(content string) (*engine.Node, error) {
 				}
 
 				node := &engine.Node{
-					Name:  "isset", // Needs implicit fn support in logic slot if strictly VM
+					Name:  "isset",
 					Value: valRaw,
 					Children: []*engine.Node{
-						{Name: "fn", Children: bodyNode.Children}, // Changed to fn for consistency
+						{Name: "do", Children: bodyNode.Children},
 					},
 				}
 				root.Children = append(root.Children, node)
@@ -603,123 +707,13 @@ func transpileBladeNative(content string) (*engine.Node, error) {
 					Name:  "empty",
 					Value: valRaw,
 					Children: []*engine.Node{
-						{Name: "fn", Children: bodyNode.Children},
+						{Name: "do", Children: bodyNode.Children},
 					},
 				}
 				root.Children = append(root.Children, node)
 				pos = absoluteBlockEnd + 9 // @endempty
 			} else {
 				pos += 6
-			}
-
-		} else if strings.HasPrefix(content[pos:], "@push") {
-			// @push('name')
-			startParen := strings.Index(content[pos:], "(")
-			endParen := findBalancedParen(content[pos:])
-
-			if startParen != -1 && endParen != -1 {
-				nameRaw := content[pos+startParen+1 : pos+endParen]
-				nameRaw = strings.Trim(nameRaw, "'\"")
-
-				blockStart := pos + endParen + 1
-				blockEnd := findEndPush(content[blockStart:])
-
-				if blockEnd == -1 {
-					return nil, fmt.Errorf("unclosed @push")
-				}
-
-				absoluteBlockEnd := blockStart + blockEnd
-				bodyContent := content[blockStart:absoluteBlockEnd]
-				bodyNode, err := transpileBladeNative(bodyContent)
-				if err != nil {
-					return nil, err
-				}
-
-				pushNode := &engine.Node{
-					Name:  "view.push",
-					Value: nameRaw,
-					Children: []*engine.Node{
-						{Name: "fn", Children: bodyNode.Children},
-					},
-				}
-				root.Children = append(root.Children, pushNode)
-
-				pos = absoluteBlockEnd + 8 // @endpush
-			} else {
-				pos += 5
-			}
-		} else if strings.HasPrefix(content[pos:], "@error") {
-			// @error('fieldname')
-			startParen := strings.Index(content[pos:], "(")
-			endParen := findBalancedParen(content[pos:])
-
-			if startParen != -1 && endParen != -1 {
-				fieldRaw := content[pos+startParen+1 : pos+endParen]
-				fieldName := strings.Trim(fieldRaw, "'\"")
-
-				blockStart := pos + endParen + 1
-				blockEnd := findEndError(content[blockStart:])
-
-				if blockEnd == -1 {
-					return nil, fmt.Errorf("unclosed @error")
-				}
-
-				absoluteBlockEnd := blockStart + blockEnd
-				bodyContent := content[blockStart:absoluteBlockEnd]
-				bodyNode, err := transpileBladeNative(bodyContent)
-				if err != nil {
-					return nil, err
-				}
-
-				errorNode := &engine.Node{
-					Name:  "error",
-					Value: fieldName,
-					Children: []*engine.Node{
-						{Name: "fn", Children: bodyNode.Children},
-					},
-				}
-				root.Children = append(root.Children, errorNode)
-
-				pos = absoluteBlockEnd + 9 // @enderror
-			} else {
-				pos += 6
-			}
-		} else if strings.HasPrefix(content[pos:], "@cannot") {
-			// @cannot('ability', $resource)
-			startParen := strings.Index(content[pos:], "(")
-			endParen := findBalancedParen(content[pos:])
-
-			if startParen != -1 && endParen != -1 {
-				argsRaw := content[pos+startParen+1 : pos+endParen]
-
-				parts := strings.Split(argsRaw, ",")
-				ability := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
-
-				blockStart := pos + endParen + 1
-				blockEnd := findEndCannot(content[blockStart:])
-
-				if blockEnd == -1 {
-					return nil, fmt.Errorf("unclosed @cannot")
-				}
-
-				absoluteBlockEnd := blockStart + blockEnd
-				bodyContent := content[blockStart:absoluteBlockEnd]
-				bodyNode, err := transpileBladeNative(bodyContent)
-				if err != nil {
-					return nil, err
-				}
-
-				cannotNode := &engine.Node{
-					Name:  "cannot",
-					Value: ability,
-					Children: []*engine.Node{
-						{Name: "fn", Children: bodyNode.Children},
-					},
-				}
-				root.Children = append(root.Children, cannotNode)
-				pos = absoluteBlockEnd + 10 // @endcannot
-			} else {
-				pos += 7
 			}
 
 		} else if strings.HasPrefix(content[pos:], "@auth") {

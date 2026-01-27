@@ -157,28 +157,18 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			return fmt.Errorf("db.select: query cannot be empty")
 		}
 
-		var rows engine.Rows
+		executor, dialect, err := getExecutor(scope, dbMgr, dbName)
+		if err != nil {
+			return err
+		}
 
-		// [PORTABILITY] Check Host Interface
-		if eng.Host != nil {
-			rows, err = eng.Host.DBQuery(ctx, dbName, query, args)
-			if err != nil {
-				return err
-			}
-		} else {
-			// Legacy Mode
-			executor, dialect, err := getExecutor(scope, dbMgr, dbName)
-			if err != nil {
-				return err
-			}
-			// [OPTIONAL] We could use dialect here to transform query placeholders if needed
-			// for now we just pass it through.
-			_ = dialect
+		// [OPTIONAL] We could use dialect here to transform query placeholders if needed
+		// for now we just pass it through.
+		_ = dialect
 
-			rows, err = executor.QueryContext(ctx, query, args...)
-			if err != nil {
-				return err
-			}
+		rows, err := executor.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
 		}
 		defer rows.Close()
 

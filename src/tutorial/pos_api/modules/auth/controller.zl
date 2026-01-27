@@ -2,14 +2,9 @@
 
 fn: login {
     log: "🔐 Login attempt started"
-    log: "Check Request:"
-    log: $request
+    $email : $request.body.email
+    $password : $request.body.password
     
-    var: $email { val: $request.body.email }
-    log: "Email Value:"
-    log: $email
-    var: $password { val: $request.body.password }
-
     // 1. Input Validation
     if: $email == "" || $password == "" {
         then: {
@@ -18,7 +13,7 @@ fn: login {
                 message: "Email and Password required",
                 error: "MISSING_CREDENTIALS"
             }
-            return
+            stop
         }
     }
     
@@ -31,7 +26,7 @@ fn: login {
                 message: "Invalid email format",
                 error: "INVALID_EMAIL"
             }
-            return
+            stop
         }
     }
     
@@ -55,7 +50,7 @@ fn: login {
                 message: "Tenant ID missing (Header X-Tenant-ID or Subdomain)",
                 error: "TENANT_ID_REQUIRED"
             }
-            return
+            stop
         }
     }
     
@@ -78,7 +73,7 @@ fn: login {
                 message: "Invalid Tenant",
                 error: "TENANT_NOT_FOUND"
             }
-            return
+            stop
         }
     }
     
@@ -102,7 +97,7 @@ fn: login {
                 message: "Invalid credentials",
                 error: "INVALID_CREDENTIALS"
             }
-            return
+            stop
         }
     }
     
@@ -121,7 +116,7 @@ fn: login {
                         message: "Invalid credentials",
                         error: "INVALID_CREDENTIALS"
                     }
-                    return
+                    stop
                 }
             }
         }
@@ -131,7 +126,7 @@ fn: login {
                 message: "Authentication error",
                 error: "PASSWORD_VERIFICATION_ERROR"
             }
-            return
+            stop
         }
     }
     
@@ -167,7 +162,7 @@ fn: login {
                 message: "Failed to generate authentication token",
                 error: "TOKEN_GENERATION_FAILED"
             }
-            return
+            stop
         }
     }
     

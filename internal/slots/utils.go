@@ -28,11 +28,6 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 
 	valStr := strings.TrimSpace(fmt.Sprintf("%v", n.Value))
 
-	// [FIX] Strip Parser's Raw String Prefix (\x00) if present
-	if strings.HasPrefix(valStr, "\x00") {
-		valStr = valStr[1:]
-	}
-
 	// 2. [PRIORITAS UTAMA] CEK STRING LITERAL (Kutip)
 	if len(valStr) >= 2 {
 		if (strings.HasPrefix(valStr, "\"") && strings.HasSuffix(valStr, "\"")) ||
@@ -57,6 +52,7 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 		}
 
 		key := strings.TrimPrefix(valStr, "$")
+		// fmt.Println("DEBUG RESOLVE:", key)
 
 		// A. Check Dot Notation OR Bracket Notation
 		if strings.Contains(key, ".") || strings.Contains(key, "[") {
@@ -77,16 +73,12 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 					targetKey := parts[i]
 
 					// 1. Handle Maps
-					// 1. Handle Maps
 					if m, ok := curr.(map[string]interface{}); ok {
-						val, exists := m[targetKey]
-						fmt.Printf("DEBUG MAP: key=%s exists=%v val=%v\n", targetKey, exists, val)
-						if exists {
+						if val, exists := m[targetKey]; exists {
 							curr = val
 							continue
 						}
 					}
-					// fmt.Printf("DEBUG RESOLVE FAIL: key=%s currType=%T\n", targetKey, curr)
 
 					// 2. Handle Arrays/Slices
 					if list, err := coerce.ToSlice(curr); err == nil {
@@ -116,9 +108,6 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 	}
 
 	// 4. FALLBACK (Nilai mentah)
-	if _, ok := n.Value.(string); ok {
-		return valStr
-	}
 	return n.Value
 }
 
@@ -205,66 +194,6 @@ func RegisterUtilSlots(eng *engine.Engine) {
 			"replace": {Description: "Substring pengganti", Required: true},
 			"limit":   {Description: "Jumlah penggantian maksimum (-1 untuk semua)", Required: false},
 			"as":      {Description: "Variabel penyimpan hasil", Required: false},
-		},
-	})
-
-	// 2.7 STRINGS CONTAINS
-	eng.Register("string.contains", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		input := coerce.ToString(resolveValue(node.Value, scope))
-		var substr string
-		target := "contains_result"
-
-		for _, c := range node.Children {
-			val := parseNodeValue(c, scope)
-			if c.Name == "substr" || c.Name == "val" {
-				substr = coerce.ToString(val)
-			}
-			if c.Name == "as" {
-				target = coerce.ToString(c.Value)
-			}
-		}
-
-		result := strings.Contains(input, substr)
-		scope.Set(target, result)
-		return nil
-	}, engine.SlotMeta{
-		Description: "Mengecek apakah string mengandung substring tertentu.",
-		Example:     "string.contains: $text { substr: '@'; as: $has_at }",
-		Inputs: map[string]engine.InputMeta{
-			"substr": {Description: "Substring yang dicari", Required: true},
-			"as":     {Description: "Variabel penyimpan hasil (bool)", Required: false},
-		},
-	})
-
-	// 2.8 STRINGS STARTS WITH
-	eng.Register("string.starts_with", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		input := coerce.ToString(resolveValue(node.Value, scope))
-		var prefix string
-		target := "starts_with_result"
-
-		for _, c := range node.Children {
-			val := parseNodeValue(c, scope)
-			if c.Name == "prefix" || c.Name == "val" {
-				prefix = coerce.ToString(val)
-			}
-			if c.Name == "as" {
-				raw := coerce.ToString(c.Value)
-				if strings.HasPrefix(raw, "\x00") {
-					raw = raw[1:]
-				}
-				target = strings.TrimPrefix(raw, "$")
-			}
-		}
-
-		result := strings.HasPrefix(input, prefix)
-		scope.Set(target, result)
-		return nil
-	}, engine.SlotMeta{
-		Description: "Mengecek apakah string diawali dengan prefix tertentu.",
-		Example:     "string.starts_with: $text { prefix: '/public/'; as: $is_static }",
-		Inputs: map[string]engine.InputMeta{
-			"prefix": {Description: "Prefix yang dicari", Required: true},
-			"as":     {Description: "Variabel penyimpan hasil (bool)", Required: false},
 		},
 	})
 
@@ -450,30 +379,12 @@ func RegisterUtilSlots(eng *engine.Engine) {
 			}
 		} else {
 			// Logic: Truthy Check (Single Value)
-			// [NEW] Support Negation (!)
-			if strings.HasPrefix(expression, "!") {
-				key := strings.TrimPrefix(expression, "!")
-				// Resolve the variable part
-				res := resolveValue(key, scope)
-
-				// Convert to bool
-				b, err := coerce.ToBool(res)
-
-				if err == nil {
-					isTrue = !b
-				} else {
-					// Check other truthy conditions
-					s := coerce.ToString(res)
-					isTrue = !(s != "" && s != "false" && s != "0" && s != "<nil>" && s != "nil")
-				}
+			val := resolveValue(node.Value, scope)
+			if b, err := coerce.ToBool(val); err == nil {
+				isTrue = b
 			} else {
-				val := resolveValue(node.Value, scope)
-				if b, err := coerce.ToBool(val); err == nil {
-					isTrue = b
-				} else {
-					s := coerce.ToString(val)
-					isTrue = (s != "" && s != "false" && s != "0" && s != "<nil>")
-				}
+				s := coerce.ToString(val)
+				isTrue = (s != "" && s != "false" && s != "0" && s != "<nil>")
 			}
 		}
 
@@ -536,9 +447,6 @@ func RegisterUtilSlots(eng *engine.Engine) {
 	// SLOT: VAR
 	eng.Register("var", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		rawName := coerce.ToString(node.Value)
-		if strings.HasPrefix(rawName, "\x00") {
-			rawName = rawName[1:]
-		}
 		varName := strings.TrimPrefix(rawName, "$")
 
 		if varName == "" {
@@ -565,7 +473,6 @@ func RegisterUtilSlots(eng *engine.Engine) {
 			}
 		}
 
-		fmt.Printf("DEBUG VAR: Setting %s = %v\n", varName, val)
 		scope.Set(varName, val)
 		return nil
 	}, engine.SlotMeta{
@@ -581,9 +488,6 @@ func RegisterUtilSlots(eng *engine.Engine) {
 	// 10.5 SCHEMA (Type Locking/Schema Check)
 	eng.Register("schema", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		rawName := coerce.ToString(node.Value)
-		if strings.HasPrefix(rawName, "\x00") {
-			rawName = rawName[1:]
-		}
 		varName := strings.TrimPrefix(rawName, "$")
 
 		if varName == "" {
@@ -713,33 +617,5 @@ func RegisterUtilSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{
 		Description: "Mengubah variabel menjadi Integer.",
 		Example:     "cast.to_int: $id { as: $id_int }",
-	})
-	// 12. HTTP SERVE STATIC
-	eng.Register("http.serve_static", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
-		r, ok2 := ctx.Value("httpRequest").(*http.Request)
-		if !ok || !ok2 {
-			return fmt.Errorf("http.serve_static: context missing")
-		}
-
-		path := r.URL.Path
-		// Security: Prevent directory traversal
-		if strings.Contains(path, "..") {
-			http.Error(w, "Invalid path", http.StatusBadRequest)
-			return nil
-		}
-
-		relPath := strings.TrimPrefix(path, "/")
-
-		// Verify file exists
-		if _, err := os.Stat(relPath); os.IsNotExist(err) {
-			return fmt.Errorf("file not found: %s", relPath)
-		}
-
-		http.ServeFile(w, r, relPath)
-		return fmt.Errorf("return") // Stop execution
-	}, engine.SlotMeta{
-		Description: "Melayani file statis dari direktori public.",
-		Example:     "http.serve_static",
 	})
 }

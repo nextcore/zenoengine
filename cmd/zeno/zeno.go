@@ -50,8 +50,6 @@ func main() {
 			cli.HandleMakeAuth()
 		case "key:generate":
 			cli.HandleKeyGenerate()
-		case "compile":
-			cli.HandleCompile(os.Args[2:])
 		case "version":
 			cli.HandleVersion()
 		default:
@@ -109,7 +107,7 @@ func main() {
 	ctxWorker, cancelWorker := context.WithCancel(context.Background())
 
 	if os.Getenv("WORKER_ENABLED") == "true" {
-		workerEng := engine.NewEngine(nil)
+		workerEng := engine.NewEngine()
 		app.RegisterAllSlots(workerEng, nil, dbMgr, queue, nil)
 		slog.Info("👷 Starting Workers...")
 		queues := appCtx.WorkerQueues // Leave empty if not configured

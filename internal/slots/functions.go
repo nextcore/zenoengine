@@ -44,6 +44,7 @@ func RegisterFunctionSlots(eng *engine.Engine) {
 		functionRegistryMu.Lock()
 		functionRegistry[funcName] = node
 		functionRegistryMu.Unlock()
+		fmt.Printf("[DEBUG FN] Registered function '%s' in scope\n", funcName)
 
 		return nil
 	}, engine.SlotMeta{
@@ -67,6 +68,7 @@ func RegisterFunctionSlots(eng *engine.Engine) {
 		funcNode, found := functionRegistry[funcName]
 		functionRegistryMu.RUnlock()
 
+		fmt.Printf("[DEBUG CALL] Looking for function '%s', found=%v (from GLOBAL registry)\n", funcName, found)
 		if !found {
 			return fmt.Errorf("call: function '%s' not found", funcName)
 		}

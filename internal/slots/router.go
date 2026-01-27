@@ -21,7 +21,6 @@ import (
 type routerKey struct{}
 
 func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
-	RegisterDebugSlots(eng) // [NEW] Register debug utilities
 
 	// Helper: Ambil router aktif (Root atau Group)
 	getCurrentRouter := func(ctx context.Context) chi.Router {
@@ -159,27 +158,21 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// This bridges native Chi middleware (MultiTenantAuth) to ZenoLang scope
 			middleware.InjectAuthToScope(r, reqScope)
 
-			// 8. EXECUTION (AST Interpreter)
-			var execErr error
+			// 8. Execute Children (Route Logic) - Auth already injected from Chi middleware
 			for _, child := range children {
-				if execErr = eng.Execute(timeoutCtx, child, reqScope); execErr != nil {
-					break
-				}
-			}
+				if err := eng.Execute(timeoutCtx, child, reqScope); err != nil {
+					// [NEW] Handle ErrReturn (Normal Halt)
+					if errors.Is(err, ErrReturn) || strings.Contains(err.Error(), "return") {
+						return
+					}
 
-			// Handle Errors
-			if execErr != nil {
-				// [NEW] Handle ErrReturn (Normal Halt)
-				if errors.Is(execErr, ErrReturn) || strings.Contains(execErr.Error(), "return") {
-					return
+					// Check if error is due to timeout
+					if timeoutCtx.Err() == context.DeadlineExceeded {
+						http.Error(w, fmt.Sprintf("Request timeout exceeded (%s)", timeout), http.StatusRequestTimeout)
+						return
+					}
+					panic(err) // Will be caught by recovery middleware
 				}
-
-				// Check if error is due to timeout
-				if timeoutCtx.Err() == context.DeadlineExceeded {
-					http.Error(w, fmt.Sprintf("Request timeout exceeded (%s)", timeout), http.StatusRequestTimeout)
-					return
-				}
-				panic(execErr) // Will be caught by recovery middleware
 			}
 		}
 	}
@@ -267,7 +260,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			jwtSecret := os.Getenv("JWT_SECRET")
 			if jwtSecret == "" {
 				// Fallback to .env default
-				jwtSecret = "some_random_secret_key_1234567890"
+				jwtSecret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
 				fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
 			}
 			subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
@@ -277,12 +270,8 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		// Mount sub-router
 		getCurrentRouter(ctx).Mount(path, subRouter)
 
-		// Calculate new prefix for documentation and nested routes
-		newPrefix := joinPath(getCurrentPath(ctx), path)
-
-		// Create new context with sub-router AND path prefix
+		// Create new context with sub-router
 		groupCtx := context.WithValue(ctx, routerKey{}, subRouter)
-		groupCtx = context.WithValue(groupCtx, pathPrefixKey{}, newPrefix)
 
 		// Execute children in group context
 		for _, child := range childrenToExec {
@@ -305,7 +294,6 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 			// Resolve Full Path for Documentation
 			fullDocPath := joinPath(getCurrentPath(ctx), path)
-			// Route registration
 
 			routeDoc := &apidoc.RouteDoc{
 				Method:    m,
@@ -450,37 +438,4 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			return nil
 		}, engine.SlotMeta{})
 	}
-
-	// ==========================================
-	// 3. SERVER START (Blocking)
-	// ==========================================
-	eng.Register("http.server", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		port := "3000" // Default port
-
-		// Check args for port
-		if node.Value != nil {
-			port = coerce.ToString(resolveValue(node.Value, scope))
-		} else {
-			for _, c := range node.Children {
-				if c.Name == "port" {
-					port = coerce.ToString(resolveValue(c.Value, scope))
-				}
-			}
-		}
-
-		if port == "" {
-			port = "3000"
-		}
-
-		// Ensure port starts with :
-		addr := port
-		if !strings.Contains(port, ":") {
-			addr = ":" + port
-		}
-
-		fmt.Printf("🚀 Starting Zeno Server on http://localhost%s\n", addr)
-
-		// Use rootRouter which was closed over from RegisterRouterSlots
-		return http.ListenAndServe(addr, rootRouter)
-	}, engine.SlotMeta{Description: "Start the HTTP server (Blocking)"})
 }

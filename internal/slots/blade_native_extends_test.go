@@ -12,7 +12,7 @@ import (
 
 func TestNativeBladeExtends(t *testing.T) {
 	// 1. Setup Engine
-	eng := engine.NewEngine(nil)
+	eng := engine.NewEngine()
 	RegisterBladeSlots(eng) // Updated function name
 	// Also register Section slots explicitly if they are not inside RegisterBladeNativeSlots?
 	// Check blade_native.go: The slots section.define, section.yield, view.extends are registered?

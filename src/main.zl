@@ -15,15 +15,6 @@ include: src/tutorial/max/main.zl
 // 404 Handler
 http.get: /* {
   do: {
-    // If accessing static files (public folder), serve them and return
-    string.starts_with: $path { prefix: "/public/" ; as: $is_public }
-    if: $is_public {
-      then: {
-        http.serve_static
-        return
-      }
-    }
-    
     // If accessing root, /max, or /max/, redirect to the tutorial dashboard
     if: $path == "/" {
         then: {

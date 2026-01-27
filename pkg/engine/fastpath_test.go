@@ -9,7 +9,7 @@ import (
 
 // BenchmarkHTTPResponseFastPath measures fast path performance
 func BenchmarkHTTPResponseFastPath(b *testing.B) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	
 	// Register http.response slot (needed for fallback)
 	eng.Register("http.response", func(ctx context.Context, node *Node, scope *Scope) error {
@@ -42,7 +42,7 @@ func BenchmarkHTTPResponseFastPath(b *testing.B) {
 
 // BenchmarkHTTPResponseGeneric measures generic path performance
 func BenchmarkHTTPResponseGeneric(b *testing.B) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	
 	// Register http.response slot
 	eng.Register("http.response", func(ctx context.Context, node *Node, scope *Scope) error {
@@ -75,7 +75,7 @@ func BenchmarkHTTPResponseGeneric(b *testing.B) {
 
 // BenchmarkVarAssignmentFastPath measures fast path for variable assignment
 func BenchmarkVarAssignmentFastPath(b *testing.B) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	
 	node := &Node{
 		Name:  "$testvar",
@@ -95,7 +95,7 @@ func BenchmarkVarAssignmentFastPath(b *testing.B) {
 
 // TestFastPathCorrectness verifies fast path produces correct results
 func TestFastPathCorrectness(t *testing.T) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	
 	// Register http.response for comparison
 	eng.Register("http.response", func(ctx context.Context, node *Node, scope *Scope) error {
@@ -136,7 +136,7 @@ func TestFastPathCorrectness(t *testing.T) {
 
 // TestFastPathVarAssignment verifies variable assignment fast path
 func TestFastPathVarAssignment(t *testing.T) {
-	eng := NewEngine(nil)
+	eng := NewEngine()
 	
 	node := &Node{
 		Name:  "$myvar",
