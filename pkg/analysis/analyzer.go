@@ -12,21 +12,55 @@ type AnalysisResult struct {
 }
 
 type Analyzer struct {
-	engine *engine.Engine
+	engine  *engine.Engine
+	Visited map[string]bool
 }
 
 func NewAnalyzer(eng *engine.Engine) *Analyzer {
-	return &Analyzer{engine: eng}
+	return &Analyzer{
+		engine:  eng,
+		Visited: make(map[string]bool),
+	}
 }
 
 func (a *Analyzer) Analyze(root *engine.Node) AnalysisResult {
 	res := AnalysisResult{}
+	a.Visited = make(map[string]bool) // Reset for fresh analysis
 	a.walk(root, &res)
 	return res
 }
 
 func (a *Analyzer) walk(node *engine.Node, res *AnalysisResult) {
 	if node == nil {
+		return
+	}
+
+	// [NEW] Recursive Analysis for Includes
+	if node.Name == "include" {
+		path := ""
+		if node.Value != nil {
+			path = fmt.Sprintf("%v", node.Value)
+			// Clean quotes if present
+			path = strings.Trim(path, "\"'`")
+		}
+
+		if path != "" {
+			// Cycle Detection
+			if a.Visited[path] {
+				// Already visited, skip to prevent infinite recursion
+				return
+			}
+			a.Visited[path] = true
+
+			// Load and Analyze
+			includedRoot, err := engine.LoadScript(path)
+			if err != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("[%s:%d:%d] include error: failed to load %s: %v",
+					node.Filename, node.Line, node.Col, path, err))
+			} else {
+				a.walk(includedRoot, res)
+			}
+		}
 		return
 	}
 
