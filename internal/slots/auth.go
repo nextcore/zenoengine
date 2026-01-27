@@ -254,17 +254,27 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		// Exec 'do' block (Protected Routes)
+		nodesToExec := node.Children
 		if doNode != nil {
-			for _, child := range doNode.Children {
-				if err := eng.Execute(ctx, child, scope); err != nil {
-					return err
-				}
+			nodesToExec = doNode.Children
+		}
+
+		for _, child := range nodesToExec {
+			// Skip config nodes if implicit
+			if doNode == nil && (child.Name == "secret" || child.Name == "redirect" || child.Name == "do" ||
+				child.Name == "tenant_header" || child.Name == "tenant_db_lookup" || child.Name == "set_auth_object") {
+				continue
+			}
+
+			if err := eng.Execute(ctx, child, scope); err != nil {
+				return err
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Protect routes with JWT verification. Supports multi-tenant with subdomain detection.",
-		Example:     "auth.middleware {\n  do: {\n     log: 'Hello Admin'\n  }\n}\n\n// Multi-tenant:\nauth.middleware {\n  tenant_header: \"X-Tenant-ID\"\n  tenant_db_lookup: true\n  set_auth_object: true\n  do: { ... }\n}",
+		Description:   "Protect routes with JWT verification. Supports multi-tenant with subdomain detection.",
+		AllowImplicit: true,
+		Example:       "auth.middleware {\n  do: {\n     log: 'Hello Admin'\n  }\n}\n\n// Multi-tenant:\nauth.middleware {\n  tenant_header: \"X-Tenant-ID\"\n  tenant_db_lookup: true\n  set_auth_object: true\n  do: { ... }\n}",
 		Inputs: map[string]engine.InputMeta{
 			"secret":           {Description: "JWT Secret key", Required: false},
 			"redirect":         {Description: "Login URL for redirect on failure", Required: false},

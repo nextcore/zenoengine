@@ -390,37 +390,55 @@ func RegisterUtilSlots(eng *engine.Engine) {
 
 		// Eksekusi Blok Then/Else
 		var target *engine.Node
+		var targetChildren []*engine.Node
+
 		if isTrue {
+			// Find explicit 'then' block
 			for _, c := range node.Children {
 				if c.Name == "then" {
 					target = c
 					break
 				}
 			}
+
+			// [IMPLICIT BODY] If no explicit 'then', execute all children except 'else'
+			if target != nil {
+				targetChildren = target.Children
+			} else {
+				for _, c := range node.Children {
+					if c.Name != "else" {
+						targetChildren = append(targetChildren, c)
+					}
+				}
+			}
 		} else {
+			// Find explicit 'else' block
 			for _, c := range node.Children {
 				if c.Name == "else" {
 					target = c
 					break
 				}
 			}
+			if target != nil {
+				targetChildren = target.Children
+			}
 		}
 
-		if target != nil {
-			for _, c := range target.Children {
-				if err := eng.Execute(ctx, c, scope); err != nil {
-					return err
-				}
+		// Execute target children
+		for _, c := range targetChildren {
+			if err := eng.Execute(ctx, c, scope); err != nil {
+				return err
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Kondisional if-then-else. Support: ==, !=, >, <, >=, <=",
+		Description:   "Kondisional if-then-else. Support: ==, !=, >, <, >=, <=",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"then": {Description: "Blok kode jika kondisi benar", Required: false},
 			"else": {Description: "Blok kode jika kondisi salah", Required: false},
 		},
-		RequiredBlocks: []string{"then"},
+		RequiredBlocks: []string{}, // Removed "then" to support implicit
 	})
 
 	// 10. ARRAY LENGTH

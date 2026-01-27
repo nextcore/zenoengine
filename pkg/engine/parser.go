@@ -94,9 +94,25 @@ func parseFile(path string) (*Node, error) {
 				Col:      tok.Column,
 				Filename: path,
 			}
-			parent := stack[len(stack)-1]
-			parent.Children = append(parent.Children, node)
-			node.Parent = parent
+
+			// [SIBLING ATTACHMENT]
+			// if/else, try/catch, forelse/empty linkage
+			attached := false
+			if lastNode != nil {
+				if (tok.Literal == "else" && lastNode.Name == "if") ||
+					(tok.Literal == "catch" && lastNode.Name == "try") ||
+					(tok.Literal == "empty" && lastNode.Name == "forelse") {
+					lastNode.Children = append(lastNode.Children, node)
+					node.Parent = lastNode
+					attached = true
+				}
+			}
+
+			if !attached {
+				parent := stack[len(stack)-1]
+				parent.Children = append(parent.Children, node)
+				node.Parent = parent
+			}
 			lastNode = node
 
 		case TokenColon:
@@ -142,10 +158,12 @@ func parseFile(path string) (*Node, error) {
 				if lastNode != nil {
 					stack = append(stack, lastNode)
 				}
-			} else if peek.Type == TokenRBrace {
-				// name: }  (Slot kosong)
+			} else if peek.Type == TokenRBrace && peek.Line == currentLine {
+				// name: }  (Slot kosong pada baris yang sama)
 				l.NextToken()
 				if len(stack) > 1 {
+					// [SIBLING ATTACHMENT]
+					lastNode = stack[len(stack)-1]
 					stack = stack[:len(stack)-1]
 				}
 			}
@@ -170,6 +188,8 @@ func parseFile(path string) (*Node, error) {
 
 		case TokenRBrace:
 			if len(stack) > 1 {
+				// [SIBLING ATTACHMENT] Set lastNode to the node being popped (closed)
+				lastNode = stack[len(stack)-1]
 				stack = stack[:len(stack)-1]
 			}
 

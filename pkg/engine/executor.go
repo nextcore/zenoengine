@@ -25,6 +25,7 @@ type SlotMeta struct {
 	Inputs         map[string]InputMeta `json:"inputs,omitempty"`
 	RequiredBlocks []string             `json:"required_blocks,omitempty"` // e.g. ["do"], ["then", "else"]
 	ValueType      string               `json:"value_type,omitempty"`      // [BARU] Tipe data untuk value utama slot
+	AllowImplicit  bool                 `json:"allow_implicit,omitempty"`  // [BARU] Jika true, unknown attributes diabaikan (karena dianggap body)
 }
 
 type Engine struct {
@@ -80,7 +81,7 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) error {
 		// --- VALIDASI ATRIBUT (Strict Mode) ---
 		if node.cachedMeta != nil {
 			// 1. Cek Atribut Tak Dikenal (Hanya jika Inputs didefinisikan)
-			if node.cachedMeta.Inputs != nil {
+			if node.cachedMeta.Inputs != nil && !node.cachedMeta.AllowImplicit {
 				for _, child := range node.Children {
 					if child.Name == "do" || child.Name == "then" || child.Name == "else" || child.Name == "catch" || child.Name == "" {
 						continue // Blok spesial diabaikan dari validasi atribut

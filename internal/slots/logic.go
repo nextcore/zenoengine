@@ -247,6 +247,17 @@ func RegisterLogicSlots(eng *engine.Engine) {
 			}
 		}
 
+		if doNode == nil {
+			// [IMPLICIT BODY] Collect all children except 'catch' and 'as'
+			implicitDo := &engine.Node{Name: "do"}
+			for _, c := range node.Children {
+				if c.Name != "catch" && c.Name != "as" && c.Name != "" {
+					implicitDo.Children = append(implicitDo.Children, c)
+				}
+			}
+			doNode = implicitDo
+		}
+
 		if doNode != nil {
 			for _, child := range doNode.Children {
 				if err := eng.Execute(ctx, child, scope); err != nil {
@@ -264,8 +275,9 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Handle errors using a try-catch block.",
-		Example:     "try {\n  do: { ... }\n  catch: { ... }\n}",
+		Description:   "Handle errors using a try-catch block.",
+		Example:       "try {\n  do: { ... }\n  catch: { ... }\n}",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"as":    {Description: "Variable name for error message (Default: 'error')", Required: false},
 			"do":    {Description: "Main code block to execute", Required: false},
@@ -293,6 +305,17 @@ func RegisterLogicSlots(eng *engine.Engine) {
 				doNode = c
 				break
 			}
+		}
+
+		// [IMPLICIT BODY] If no explicit 'do', collect non-'as' children
+		if doNode == nil {
+			implicitDo := &engine.Node{Name: "do"}
+			for _, c := range node.Children {
+				if c.Name != "as" && c.Name != "item" {
+					implicitDo.Children = append(implicitDo.Children, c)
+				}
+			}
+			doNode = implicitDo
 		}
 
 		// A. C-Style For Loop (e.g. "$i = 0; $i < 10; $i++")
@@ -409,13 +432,14 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	}
 
 	eng.Register("for", handlerFor, engine.SlotMeta{
-		Description: "Iterate (loop) over a list or array.",
-		Example:     "for: $list\n  as: $item\n  do: ...",
+		Description:   "Iterate (loop) over a list or array.",
+		Example:       "for: $list\n  as: $item\n  do: ...",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"as": {Description: "Variable name for current element (Default: 'item')", Required: false},
 			"do": {Description: "Code block to repeat", Required: false},
 		},
-		RequiredBlocks: []string{"do"},
+		RequiredBlocks: []string{}, // Removed "do" from required blocks to support implicit
 	})
 	eng.Register("foreach", handlerFor, engine.SlotMeta{Example: "foreach: $list { as: $item ... }"}) // Alias
 
@@ -500,9 +524,14 @@ func RegisterLogicSlots(eng *engine.Engine) {
 				}
 			}
 
-			// Fallback: execute all children if no 'do' block found
+			// [IMPLICIT BODY] Fallback: execute all children if no 'do' block found
+			// BUT: we need to be careful not to execute attributes that are NOT code
 			if childrenToExec == nil {
-				childrenToExec = node.Children
+				for _, child := range node.Children {
+					// In while/loop, any child that isn't 'do' can be considered part of the body
+					// unless it's a specific configuration slot (currently none for while/loop)
+					childrenToExec = append(childrenToExec, child)
+				}
 			}
 
 			for _, child := range childrenToExec {
@@ -522,15 +551,15 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	}
 
 	eng.Register("while", handlerWhile, engine.SlotMeta{
-		Description:    "While loop",
-		RequiredBlocks: []string{"do"},
+		Description:   "While loop",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Code block to execute"},
 		},
 	})
 	eng.Register("loop", handlerWhile, engine.SlotMeta{
-		Description:    "While loop",
-		RequiredBlocks: []string{"do"},
+		Description:   "While loop",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Code block to execute"},
 		},
@@ -613,15 +642,29 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	eng.Register("isset", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		val := resolveValue(node.Value, scope)
 		if val != nil {
+			var doNode *engine.Node
 			for _, child := range node.Children {
 				if child.Name == "do" {
-					return eng.Execute(ctx, child, scope)
+					doNode = child
+					break
+				}
+			}
+
+			// [IMPLICIT BODY]
+			if doNode != nil {
+				return eng.Execute(ctx, doNode, scope)
+			} else {
+				for _, child := range node.Children {
+					if err := eng.Execute(ctx, child, scope); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Execute block if variable is set/defined.",
+		Description:   "Execute block if variable is set/defined.",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Code block to execute"},
 		},
@@ -649,15 +692,29 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 
 		if isEmpty {
+			var doNode *engine.Node
 			for _, child := range node.Children {
 				if child.Name == "do" {
-					return eng.Execute(ctx, child, scope)
+					doNode = child
+					break
+				}
+			}
+
+			// [IMPLICIT BODY]
+			if doNode != nil {
+				return eng.Execute(ctx, doNode, scope)
+			} else {
+				for _, child := range node.Children {
+					if err := eng.Execute(ctx, child, scope); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Execute block if variable is empty (null, '', or empty array).",
+		Description:   "Execute block if variable is empty (null, '', or empty array).",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Code block to execute"},
 		},
@@ -667,15 +724,29 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		val := resolveValue(node.Value, scope)
 		boolVal, _ := coerce.ToBool(val)
 		if !boolVal {
+			var doNode *engine.Node
 			for _, child := range node.Children {
 				if child.Name == "do" {
-					return eng.Execute(ctx, child, scope)
+					doNode = child
+					break
+				}
+			}
+
+			// [IMPLICIT BODY]
+			if doNode != nil {
+				return eng.Execute(ctx, doNode, scope)
+			} else {
+				for _, child := range node.Children {
+					if err := eng.Execute(ctx, child, scope); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Reverse of IF. Execute block if condition is FALSE.",
+		Description:   "Reverse of IF. Execute block if condition is FALSE.",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Code block to execute"},
 		},
@@ -695,15 +766,29 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 
 		if isAuth {
+			var doNode *engine.Node
 			for _, child := range node.Children {
 				if child.Name == "do" {
-					return eng.Execute(ctx, child, scope)
+					doNode = child
+					break
+				}
+			}
+
+			// [IMPLICIT BODY]
+			if doNode != nil {
+				return eng.Execute(ctx, doNode, scope)
+			} else {
+				for _, child := range node.Children {
+					if err := eng.Execute(ctx, child, scope); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Execute block if user is logged in.",
+		Description:   "Execute block if user is logged in.",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Code block to execute"},
 		},
@@ -720,15 +805,29 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 
 		if !isAuth {
+			var doNode *engine.Node
 			for _, child := range node.Children {
 				if child.Name == "do" {
-					return eng.Execute(ctx, child, scope)
+					doNode = child
+					break
+				}
+			}
+
+			// [IMPLICIT BODY]
+			if doNode != nil {
+				return eng.Execute(ctx, doNode, scope)
+			} else {
+				for _, child := range node.Children {
+					if err := eng.Execute(ctx, child, scope); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Execute block if user is NOT logged in (guest).",
+		Description:   "Execute block if user is NOT logged in (guest).",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Code block to execute"},
 		},
@@ -830,15 +929,31 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 
 		if callback(ability, resource) {
+			var doNode *engine.Node
 			for _, child := range node.Children {
 				if child.Name == "do" {
-					return eng.Execute(ctx, child, scope)
+					doNode = child
+					break
+				}
+			}
+
+			// [IMPLICIT BODY]
+			if doNode != nil {
+				return eng.Execute(ctx, doNode, scope)
+			} else {
+				for _, child := range node.Children {
+					if child.Name != "resource" {
+						if err := eng.Execute(ctx, child, scope); err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Execute block if user has specific permission (ability).",
+		Description:   "Execute block if user has specific permission (ability).",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"resource": {Description: "Object to check permission for"},
 			"do":       {Description: "Code block to execute"},
@@ -874,15 +989,31 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 
 		if !callback(ability, resource) {
+			var doNode *engine.Node
 			for _, child := range node.Children {
 				if child.Name == "do" {
-					return eng.Execute(ctx, child, scope)
+					doNode = child
+					break
+				}
+			}
+
+			// [IMPLICIT BODY]
+			if doNode != nil {
+				return eng.Execute(ctx, doNode, scope)
+			} else {
+				for _, child := range node.Children {
+					if child.Name != "resource" {
+						if err := eng.Execute(ctx, child, scope); err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Menjalankan blok jika user TIDAK memiliki izin (ability).",
+		Description:   "Menjalankan blok jika user TIDAK memiliki izin (ability).",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"resource": {Description: "Objek yang dicek izinnya"},
 			"do":       {Description: "Blok kode yang dijalankan"},
@@ -923,16 +1054,31 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		} else {
 			// Synthesize a "for" node
 			forNode := &engine.Node{Name: "for", Value: node.Value}
+			hasExplicitDo := false
 			for _, child := range node.Children {
+				if child.Name == "do" {
+					hasExplicitDo = true
+				}
 				if child.Name == "as" || child.Name == "do" {
 					forNode.Children = append(forNode.Children, child)
 				}
 			}
+
+			// [IMPLICIT BODY]
+			if !hasExplicitDo {
+				for _, child := range node.Children {
+					if child.Name != "as" && child.Name != "empty" && child.Name != "" {
+						forNode.Children = append(forNode.Children, child)
+					}
+				}
+			}
+
 			return eng.Execute(ctx, forNode, scope)
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Perulangan list dengan blok cadangan jika list kosong.",
+		Description:   "Perulangan list dengan blok cadangan jika list kosong.",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"as":    {Description: "Alias variabel item"},
 			"do":    {Description: "Blok yang diulang"},
@@ -959,14 +1105,28 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 
 		scope.Set("message", msgs[0])
+		var doNode *engine.Node
 		for _, child := range node.Children {
 			if child.Name == "do" {
-				return eng.Execute(ctx, child, scope)
+				doNode = child
+				break
+			}
+		}
+
+		// [IMPLICIT BODY]
+		if doNode != nil {
+			return eng.Execute(ctx, doNode, scope)
+		} else {
+			for _, child := range node.Children {
+				if err := eng.Execute(ctx, child, scope); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Menampilkan pesan error validasi untuk field tertentu.",
+		Description:   "Menampilkan pesan error validasi untuk field tertentu.",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"do": {Description: "Blok kode yang dijalankan"},
 		},

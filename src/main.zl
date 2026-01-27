@@ -5,40 +5,25 @@ log: "🚀 ZenoEngine Started..."
 // ==========================================
 include: src/tutorial/max/main.zl
 
-// ==========================================
-// OTHER TUTORIALS (Uncomment to enable)
-// ==========================================
-include: src/tutorial/pos_api/main.zl
-// include: src/tutorial/inertia_demo/main.zl
-// include: src/tutorial/gocms/main.zl
-
 // 404 Handler
 http.get: /* {
-  do: {
     // If accessing root, /max, or /max/, redirect to the tutorial dashboard
     if: $path == "/" {
-        then: {
-             http.redirect: "/tutorial/max"
-             return
-        }
+         http.redirect: "/tutorial/max"
+         return
     }
 
     if: $path == "/max" {
-        then: {
-             http.redirect: "/tutorial/max"
-             return
-        }
+         http.redirect: "/tutorial/max"
+         return
     }
 
     if: $path == "/max/" {
-        then: {
-             http.redirect: "/tutorial/max"
-             return
-        }
+         http.redirect: "/tutorial/max"
+         return
     }
 
     http.not_found: {
       body: "Halaman tidak ditemukan."
     }
-  }
 }

@@ -279,7 +279,9 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		}
 
 		return nil
-	}, engine.SlotMeta{})
+	}, engine.SlotMeta{
+		AllowImplicit: true,
+	})
 
 	// ==========================================
 	// 2. STANDARD HTTP METHODS (Mendukung Implicit Do)
@@ -436,6 +438,8 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// Register route handler on the middleware-enabled router chain
 			targetRouter.MethodFunc(m, path, createHandler(execChildren, scope))
 			return nil
-		}, engine.SlotMeta{})
+		}, engine.SlotMeta{
+			AllowImplicit: true,
+		})
 	}
 }

@@ -24,13 +24,10 @@ db.table: tutorial_users {
 db.count: { as: $user_count }
 
 if: $user_count == 0 {
-  then: {
-    log: "🌱 No users found, seeding demo data..."
-    include: src/tutorial/max/seeders/demo_data.zl
-  }
-  else: {
-    log: "✅ Database already seeded"
-  }
+  log: "🌱 No users found, seeding demo data..."
+  include: src/tutorial/max/seeders/demo_data.zl
+} else: {
+  log: "✅ Database already seeded"
 }
 
 // ==========================================

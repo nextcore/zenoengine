@@ -12,7 +12,7 @@ import (
 
 // RegisterSSESlots registers Server-Sent Events slots
 func RegisterSSESlots(eng *engine.Engine) {
-	
+
 	// 1. SSE.STREAM - Start SSE connection
 	eng.Register("sse.stream", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
@@ -46,7 +46,8 @@ func RegisterSSESlots(eng *engine.Engine) {
 
 		return nil
 	}, engine.SlotMeta{
-		Description: "Start Server-Sent Events stream",
+		Description:   "Start Server-Sent Events stream",
+		AllowImplicit: true,
 		Example: `sse.stream {
     sse.send {
         event: "message"
@@ -143,7 +144,8 @@ func RegisterSSESlots(eng *engine.Engine) {
 		// Get interval (default 1 second)
 		interval := 1000
 		var maxIterations int
-		
+		var doNode *engine.Node
+
 		for _, child := range node.Children {
 			if child.Name == "interval" {
 				val := parseNodeValue(child, scope)
@@ -152,6 +154,9 @@ func RegisterSSESlots(eng *engine.Engine) {
 			if child.Name == "max" {
 				val := parseNodeValue(child, scope)
 				maxIterations, _ = coerce.ToInt(val)
+			}
+			if child.Name == "do" {
+				doNode = child
 			}
 		}
 
@@ -165,13 +170,17 @@ func RegisterSSESlots(eng *engine.Engine) {
 				return nil
 			case <-ticker.C:
 				// Execute loop body
-				for _, child := range node.Children {
-					if child.Name == "do" {
-						for _, doChild := range child.Children {
-							if err := eng.Execute(ctx, doChild, scope); err != nil {
-								return err
-							}
-						}
+				nodesToExec := node.Children
+				if doNode != nil {
+					nodesToExec = doNode.Children
+				}
+
+				for _, child := range nodesToExec {
+					if doNode == nil && (child.Name == "interval" || child.Name == "max" || child.Name == "do") {
+						continue
+					}
+					if err := eng.Execute(ctx, child, scope); err != nil {
+						return err
 					}
 				}
 
@@ -182,7 +191,8 @@ func RegisterSSESlots(eng *engine.Engine) {
 			}
 		}
 	}, engine.SlotMeta{
-		Description: "Loop with periodic SSE updates",
+		Description:   "Loop with periodic SSE updates",
+		AllowImplicit: true,
 		Inputs: map[string]engine.InputMeta{
 			"interval": {Description: "Interval in milliseconds", Type: "int"},
 			"max":      {Description: "Max iterations (0 = infinite)", Type: "int"},

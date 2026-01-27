@@ -10,155 +10,133 @@ coalesce: $jwt_secret { default: "ZENOLANG_DEMO_SECRET_KEY_2026"; as: $jwt_secre
 // 1. LIST TEAMS
 // ==========================================
 http.get: /tutorial/max/teams {
-  do: {
     auth.middleware: {
       secret: $jwt_secret
       redirect: "/tutorial/max/login"
-      do: {
-        auth.user: { as: $current_user }
-        
-        // Get all teams
-            db.table: tutorial_teams {
-              db: tutorial
-            }
-        db.get: { as: $teams }
-        len: $teams { as: $teams_count }
-        dump: $teams_count
-        
-        view.blade: "tutorial/max/teams/index.blade.zl" {
-          teams: $teams
-          teams_count: $teams_count
-          current_user: $current_user
-          title: "Teams"
-        }
+      
+      auth.user: { as: $current_user }
+      
+      // Get all teams
+          db.table: tutorial_teams {
+            db: tutorial
+          }
+      db.get: { as: $teams }
+      len: $teams { as: $teams_count }
+      dump: $teams_count
+      
+      view.blade: "tutorial/max/teams/index.blade.zl" {
+        teams: $teams
+        teams_count: $teams_count
+        current_user: $current_user
+        title: "Teams"
       }
     }
-  }
 }
 
 // ==========================================
 // 2. CREATE TEAM (POST)
 // ==========================================
 http.post: /tutorial/max/teams/store {
-  do: {
     auth.middleware: {
       secret: $jwt_secret
       redirect: "/tutorial/max/login"
-      do: {
-        auth.user: { as: $current_user }
-        
-        http.form: "name" { as: $name }
-        http.form: "description" { as: $description }
-        
-// REMOVED dump
-        
-        validate: {
+      
+      auth.user: { as: $current_user }
+      
+      http.form: "name" { as: $name }
+      http.form: "description" { as: $description }
+      
+      validate: {
+        name: $name
+      } {
+        rules: {
+          name: "required|min:3"
+        }
+        as: $errors
+      }
+      
+      if: $errors_any {
+        http.validation_error: {
+          errors: $errors
+        }
+      } else: {
+        db.table: tutorial_teams {
+          db: tutorial
+        }
+        db.insert: {
           name: $name
-        } {
-          rules: {
-            name: "required|min:3"
-          }
-          as: $errors
+          description: $description
+          owner_id: $current_user.user_id
         }
         
-        if: $errors_any {
-          then: {
-            http.validation_error: {
-              errors: $errors
-            }
-          }
-          else: {
-            db.table: tutorial_teams {
-              db: tutorial
-            }
-            db.insert: {
-              name: $name
-              description: $description
-              owner_id: $current_user.user_id
-            }
-            
-            http.redirect: "/tutorial/max/teams"
-          }
-        }
+        http.redirect: "/tutorial/max/teams"
       }
     }
-  }
 }
 
 // ==========================================
 // 3. DELETE TEAM
 // ==========================================
 http.post: '/tutorial/max/teams/:id/delete' {
-  do: {
     auth.middleware: {
       secret: $jwt_secret
       redirect: "/tutorial/max/login"
-      do: {
-        auth.user: { as: $current_user }
-        http.param: "id" { as: $team_id }
-        
-        // Get team
-            db.table: tutorial_teams {
-              db: tutorial
-            }
-        db.where: {
-
-          col: "id"
-
-          val: $team_id
-
-        }
-        db.first: { as: $team }
-        
-        isset: $team {
-          do: {
-            // Check if user is owner or admin
-            if: $team.owner_id == $current_user.user_id {
-              then: {
-                db.table: tutorial_teams {
-                  db: tutorial
-                }
-                db.where: {
-
-                  col: "id"
-
-                  val: $team_id
-
-                }
-                db.delete: {}
-                
-                http.redirect: "/tutorial/max/teams"
-              }
-              else: {
-                if: $current_user.role == "admin" {
-                  then: {
-                    db.table: tutorial_teams {
-                      db: tutorial
-                    }
-                    db.where: {
-
-                      col: "id"
-
-                      val: $team_id
-
-                    }
-                    db.delete: {}
-                    
-                    http.redirect: "/tutorial/max/teams"
-                  }
-                  else: {
-                    http.forbidden: {
-                      message: "Only team owner can delete this team"
-                    }
-                  }
-                }
-              }
-            }
+      
+      auth.user: { as: $current_user }
+      http.param: "id" { as: $team_id }
+      
+      // Get team
+          db.table: tutorial_teams {
+            db: tutorial
           }
-        }
+      db.where: {
+
+        col: "id"
+
+        val: $team_id
+
+      }
+      db.first: { as: $team }
+      
+      isset: $team {
+          // Check if user is owner or admin
+          if: $team.owner_id == $current_user.user_id {
+              db.table: tutorial_teams {
+                db: tutorial
+              }
+              db.where: {
+
+                col: "id"
+
+                val: $team_id
+
+              }
+              db.delete: {}
+              
+              http.redirect: "/tutorial/max/teams"
+          } else: {
+              if: $current_user.role == "admin" {
+                  db.table: tutorial_teams {
+                    db: tutorial
+                  }
+                  db.where: {
+
+                    col: "id"
+
+                    val: $team_id
+
+                  }
+                  db.delete: {}
+                  
+                  http.redirect: "/tutorial/max/teams"
+              } else: {
+                  http.forbidden: {
+                    message: "Only team owner can delete this team"
+                  }
+              }
+          }
       }
     }
-  }
 }
 
 log: "✅ Team routes loaded (using tutorial database)"

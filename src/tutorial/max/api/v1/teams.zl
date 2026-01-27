@@ -13,15 +13,13 @@ http.get: /api/v1/teams {
     auth.middleware: {
       secret: $jwt_secret
       
-      do: {
-          db.table: tutorial_teams {
-            db: tutorial
-          }
-          db.get: { as: $teams }
-          
-          http.ok: {
-            data: $teams
-          }
+      db.table: tutorial_teams {
+        db: tutorial
+      }
+      db.get: { as: $teams }
+      
+      http.ok: {
+        data: $teams
       }
     }
 }
@@ -33,55 +31,51 @@ http.post: /api/v1/teams {
     auth.middleware: {
       secret: $jwt_secret
       
-      do: {
-          auth.user: { as: $current_user }
-          
-          http.form: "name" { as: $name }
-          http.form: "description" { as: $description }
-          
-          validate: {
-            name: $name
-          } {
-            rules: {
-              name: "required|min:3"
-            }
-            as: $errors
+      auth.user: { as: $current_user }
+      
+      http.form: "name" { as: $name }
+      http.form: "description" { as: $description }
+      
+      validate: {
+        name: $name
+      } {
+        rules: {
+          name: "required|min:3"
+        }
+        as: $errors
+      }
+      
+      if: $errors_any {
+          http.validation_error: {
+            errors: $errors
           }
-          
-          if: $errors_any {
-              then: {
-                  http.validation_error: {
-                    errors: $errors
-                  }
-                  stop
-              }
-          }
+          stop
+      }
 
-          db.table: tutorial_teams {
-            db: tutorial
-          }
-          db.insert: {
-            name: $name
-            description: $description
-            owner_id: $current_user.user_id
-            created_at: date("now")
-          }
-          
-          var: $team_id { val: $db_last_id }
-          
-          db.table: tutorial_teams {
-            db: tutorial
-          }
-          db.where: {
-              col: "id"
-              val: $team_id
-          }
-          db.first: { as: $created_team }
-          
-          http.created: {
-            message: "Team created successfully"
-            data: $created_team
-          }
+      db.table: tutorial_teams {
+        db: tutorial
+      }
+      db.insert: {
+        name: $name
+        description: $description
+        owner_id: $current_user.user_id
+        created_at: date("now")
+      }
+      
+      var: $team_id { val: $db_last_id }
+      
+      db.table: tutorial_teams {
+        db: tutorial
+      }
+      db.where: {
+          col: "id"
+          val: $team_id
+      }
+      db.first: { as: $created_team }
+      
+      http.created: {
+        message: "Team created successfully"
+        data: $created_team
       }
     }
 }

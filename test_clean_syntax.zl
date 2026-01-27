@@ -1,0 +1,71 @@
+$age: 20
+log: "--- Testing IF ---"
+if: $age >= 18 {
+  log: "SUCCESS: Direct If works"
+} else: {
+  log: "FAILURE: Explicit Else executed erroneously"
+}
+
+if: $age < 18 {
+  log: "FAILURE: Direct If executed erroneously"
+} else: {
+  log: "SUCCESS: Explicit Else works with implicit if"
+}
+
+log: "--- Testing FOR ---"
+db.select: "SELECT 'One' as val UNION ALL SELECT 'Two' UNION ALL SELECT 'Three'" {
+  as: $items
+}
+for: $items {
+  as: $item
+  log: $item.val
+}
+
+log: "--- Testing TRY/CATCH ---"
+try {
+  log: "Inside Try block"
+  db.execute: "INVALID SQL"
+} catch: {
+  log: "SUCCESS: Caught expected error"
+}
+
+log: "--- Testing WHILE ---"
+$i: 0
+while: "$i < 3" {
+  log: $i
+  math.calc: "$i + 1" {
+    as: $i
+  }
+}
+
+log: "--- Testing ISSET ---"
+$name: "Zeno"
+isset: $name {
+  log: "SUCCESS: Isset works"
+}
+
+log: "--- Testing UNLESS ---"
+$locked: false
+unless: $locked {
+  log: "SUCCESS: Unless works"
+}
+
+log: "--- Testing FORELSE ---"
+db.select: "SELECT 1 WHERE 1=0" {
+  as: $empty_list
+}
+forelse: $empty_list {
+  as: $x
+  log: "FAILURE: Should not see this"
+} empty: {
+  log: "SUCCESS: Forelse empty works"
+}
+
+forelse: $items {
+  as: $item
+  log: $item.val
+} empty: {
+  log: "FAILURE: Should not see this"
+}
+
+log: "--- FINISHED ---"
