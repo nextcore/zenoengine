@@ -7,51 +7,66 @@ system.env: "JWT_SECRET" { as: $jwt_secret }
 coalesce: $jwt_secret { default: "ZENOLANG_DEMO_SECRET_KEY_2026"; as: $jwt_secret }
 
 http.get: /tutorial/max/notifications/stream {
-  auth.middleware: {
-    secret: $jwt_secret
-    auth.user: { as: $current_user }
-    
-    // Start SSE stream
-    sse.stream: {
-      // Send welcome message
-      sse.send: {
-        event: "connected"
-        data: "Connected to notification stream"
-      }
-      
-      // Stream notifications in a loop
-      sse.loop: {
-        interval: 3000
-        // Get unread notifications
-        db.table: tutorial_notifications {
-          db: tutorial
-        }
-        db.where: {
-          col: "user_id"
-          val: $current_user.user_id
-        }
-        db.where: {
-          col: "is_read"
-          val: 0
-        }
-        db.order_by: "created_at DESC"
-        db.limit: 10
-        db.get: { as: $notifications }
+  do: {
+    auth.middleware: {
+      secret: $jwt_secret
+      do: {
+        auth.user: { as: $current_user }
         
-        // Send notifications
-        forelse: $notifications {
-          as: $notif
-          json.stringify: $notif { as: $notif_json }
-          
+        // Start SSE stream
+        sse.stream: {
+          // Send welcome message
           sse.send: {
-            event: "notification"
-            data: $notif_json
+            event: "connected"
+            data: "Connected to notification stream"
           }
-        } empty: {
-          // Send heartbeat
-          sse.send: {
-            event: "heartbeat"
-            data: "ping"
+          
+          // Stream notifications in a loop
+          sse.loop: {
+            interval: 3000
+            do: {
+              // Get unread notifications
+              db.table: tutorial_notifications {
+                db: tutorial
+              }
+              db.where: {
+
+                col: "user_id"
+
+                val: $current_user.user_id
+
+              }
+              db.where: {
+
+                col: "is_read"
+
+                val: 0
+
+              }
+              db.order_by: "created_at DESC"
+              db.limit: 10
+              db.get: { as: $notifications }
+              
+              // Send notifications
+              forelse: $notifications {
+                as: $notif
+                do: {
+                  json.stringify: $notif { as: $notif_json }
+                  
+                  sse.send: {
+                    event: "notification"
+                    data: $notif_json
+                  }
+                }
+                empty: {
+                  // Send heartbeat
+                  sse.send: {
+                    event: "heartbeat"
+                    data: "ping"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -63,28 +78,38 @@ http.get: /tutorial/max/notifications/stream {
 // MARK NOTIFICATION AS READ
 // ==========================================
 http.post: '/tutorial/max/notifications/:id/read' {
-  auth.middleware: {
-    secret: $jwt_secret
-    auth.user: { as: $current_user }
-    http.param: "id" { as: $notif_id }
-    
-    db.table: tutorial_notifications {
-      db: tutorial
-    }
-    db.where: {
-      col: "id"
-      val: $notif_id
-    }
-    db.where: {
-      col: "user_id"
-      val: $current_user.user_id
-    }
-    db.update: {
-      is_read: 1
-    }
-    
-    http.ok: {
-      message: "Notification marked as read"
+  do: {
+    auth.middleware: {
+      secret: $jwt_secret
+      do: {
+        auth.user: { as: $current_user }
+        http.param: "id" { as: $notif_id }
+        
+        db.table: tutorial_notifications {
+          db: tutorial
+        }
+        db.where: {
+
+          col: "id"
+
+          val: $notif_id
+
+        }
+        db.where: {
+
+          col: "user_id"
+
+          val: $current_user.user_id
+
+        }
+        db.update: {
+          is_read: 1
+        }
+        
+        http.ok: {
+          message: "Notification marked as read"
+        }
+      }
     }
   }
 }

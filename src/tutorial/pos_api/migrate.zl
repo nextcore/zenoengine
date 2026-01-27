@@ -1,0 +1,40 @@
+// ==========================================
+// MIGRATION RUNNER
+// Run this script to setup all databases
+// Command: zeno src/tutorial/pos_api/migrate.zl
+// ==========================================
+
+log: "🚀 Starting POS API Migrations..."
+
+// 1. Run System Migration
+include: src/tutorial/pos_api/migrations/01_system.zl
+
+// 2. Get All Active Tenants from System DB
+db.select: "SELECT * FROM tenants WHERE is_active = 1" {
+    db: "system"
+    as: $tenants
+}
+
+// 3. Loop through Tenants and Run Schema Migration
+for: $tenants {
+    as: $tenant
+    do: {
+        log: "----------------------------------------"
+        log: "Processing Tenant..."
+        
+        // Set Target DB for the included script
+        scope.set: $TARGET_DB {
+            val: $tenant.db_connection_name
+        }
+        
+        // Execute Schema Migration
+        include: src/tutorial/pos_api/migrations/02_tenant.zl
+    }
+}
+
+// 4. Run Seeder (Auto-populate dummy data)
+log: "Running Seeders..."
+include: src/tutorial/pos_api/migrations/03_seed_products.zl
+
+log: "----------------------------------------"
+log: "✅ ALL MIGRATIONS & SEEDING COMPLETED SUCCESSFULLY"

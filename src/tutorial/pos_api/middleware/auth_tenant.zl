@@ -1,0 +1,113 @@
+// Middleware for route protection & session setup
+// ============================================
+
+http.header: "Authorization" { as: $auth_header }
+http.header: "X-Tenant-ID" { as: $tenant_id_header }
+
+// 1. Validate Token & Tenant ID existence
+// STRATEGY: Hybrid (Header Priority -> Fallback to Subdomain)
+
+// A. Check Header
+if: !$tenant_id_header {
+    then: {
+        // B. Fallback to Subdomain (Domain-Based)
+        http.host: { as: $host }
+        
+        // Parse: "abc.myapp.com" -> ["abc", "myapp", "com"]
+        string.split: $host { delimiter: "."; as: $host_parts }
+        
+        // Ensure at least a subdomain exists (abc.localhost = 2 parts)
+        if: $host_parts.length >= 2 {
+            then: {
+                // Use the first part as tenant code
+                $tenant_id_header = $host_parts.0
+                log: "Detected Tenant from Domain: " + $tenant_id_header
+            }
+        }
+    }
+}
+
+// C. Final Validation
+if: (!$auth_header) || (!$tenant_id_header) {
+    then: {
+        http.unauthorized: { 
+            message: "Missing Authorization token or Tenant ID (Header/Domain)" 
+        }
+        stop  // Stop execution
+    }
+}
+
+// 2. Parse Bearer Token
+// Format: "Bearer <token>"
+string.split: $auth_header { delimiter: " "; as: $auth_parts }
+
+if: $auth_parts.length < 2 {
+    then: {
+        http.unauthorized: { message: "Invalid Authorization format" }
+        stop
+    }
+}
+
+$token : $auth_parts.1
+
+// 3. JWT Verification
+try: {
+    do: {
+        jwt.verify: $token {
+            secret: env("JWT_SECRET")
+            as: $claims
+        }
+        log: "JWT verification successful"
+    }
+    catch: {
+        log: $error
+        http.unauthorized: { 
+            message: "Invalid or expired token",
+            error: "JWT_VERIFICATION_FAILED"
+        }
+        stop
+    }
+}
+
+// 4. Validate Tenant (Check in System DB)
+db.select: "SELECT * FROM tenants WHERE code = ? AND is_active = 1 LIMIT 1" {
+    db: "system"
+    bind: {
+        val: $tenant_id_header
+    }
+    as: $tenants
+}
+
+// db.select returns array, access first element directly
+if: !$tenants || $tenants.length == 0 {
+    then: {
+        log: "ERROR: Invalid tenant ID attempted"
+        http.forbidden: { 
+            message: "Invalid or inactive tenant",
+            tenant_id: $tenant_id_header,
+            error: "TENANT_NOT_FOUND"
+        }
+        stop
+    }
+}
+
+log: "Tenant validated successfully"
+
+// 5. Set $auth object for controllers to access
+// Controllers expect: $auth.user_id, $auth.email, etc.
+scope.set: $auth {
+    val: {
+        user_id: $claims.user_id
+        email: $claims.email
+        tenant_id: $claims.tenant_id
+        role: $claims.role
+    }
+}
+
+// Also set legacy variables for backward compatibility
+scope.set: $CURRENT_USER { val: $claims }
+scope.set: $CURRENT_TENANT_DB { val: $tenants.0.db_connection_name }
+scope.set: $CURRENT_TENANT_NAME { val: $tenants.0.name }
+scope.set: $CURRENT_TENANT_ID { val: $tenants.0.code }
+
+log: "User authenticated successfully"

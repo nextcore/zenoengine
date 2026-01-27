@@ -85,8 +85,7 @@ func RegisterTransactionSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 		return nil
 	}, engine.SlotMeta{
-		Description:   "Menjalankan blok kode dalam database transaction (ACID).",
-		AllowImplicit: true,
-		Example:       "db.transaction\n  do:\n    db.insert: ...\n    db.update: ...",
+		Description: "Menjalankan blok kode dalam database transaction (ACID).",
+		Example:     "db.transaction\n  do:\n    db.insert: ...\n    db.update: ...",
 	})
 }

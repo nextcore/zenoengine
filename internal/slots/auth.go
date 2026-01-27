@@ -24,7 +24,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		table := "users"
 		colUser := "email"
 		colPass := "password"
-		jwtSecret := "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
+		jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
 		target := "token"
 		dbName := "default"
 
@@ -132,7 +132,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 	// 2. AUTH.MIDDLEWARE (Guard) - Auto Multi-Tenant Detection
 	eng.Register("auth.middleware", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		jwtSecret := "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
+		jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
 		var doNode *engine.Node
 
 		// Parse parameters
@@ -254,27 +254,17 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		// Exec 'do' block (Protected Routes)
-		nodesToExec := node.Children
 		if doNode != nil {
-			nodesToExec = doNode.Children
-		}
-
-		for _, child := range nodesToExec {
-			// Skip config nodes if implicit
-			if doNode == nil && (child.Name == "secret" || child.Name == "redirect" || child.Name == "do" ||
-				child.Name == "tenant_header" || child.Name == "tenant_db_lookup" || child.Name == "set_auth_object") {
-				continue
-			}
-
-			if err := eng.Execute(ctx, child, scope); err != nil {
-				return err
+			for _, child := range doNode.Children {
+				if err := eng.Execute(ctx, child, scope); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	}, engine.SlotMeta{
-		Description:   "Protect routes with JWT verification. Supports multi-tenant with subdomain detection.",
-		AllowImplicit: true,
-		Example:       "auth.middleware {\n  do: {\n     log: 'Hello Admin'\n  }\n}\n\n// Multi-tenant:\nauth.middleware {\n  tenant_header: \"X-Tenant-ID\"\n  tenant_db_lookup: true\n  set_auth_object: true\n  do: { ... }\n}",
+		Description: "Protect routes with JWT verification. Supports multi-tenant with subdomain detection.",
+		Example:     "auth.middleware {\n  do: {\n     log: 'Hello Admin'\n  }\n}\n\n// Multi-tenant:\nauth.middleware {\n  tenant_header: \"X-Tenant-ID\"\n  tenant_db_lookup: true\n  set_auth_object: true\n  do: { ... }\n}",
 		Inputs: map[string]engine.InputMeta{
 			"secret":           {Description: "JWT Secret key", Required: false},
 			"redirect":         {Description: "Login URL for redirect on failure", Required: false},
@@ -319,7 +309,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				// or we could try to find it from env.
 				jwtSecret := os.Getenv("JWT_SECRET")
 				if jwtSecret == "" {
-					jwtSecret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar"
+					jwtSecret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
 				}
 
 				token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -425,7 +415,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 		// Jika secret kosong, cari dari environment global atau default
 		if secret == "" {
-			secret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
+			secret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -482,7 +472,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		if secret == "" {
-			secret = "ini_contoh_token_di_zenolang_!@#_jgn_disebar" // Default from .env
+			secret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
 		}
 
 		// Parse token (even if expired, we might want to allow refresh if within grace period - but here we require valid signature)

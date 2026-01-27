@@ -59,31 +59,34 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 
 	// CSRF Protection
 	port := os.Getenv("APP_PORT")
+
+	// Base trusted origins
+	trustedOrigins := []string{
+		"localhost",
+		"localhost:3000",
+		"http://localhost",
+		"http://localhost:" + port,
+		"127.0.0.1",
+		"127.0.0.1:" + port,
+		"http://127.0.0.1",
+		"http://127.0.0.1:" + port,
+	}
+
+	// Add user-defined trusted origins from .env
+	if envOrigins := os.Getenv("TRUSTED_ORIGINS"); envOrigins != "" {
+		for _, origin := range strings.Split(envOrigins, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				trustedOrigins = append(trustedOrigins, origin)
+			}
+		}
+	}
+
 	CSRF := csrf.Protect(
 		[]byte(os.Getenv("CSRF_TOKEN")),
 		csrf.Secure(false),
 		csrf.Path("/"),
-		csrf.TrustedOrigins(func() []string {
-			origins := []string{
-				"localhost",
-				"localhost:3000",
-				"http://localhost",
-				"http://localhost:" + port,
-				"127.0.0.1",
-				"127.0.0.1:" + port,
-				"http://127.0.0.1",
-				"http://127.0.0.1:" + port,
-			}
-			if envOrigins := os.Getenv("TRUSTED_ORIGINS"); envOrigins != "" {
-				for _, origin := range strings.Split(envOrigins, ",") {
-					origin = strings.TrimSpace(origin)
-					if origin != "" {
-						origins = append(origins, origin)
-					}
-				}
-			}
-			return origins
-		}()),
+		csrf.TrustedOrigins(trustedOrigins),
 		csrf.SameSite(csrf.SameSiteLaxMode),
 	)
 

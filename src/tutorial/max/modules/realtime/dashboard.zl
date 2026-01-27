@@ -7,126 +7,134 @@ system.env: "JWT_SECRET" { as: $jwt_secret }
 coalesce: $jwt_secret { default: "ZENOLANG_DEMO_SECRET_KEY_2026"; as: $jwt_secret }
 
 http.get: /tutorial/max/dashboard {
+  do: {
     auth.middleware: {
       secret: $jwt_secret
       redirect: "/tutorial/max/login"
-      
-      auth.user: { as: $current_user }
-      dump: $current_user
-      
-      // Get statistics
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.count: { as: $total_tasks }
-      
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-        col: "status"
-        val: "completed"
-      }
-      db.count: { as: $completed_tasks }
-      
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-        col: "status"
-        val: "in_progress"
-      }
-      db.count: { as: $in_progress_tasks }
-      
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-        col: "status"
-        val: "pending"
-      }
-      db.count: { as: $pending_tasks }
-      
-      db.table: tutorial_teams {
-        db: tutorial
-      }
-      db.count: { as: $total_teams }
-      
-      db.table: tutorial_users {
-        db: tutorial
-      }
-      db.count: { as: $total_users }
-      
-      // Get recent tasks
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.order_by: "created_at DESC"
-      db.limit: 5
-      db.get: { as: $recent_tasks }
-      
-      // Get user's assigned tasks
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-        col: "assigned_to"
-        val: $current_user.user_id
-      }
-      db.where: {
-        col: "status"
-        op: "!="
-        val: "completed"
-      }
-      db.order_by: "due_date ASC"
-      db.limit: 5
-      db.get: { as: $my_tasks }
-      len: $recent_tasks { as: $recent_tasks_count }
-      len: $my_tasks { as: $my_tasks_count }
-      
-      // Get unread notifications count
-      db.table: tutorial_notifications {
-        db: tutorial
-      }
-      db.where: {
-        col: "user_id"
-        val: $current_user.user_id
-      }
-      db.where: {
-        col: "is_read"
-        val: 0
-      }
-      db.count: { as: $unread_count }
-      
-      view.blade: "tutorial/max/dashboard.blade.zl" {
-        current_user: $current_user
-        total_tasks: $total_tasks
-        completed_tasks: $completed_tasks
-        in_progress_tasks: $in_progress_tasks
-        pending_tasks: $pending_tasks
-        total_teams: $total_teams
-        total_users: $total_users
-        recent_tasks: $recent_tasks
-        recent_tasks_count: $recent_tasks_count
-        my_tasks: $my_tasks
-        my_tasks_count: $my_tasks_count
-        unread_count: $unread_count
-        title: "Dashboard"
+      do: {
+        auth.user: { as: $current_user }
+        dump: $current_user
+        
+        // Get statistics
+        db.table: tutorial_tasks {
+          db: tutorial
+        }
+        db.count: { as: $total_tasks }
+        
+        db.table: tutorial_tasks {
+          db: tutorial
+        }
+        db.where: {
+          col: "status"
+          val: "completed"
+        }
+        db.count: { as: $completed_tasks }
+        
+        db.table: tutorial_tasks {
+          db: tutorial
+        }
+        db.where: {
+          col: "status"
+          val: "in_progress"
+        }
+        db.count: { as: $in_progress_tasks }
+        
+        db.table: tutorial_tasks {
+          db: tutorial
+        }
+        db.where: {
+          col: "status"
+          val: "pending"
+        }
+        db.count: { as: $pending_tasks }
+        
+        db.table: tutorial_teams {
+          db: tutorial
+        }
+        db.count: { as: $total_teams }
+        
+        db.table: tutorial_users {
+          db: tutorial
+        }
+        db.count: { as: $total_users }
+        
+        // Get recent tasks
+        db.table: tutorial_tasks {
+          db: tutorial
+        }
+        db.order_by: "created_at DESC"
+        db.limit: 5
+        db.get: { as: $recent_tasks }
+        
+        // Get user's assigned tasks
+        db.table: tutorial_tasks {
+          db: tutorial
+        }
+        db.where: {
+          col: "assigned_to"
+          val: $current_user.user_id
+        }
+        db.where: {
+          col: "status"
+          op: "!="
+          val: "completed"
+        }
+        db.order_by: "due_date ASC"
+        db.limit: 5
+        db.get: { as: $my_tasks }
+        len: $recent_tasks { as: $recent_tasks_count }
+        len: $my_tasks { as: $my_tasks_count }
+        
+        // Get unread notifications count
+        db.table: tutorial_notifications {
+          db: tutorial
+        }
+        db.where: {
+          col: "user_id"
+          val: $current_user.user_id
+        }
+        db.where: {
+          col: "is_read"
+          val: 0
+        }
+        db.count: { as: $unread_count }
+        
+        view.blade: "tutorial/max/dashboard.blade.zl" {
+          current_user: $current_user
+          total_tasks: $total_tasks
+          completed_tasks: $completed_tasks
+          in_progress_tasks: $in_progress_tasks
+          pending_tasks: $pending_tasks
+          total_teams: $total_teams
+          total_users: $total_users
+          recent_tasks: $recent_tasks
+          recent_tasks_count: $recent_tasks_count
+          my_tasks: $my_tasks
+          my_tasks_count: $my_tasks_count
+          unread_count: $unread_count
+          title: "Dashboard"
+        }
       }
     }
+  }
 }
 
 // ==========================================
 // HOME/LANDING PAGE (Redirect to Dashboard or Login)
 // ==========================================
 http.get: /tutorial/max {
+  do: {
     auth.check: { as: $is_logged_in }
     
     if: $is_logged_in {
-      http.redirect: "/tutorial/max/dashboard"
-    } else: {
-      http.redirect: "/tutorial/max/login"
+      then: {
+        http.redirect: "/tutorial/max/dashboard"
+      }
+      else: {
+        http.redirect: "/tutorial/max/login"
+      }
     }
+  }
 }
 
 log: "✅ Dashboard routes loaded (using tutorial database)"

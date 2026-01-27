@@ -1,0 +1,102 @@
+// ============================================
+// Inertia.js Demo Controllers
+// ============================================
+// Example controllers showing Inertia.js usage
+
+// ============================================
+// Dashboard
+// ============================================
+fn: inertia_dashboard {
+    // Get sample product data
+    db.select: {
+        table: "products"
+        limit: 10
+        as: $products
+    }
+    
+    // Render Inertia component
+    inertia.render: {
+        component: "Dashboard"
+        props: {
+            user: $auth
+            products: $products
+            stats: {
+                total_products: 100
+                total_sales: 50
+                revenue: 1000000
+            }
+        }
+    }
+}
+
+// ============================================
+// Products List
+// ============================================
+fn: inertia_products {
+    // Get all products
+    db.select: {
+        table: "products"
+        as: $products
+    }
+    
+    // Render Inertia component
+    inertia.render: {
+        component: "Products/Index"
+        props: {
+            products: $products
+            user: $auth
+        }
+    }
+}
+
+// ============================================
+// Product Store
+// ============================================
+fn: inertia_product_store {
+    // Get form data
+    http.form: {
+        as: $form
+    }
+    
+    // Validate required fields
+    if: !$form.name || !$form.price {
+        then: {
+            // Set validation errors
+            $errors: {
+                name: "Name is required"
+                price: "Price is required"
+            }
+            
+            // Redirect back with errors
+            http.redirect: {
+                url: "/inertia/products/create"
+                with: {
+                    errors: $errors
+                }
+            }
+            stop
+        }
+    }
+    
+    // Insert new product
+    db.insert: {
+        table: "products"
+        data: {
+            name: $form.name
+            sku: $form.sku
+            price: $form.price
+            stock: $form.stock
+        }
+        as: $product
+    }
+    
+    // Redirect with success message
+    http.redirect: {
+        url: "/inertia/products"
+        with: {
+            flash: {
+                success: "Product created successfully!"
+            }
+        }
+    }
+}

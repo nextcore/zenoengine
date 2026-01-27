@@ -1,0 +1,183 @@
+// Login Controller (Tenant Based)
+
+fn: login {
+    log: "🔐 Login attempt started"
+    $email : $request.body.email
+    $password : $request.body.password
+    
+    // 1. Input Validation
+    if: $email == "" || $password == "" {
+        then: {
+            log: "ERROR: Login failed - Missing credentials"
+            http.bad_request: { 
+                message: "Email and Password required",
+                error: "MISSING_CREDENTIALS"
+            }
+            stop
+        }
+    }
+    
+    // Validate email format (basic check)
+    string.contains: $email { substr: "@"; as: $has_at }
+    if: !$has_at {
+        then: {
+            log: "ERROR: Login failed - Invalid email format"
+            http.bad_request: { 
+                message: "Invalid email format",
+                error: "INVALID_EMAIL"
+            }
+            stop
+        }
+    }
+    
+    // 2. Identify Tenant (Hybrid: Header / Domain)
+    http.header: "X-Tenant-ID" { as: $tenant_id }
+    
+    if: !$tenant_id {
+        then: {
+            http.host: { as: $host }
+            string.split: $host { delimiter: "."; as: $parts }
+            if: $parts.length >= 2 {
+                then: { $tenant_id = $parts.0 }
+            }
+        }
+    }
+
+    if: !$tenant_id {
+        then: {
+            log: "ERROR: Login failed - Tenant ID missing"
+            http.bad_request: { 
+                message: "Tenant ID missing (Header X-Tenant-ID or Subdomain)",
+                error: "TENANT_ID_REQUIRED"
+            }
+            stop
+        }
+    }
+    
+    log: "Login attempt for tenant with email"
+    
+    // Check Tenant DB - Use raw SQL query
+    db.select: "SELECT * FROM tenants WHERE code = ? AND is_active = 1 LIMIT 1" {
+        db: "system"
+        bind: {
+            val: $tenant_id
+        }
+        as: $tenants
+    }
+    
+    // db.select returns array, get first element
+    if: !$tenants || $tenants.length == 0 {
+        then: {
+            log: "ERROR: Login failed - Invalid tenant"
+            http.bad_request: { 
+                message: "Invalid Tenant",
+                error: "TENANT_NOT_FOUND"
+            }
+            stop
+        }
+    }
+    
+    // db.select returns array, get first element and use directly
+    log: "Tenant validated successfully"
+    
+    // Find user in tenant database - Use raw SQL query
+    db.select: "SELECT * FROM users WHERE email = ? LIMIT 1" {
+        db: $tenants.0.db_connection_name
+        bind: {
+            val: $email
+        }
+        as: $users
+    }
+    
+    // db.select returns array, get first element
+    if: !$users || $users.length == 0 {
+        then: {
+            log: "ERROR: Login failed - User not found"
+            http.unauthorized: { 
+                message: "Invalid credentials",
+                error: "INVALID_CREDENTIALS"
+            }
+            stop
+        }
+    }
+    
+    // 3. Verify Password with bcrypt
+    try: {
+        do: {
+            crypto.verify: $password {
+                hash: $users.0.password
+                as: $password_valid
+            }
+            
+            if: !$password_valid {
+                then: {
+                    log: "ERROR: Login failed - Invalid password"
+                    http.unauthorized: { 
+                        message: "Invalid credentials",
+                        error: "INVALID_CREDENTIALS"
+                    }
+                    stop
+                }
+            }
+        }
+        catch: {
+            log: "ERROR: Password verification failed"
+            http.internal_error: { 
+                message: "Authentication error",
+                error: "PASSWORD_VERIFICATION_ERROR"
+            }
+            stop
+        }
+    }
+    
+    log: "Password verified successfully"
+    
+    // 4. Validate JWT Secret
+    $jwt_secret : env("JWT_SECRET")
+    if: !$jwt_secret || $jwt_secret == "" {
+        then: {
+            // Placeholder for production
+            $jwt_secret : "replace_this_with_a_secure_key"
+            log: "Using default JWT_SECRET placeholder"
+        }
+    }
+    
+    // 5. Generate JWT Token
+    jwt.sign: {
+        secret: $jwt_secret
+        claims: {
+            user_id: $users.0.id
+            email: $users.0.email
+            tenant_id: $tenant_id
+            role: $users.0.role
+        }
+        expires_in: 86400
+        as: $token
+    }
+    
+    if: !$token {
+        then: {
+            log: "ERROR: Token generation failed"
+            http.internal_error: { 
+                message: "Failed to generate authentication token",
+                error: "TOKEN_GENERATION_FAILED"
+            }
+            stop
+        }
+    }
+    
+    // AUDIT LOG: Successful login
+    log: "AUDIT: Successful login"
+    
+    http.ok: {
+        token: $token
+        type: "Bearer"
+        expires_in: 86400
+        user: {
+            id: $users.0.id
+            email: $users.0.email
+            name: $users.0.name
+            role: $users.0.role
+        }
+    }
+}

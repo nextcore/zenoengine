@@ -1,0 +1,24 @@
+// src/tutorial/pos_api/modules/sales/routes.zl
+include: "src/tutorial/pos_api/modules/sales/controller.zl"
+
+// POST Create Sale
+http.post: /api/v1/sales/ {
+    summary: "Create POS Transaction"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            call: create_sale
+        }
+    }
+}
+
+// GET Daily Report
+http.get: /api/v1/sales/reports/daily {
+    summary: "Daily Sales Report"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            call: get_daily_report
+        }
+    }
+}

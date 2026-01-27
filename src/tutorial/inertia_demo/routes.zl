@@ -1,0 +1,60 @@
+// ============================================
+// Inertia.js Demo Routes
+// ============================================
+
+include: "src/tutorial/inertia_demo/controller.zl"
+
+// ============================================
+// Dashboard
+// ============================================
+http.get: /inertia/dashboard {
+    summary: "Inertia Dashboard Demo"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            call: inertia_dashboard
+        }
+    }
+}
+
+// ============================================
+// Products
+// ============================================
+
+// Products List
+http.get: /inertia/products {
+    summary: "Inertia Products List"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            call: inertia_products
+        }
+    }
+}
+
+// Product Create Form
+http.get: /inertia/products/create {
+    summary: "Inertia Product Create Form"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            inertia.render: {
+                component: "Products/Create"
+                props: {
+                    user: $auth
+                }
+            }
+        }
+    }
+}
+
+// Product Store
+http.post: /inertia/products {
+    summary: "Inertia Product Store"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            call: inertia_product_store
+        }
+    }
+}

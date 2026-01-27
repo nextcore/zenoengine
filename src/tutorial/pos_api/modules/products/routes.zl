@@ -1,0 +1,24 @@
+// src/tutorial/pos_api/modules/products/routes.zl
+include: "src/tutorial/pos_api/modules/products/controller.zl"
+
+// GET List Products
+http.get: /api/v1/products/ {
+    summary: "Get Product List"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            call: get_products
+        }
+    }
+}
+
+// POST Create Product
+http.post: /api/v1/products/ {
+    summary: "Create New Product"
+    auth.middleware: {
+        secret: env("JWT_SECRET")
+        do: {
+            call: create_product
+        }
+    }
+}

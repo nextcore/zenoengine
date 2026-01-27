@@ -1,0 +1,47 @@
+@extends('layout')
+
+@section('content')
+
+@if($is_single)
+    <div class="max-w-3xl mx-auto">
+        <a href="/" class="inline-flex items-center text-sm text-indigo-600 font-medium mb-8 hover:text-indigo-700 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            Back to Home
+        </a>
+        
+        <article class="prose prose-slate prose-indigo lg:prose-lg max-w-none">
+            <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight mb-4">{{ $page.Title }}</h1>
+            <div class="text-slate-600 leading-relaxed whitespace-pre-line">
+                {{ $page.Content }}
+            </div>
+        </article>
+    </div>
+@else
+    <div class="bg-indigo-600 rounded-2xl p-8 mb-12 text-white shadow-xl shadow-indigo-100 overflow-hidden relative">
+        <div class="relative z-10">
+            <h1 class="text-3xl font-bold mb-2">Welcome to your Google Sheets CMS!</h1>
+            <p class="text-indigo-100 max-w-2xl">Manage your website content directly from a spreadsheet. Fast, simple, and production-ready.</p>
+        </div>
+        <div class="absolute -right-16 -top-16 w-64 h-64 bg-indigo-500 rounded-full opacity-20"></div>
+    </div>
+
+    <h2 class="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2v6h6"></path></svg>
+        Your Pages
+    </h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        @foreach($pages as $p)
+        <div class="group bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-200">
+            <h3 class="text-lg font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">{{ $p.Title }}</h3>
+            <p class="text-slate-500 text-sm mb-4 line-clamp-2">{{ $p.Content }}</p>
+            <a href="/p/{{ $p.Slug }}" class="text-sm font-semibold text-indigo-600 inline-flex items-center hover:gap-1 transition-all">
+                Read more
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            </a>
+        </div>
+        @endforeach
+    </div>
+@endif
+
+@endsection

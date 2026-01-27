@@ -11,22 +11,28 @@ coalesce: $jwt_secret { default: "ZENOLANG_DEMO_SECRET_KEY_2026"; as: $jwt_secre
 // 1. LOGIN PAGE (GET)
 // ==========================================
 http.get: /tutorial/max/login {
+  do: {
     // If already logged in, redirect to dashboard
     auth.check: { as: $is_logged_in }
     
     if: $is_logged_in {
-      http.redirect: "/tutorial/max/dashboard"
-    } else: {
-      view.blade: "tutorial/max/auth/login.blade.zl" {
-        title: "Login - ZenoLang Demo"
+      then: {
+        http.redirect: "/tutorial/max/dashboard"
+      }
+      else: {
+        view.blade: "tutorial/max/auth/login.blade.zl" {
+          title: "Login - ZenoLang Demo"
+        }
       }
     }
+  }
 }
 
 // ==========================================
 // 2. LOGIN HANDLER (POST)
 // ==========================================
 http.post: /tutorial/max/auth/login {
+  do: {
     // Get form data
     http.form: "email" { as: $email }
     http.form: "password" { as: $password }
@@ -44,64 +50,77 @@ http.post: /tutorial/max/auth/login {
     }
     
     if: $errors_any {
-      view.blade: "tutorial/max/auth/login.blade.zl" {
-        error: "Validation failed. Please check your inputs."
-      }
-    } else: {
-      // Attempt login
-      try {
-        auth.login: {
-          username: $email
-          password: $password
-          table: "tutorial_users"
-          db: "tutorial"
-          col_user: "email"
-          col_pass: "password"
-          secret: $jwt_secret
-          as: $token
-        }
-        
-        // Set cookie with token
-        cookie.set: {
-          name: "auth_token"
-          val: $token
-          age: 86400
-        }
-        
-        // Get user data
-        auth.user: { as: $user }
-        
-        log: "✅ User login attempt successful"
-        
-        http.redirect: "/tutorial/max/dashboard"
-      } catch: {
+      then: {
         view.blade: "tutorial/max/auth/login.blade.zl" {
-          error: "Invalid email or password"
+          error: "Validation failed. Please check your inputs."
+        }
+      }
+      else: {
+        // Attempt login
+        try: {
+          do: {
+            auth.login: {
+              username: $email
+              password: $password
+              table: "tutorial_users"
+              db: "tutorial"
+              col_user: "email"
+              col_pass: "password"
+              secret: $jwt_secret
+              as: $token
+            }
+            
+            // Set cookie with token
+            cookie.set: {
+              name: "auth_token"
+              val: $token
+              age: 86400
+            }
+            
+            // Get user data
+            auth.user: { as: $user }
+            
+            log: "✅ User login attempt successful"
+            
+            http.redirect: "/tutorial/max/dashboard"
+          }
+          catch: {
+            view.blade: "tutorial/max/auth/login.blade.zl" {
+              error: "Invalid email or password"
+            }
+          }
         }
       }
     }
+  }
 }
 
 // ==========================================
 // 3. REGISTER PAGE (GET)
 // ==========================================
 http.get: /tutorial/max/register {
+  do: {
     // If already logged in, redirect to dashboard
     auth.check: { as: $is_logged_in }
     
     if: $is_logged_in {
-      http.redirect: "/tutorial/max/dashboard"
-    } else: {
-      view.blade: "tutorial/max/auth/register.blade.zl" {
-        title: "Register - ZenoLang Demo"
+      then: {
+        http.redirect: "/tutorial/max/dashboard"
+      }
+      else: {
+        view.blade: "tutorial/max/auth/register.blade.zl" {
+          title: "Register - ZenoLang Demo"
+        }
       }
     }
+  }
 }
 
 // ==========================================
 // 4. REGISTER HANDLER (POST)
 // ==========================================
 http.post: /tutorial/max/auth/register {
+  do: {
     // Get form data
     http.form: "username" { as: $username }
     http.form: "email" { as: $email }
@@ -122,94 +141,110 @@ http.post: /tutorial/max/auth/register {
     }
     
     if: $errors_any {
-      view.blade: "tutorial/max/auth/register.blade.zl" {
-        error: "Validation failed. Please check your inputs."
-        errors: $errors
-      }
-    } else: {
-      try {
-        // Check if email already exists
-        db.table: tutorial_users {
-          db: tutorial
-        }
-        db.where: {
-          col: "email"
-          val: $email
-        }
-        db.first: { as: $existing_user }
-        
-        isset: $existing_user {
-          view.blade: "tutorial/max/auth/register.blade.zl" {
-            error: "Email already registered"
-          }
-        }
-        
-        // Hash password
-        crypto.hash: $password { as: $hashed_password }
-        
-        // Handle avatar upload if provided
-        var: $avatar_path { val: "" }
-        
-        try {
-          http.upload: {
-            field: "avatar"
-            dest: "uploads/avatars"
-            as: $avatar_filename
-          }
-          var: $avatar_path { val: $avatar_filename }
-        } catch: {
-          // Avatar is optional, continue without it
-          log: "No avatar uploaded"
-        }
-        
-        // Insert new user
-        db.table: tutorial_users {
-          db: tutorial
-        }
-        db.insert: {
-          username: $username
-          email: $email
-          password: $hashed_password
-          avatar: $avatar_path
-          role: "member"
-        }
-        
-        var: $user_id { val: $db_last_id }
-        
-        log: "✅ New user registration attempt successful"
-        
-        // Auto-login after registration
-        auth.login: {
-          username: $email
-          password: $password
-          table: "tutorial_users"
-          db: "tutorial"
-          col_user: "email"
-          col_pass: "password"
-          secret: $jwt_secret
-          as: $token
-        }
-        
-        // Set cookie
-        cookie.set: {
-          name: "auth_token"
-          val: $token
-          age: 86400
-        }
-        
-        http.redirect: "/tutorial/max/dashboard"
-      } catch: {
+      then: {
         view.blade: "tutorial/max/auth/register.blade.zl" {
-          error: "Registration failed: " + $error
+          error: "Validation failed. Please check your inputs."
+          errors: $errors
+        }
+      }
+      else: {
+        try: {
+          do: {
+            // Check if email already exists
+            db.table: tutorial_users {
+              db: tutorial
+            }
+            db.where: {
+
+              col: "email"
+
+              val: $email
+
+            }
+            db.first: { as: $existing_user }
+            
+            isset: $existing_user {
+              do: {
+                view.blade: "tutorial/max/auth/register.blade.zl" {
+                  error: "Email already registered"
+                }
+              }
+            }
+            
+            // Hash password
+            crypto.hash: $password { as: $hashed_password }
+            
+            // Handle avatar upload if provided
+            var: $avatar_path { val: "" }
+            
+            try: {
+              do: {
+                http.upload: {
+                  field: "avatar"
+                  dest: "uploads/avatars"
+                  as: $avatar_filename
+                }
+                var: $avatar_path { val: $avatar_filename }
+              }
+              catch: {
+                // Avatar is optional, continue without it
+                log: "No avatar uploaded"
+              }
+            }
+            
+            // Insert new user
+            db.table: tutorial_users {
+              db: tutorial
+            }
+            db.insert: {
+              username: $username
+              email: $email
+              password: $hashed_password
+              avatar: $avatar_path
+              role: "member"
+            }
+            
+            var: $user_id { val: $db_last_id }
+            
+            log: "✅ New user registration attempt successful"
+            
+            // Auto-login after registration
+            auth.login: {
+              username: $email
+              password: $password
+              table: "tutorial_users"
+              db: "tutorial"
+              col_user: "email"
+              col_pass: "password"
+              secret: $jwt_secret
+              as: $token
+            }
+            
+            // Set cookie
+            cookie.set: {
+              name: "auth_token"
+              val: $token
+              age: 86400
+            }
+            
+            http.redirect: "/tutorial/max/dashboard"
+          }
+          catch: {
+            view.blade: "tutorial/max/auth/register.blade.zl" {
+              error: "Registration failed: " + $error
+            }
+          }
         }
       }
     }
+  }
 }
 
 // ==========================================
 // 5. LOGOUT HANDLER (POST)
 // ==========================================
 http.post: /tutorial/max/auth/logout {
+  do: {
     // Clear auth cookie
     cookie.set: {
       name: "auth_token"
@@ -218,6 +253,7 @@ http.post: /tutorial/max/auth/logout {
     }
     
     http.redirect: "/tutorial/max/login"
+  }
 }
 
 log: "✅ Authentication routes loaded (using tutorial database)"

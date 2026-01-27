@@ -1,0 +1,122 @@
+// ==========================================
+// POS API DATA SEEDER
+// ==========================================
+
+log: "🌱 Starting POS API Seeder..."
+
+// 1. Get Active Tenants (Use Raw SQL for safety)
+db.select: "SELECT * FROM tenants WHERE is_active = 1" {
+    db: "system"
+    as: $tenants
+}
+
+for: $tenants {
+    as: $tenant
+    do: {
+        scope.set: $TARGET_DB {
+            val: $tenant.db_connection_name
+        }
+        
+        log: "----------------------------------------"
+        log: "Seeding Tenant: "
+        log: $tenant.name
+        
+        // SEED PRODUCTS based on tenant type
+        // Tenant 'abc' = Toko Baju
+        if: $tenant.code == "abc" {
+            then: {
+                // Produk 1
+                db.table: products { db: $TARGET_DB }
+                db.where: {
+                    col: "sku"
+                    val: "TSHIRT-001"
+                }
+                db.count: { as: $p1_count }
+                
+                if: $p1_count == 0 {
+                    then: {
+                        db.table: products { db: $TARGET_DB }
+                        db.insert: {
+                            sku: "TSHIRT-001"
+                            name: "Basic T-Shirt Black XL"
+                            price: 75000
+                            stock: 100
+                        }
+                        log: "  + Product: T-Shirt Black XL"
+                    }
+                }
+
+                // Produk 2
+                db.table: products { db: $TARGET_DB }
+                db.where: {
+                    col: "sku"
+                    val: "JEANS-001"
+                }
+                db.count: { as: $p2_count }
+                
+                if: $p2_count == 0 {
+                    then: {
+                        db.table: products { db: $TARGET_DB }
+                        db.insert: {
+                            sku: "JEANS-001"
+                            name: "Slim Fit Jeans Blue 32"
+                            price: 250000
+                            stock: 50
+                        }
+                        log: "  + Product: Slim Fit Jeans"
+                    }
+                }
+            }
+        }
+        
+        // Tenant 'xyz' = Coffee Shop
+        if: $tenant.code == "xyz" {
+            then: {
+                // Produk 1
+                db.table: products { db: $TARGET_DB }
+                db.where: {
+                    col: "sku"
+                    val: "COFFEE-LATTE"
+                }
+                db.count: { as: $p1_count }
+                
+                if: $p1_count == 0 {
+                    then: {
+                        db.table: products { db: $TARGET_DB }
+                        db.insert: {
+                            sku: "COFFEE-LATTE"
+                            name: "Ice Cafe Latte"
+                            price: 24000
+                            stock: 1000
+                        }
+                        log: "  + Product: Ice Cafe Latte"
+                    }
+                }
+
+                // Produk 2
+                db.table: products { db: $TARGET_DB }
+                db.where: {
+                    col: "sku"
+                    val: "FOOD-CROISSANT"
+                }
+                db.count: { as: $p2_count }
+                
+                if: $p2_count == 0 {
+                    then: {
+                        db.table: products { db: $TARGET_DB }
+                        db.insert: {
+                            sku: "FOOD-CROISSANT"
+                            name: "Butter Croissant"
+                            price: 18000
+                            stock: 20
+                        }
+                        log: "  + Product: Butter Croissant"
+                    }
+                }
+            }
+        }
+    }
+}
+
+log: "----------------------------------------"
+log: "✅ [SEEDER] Completed!"

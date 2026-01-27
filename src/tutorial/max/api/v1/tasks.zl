@@ -14,43 +14,45 @@ http.get: /api/v1/tasks {
     auth.middleware: {
       secret: $jwt_secret
       
-      auth.user: { as: $current_user }
-      
-      // Get pagination params
-      http.query: "page" { as: $page }
-      http.query: "per_page" { as: $per_page }
-      
-      coalesce: $page { default: "1"; as: $page }
-      coalesce: $per_page { default: "20"; as: $per_page }
-      
-      cast.to_int: $page { as: $page }
-      cast.to_int: $per_page { as: $per_page }
-      
-      // Calculate offset
-      math.calc: ($page - 1) * $per_page { as: $offset }
-      
-      // Get total count
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.count: { as: $total }
-      
-      // Get tasks
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.order_by: "created_at DESC"
-      db.limit: $per_page
-      db.offset: $offset
-      db.get: { as: $tasks }
-      
-      http.ok: {
-        data: $tasks
-        pagination: {
-          page: $page
-          per_page: $per_page
-          total: $total
-        }
+      do: {
+          auth.user: { as: $current_user }
+          
+          // Get pagination params
+          http.query: "page" { as: $page }
+          http.query: "per_page" { as: $per_page }
+          
+          coalesce: $page { default: "1"; as: $page }
+          coalesce: $per_page { default: "20"; as: $per_page }
+          
+          cast.to_int: $page { as: $page }
+          cast.to_int: $per_page { as: $per_page }
+          
+          // Calculate offset
+          math.calc: ($page - 1) * $per_page { as: $offset }
+          
+          // Get total count
+          db.table: tutorial_tasks {
+            db: tutorial
+          }
+          db.count: { as: $total }
+          
+          // Get tasks
+          db.table: tutorial_tasks {
+            db: tutorial
+          }
+          db.order_by: "created_at DESC"
+          db.limit: $per_page
+          db.offset: $offset
+          db.get: { as: $tasks }
+          
+          http.ok: {
+            data: $tasks
+            pagination: {
+              page: $page
+              per_page: $per_page
+              total: $total
+            }
+          }
       }
     }
 }
@@ -62,67 +64,71 @@ http.post: /api/v1/tasks {
     auth.middleware: {
       secret: $jwt_secret
       
-      auth.user: { as: $current_user }
-      
-      // Get JSON body
-      http.form: "title" { as: $title }
-      http.form: "description" { as: $description }
-      http.form: "priority" { as: $priority }
-      http.form: "status" { as: $status }
-      http.form: "team_id" { as: $team_id }
-      http.form: "assigned_to" { as: $assigned_to }
-      http.form: "due_date" { as: $due_date }
-      
-      // Validate
-      validate: {
-        title: $title
-        description: $description
-        priority: $priority
-      } {
-        rules: {
-          title: "required|min:3"
-          description: "required"
-          priority: "required"
-        }
-        as: $errors
-      }
-      
-      if: $errors_any {
-          http.validation_error: {
-            errors: $errors
+      do: {
+          auth.user: { as: $current_user }
+          
+          // Get JSON body
+          http.form: "title" { as: $title }
+          http.form: "description" { as: $description }
+          http.form: "priority" { as: $priority }
+          http.form: "status" { as: $status }
+          http.form: "team_id" { as: $team_id }
+          http.form: "assigned_to" { as: $assigned_to }
+          http.form: "due_date" { as: $due_date }
+          
+          // Validate
+          validate: {
+            title: $title
+            description: $description
+            priority: $priority
+          } {
+            rules: {
+              title: "required|min:3"
+              description: "required"
+              priority: "required"
+            }
+            as: $errors
           }
-          stop
-      }
-      
-      // Insert task
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.insert: {
-        title: $title
-        description: $description
-        priority: $priority
-        status: $status
-        team_id: $team_id
-        assigned_to: $assigned_to
-        due_date: $due_date
-      }
-      
-      var: $task_id { val: $db_last_id }
-      
-      // Get created task
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-          col: "id"
-          val: $task_id
-      }
-      db.first: { as: $created_task }
-      
-      http.created: {
-        message: "Task created successfully"
-        data: $created_task
+          
+          if: $errors_any {
+              then: {
+                  http.validation_error: {
+                    errors: $errors
+                  }
+                  stop
+              }
+          }
+          
+          // Insert task
+          db.table: tutorial_tasks {
+            db: tutorial
+          }
+          db.insert: {
+            title: $title
+            description: $description
+            priority: $priority
+            status: $status
+            team_id: $team_id
+            assigned_to: $assigned_to
+            due_date: $due_date
+          }
+          
+          var: $task_id { val: $db_last_id }
+          
+          // Get created task
+          db.table: tutorial_tasks {
+            db: tutorial
+          }
+          db.where: {
+              col: "id"
+              val: $task_id
+          }
+          db.first: { as: $created_task }
+          
+          http.created: {
+            message: "Task created successfully"
+            data: $created_task
+          }
       }
     }
 }
@@ -134,26 +140,30 @@ http.get: '/api/v1/tasks/{id}' {
     auth.middleware: {
       secret: $jwt_secret
       
-      var: $task_id { val: $id }
-      
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-          col: "id"
-          val: $task_id
-      }
-      db.first: { as: $task }
-      
-      if: $task {
-          http.ok: {
-            data: $task
+      do: {
+          var: $task_id { val: $id }
+          
+          db.table: tutorial_tasks {
+            db: tutorial
           }
-          stop
-      }
-      
-      http.not_found: {
-        message: "Task not found"
+          db.where: {
+              col: "id"
+              val: $task_id
+          }
+          db.first: { as: $task }
+          
+          if: $task {
+              then: {
+                  http.ok: {
+                    data: $task
+                  }
+                  stop
+              }
+          }
+          
+          http.not_found: {
+            message: "Task not found"
+          }
       }
     }
 }
@@ -165,41 +175,43 @@ http.put: '/api/v1/tasks/{id}' {
     auth.middleware: {
       secret: $jwt_secret
       
-      var: $task_id { val: $id }
-      
-      http.form: "title" { as: $title }
-      http.form: "description" { as: $description }
-      http.form: "priority" { as: $priority }
-      http.form: "status" { as: $status }
-      
-      // Update task
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-          col: "id"
-          val: $task_id
-      }
-      db.update: {
-        title: $title
-        description: $description
-        priority: $priority
-        status: $status
-      }
-      
-      // Get updated task
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-          col: "id"
-          val: $task_id
-      }
-      db.first: { as: $updated_task }
-      
-      http.ok: {
-        message: "Task updated successfully"
-        data: $updated_task
+      do: {
+          var: $task_id { val: $id }
+          
+          http.form: "title" { as: $title }
+          http.form: "description" { as: $description }
+          http.form: "priority" { as: $priority }
+          http.form: "status" { as: $status }
+          
+          // Update task
+          db.table: tutorial_tasks {
+            db: tutorial
+          }
+          db.where: {
+              col: "id"
+              val: $task_id
+          }
+          db.update: {
+            title: $title
+            description: $description
+            priority: $priority
+            status: $status
+          }
+          
+          // Get updated task
+          db.table: tutorial_tasks {
+            db: tutorial
+          }
+          db.where: {
+              col: "id"
+              val: $task_id
+          }
+          db.first: { as: $updated_task }
+          
+          http.ok: {
+            message: "Task updated successfully"
+            data: $updated_task
+          }
       }
     }
 }
@@ -211,19 +223,21 @@ http.delete: '/api/v1/tasks/{id}' {
     auth.middleware: {
       secret: $jwt_secret
       
-      var: $task_id { val: $id }
-      
-      db.table: tutorial_tasks {
-        db: tutorial
-      }
-      db.where: {
-          col: "id"
-          val: $task_id
-      }
-      db.delete: {}
-      
-      http.ok: {
-        message: "Task deleted successfully"
+      do: {
+          var: $task_id { val: $id }
+          
+          db.table: tutorial_tasks {
+            db: tutorial
+          }
+          db.where: {
+              col: "id"
+              val: $task_id
+          }
+          db.delete: {}
+          
+          http.ok: {
+            message: "Task deleted successfully"
+          }
       }
     }
 }
