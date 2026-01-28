@@ -37,4 +37,5 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 	slots.RegisterGSheetSlots(eng)
 	slots.RegisterHTTPClientSlots(eng)
 	slots.RegisterFunctionSlots(eng)
+	slots.RegisterMetaSlots(eng)
 }

@@ -83,8 +83,8 @@ func (m *DBManager) GetDefault() (*sql.DB, Dialect) {
 
 // SetDefault mengubah nama koneksi default
 func (m *DBManager) SetDefault(name string) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if _, exists := m.connections[name]; !exists {
 		return fmt.Errorf("database connection '%s' not found", name)

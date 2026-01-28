@@ -62,6 +62,41 @@ func RegisterCollectionSlots(eng *engine.Engine) {
 		Example:     "array.push: $my_list\n  val: 'New Item'",
 	})
 
+	// ARRAY.GET
+	eng.Register("collections.get", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		var list []interface{}
+		var index int
+		target := "item"
+
+		if node.Value != nil {
+			list, _ = coerce.ToSlice(resolveValue(node.Value, scope))
+		}
+
+		for _, c := range node.Children {
+			if c.Name == "in" || c.Name == "list" {
+				list, _ = coerce.ToSlice(parseNodeValue(c, scope))
+			}
+			if c.Name == "index" || c.Name == "i" {
+				index, _ = coerce.ToInt(parseNodeValue(c, scope))
+			}
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		if len(list) == 0 {
+			scope.Set(target, nil)
+			return nil
+		}
+
+		if index < 0 || index >= len(list) {
+			return fmt.Errorf("collections.get: index out of bounds")
+		}
+
+		scope.Set(target, list[index])
+		return nil
+	}, engine.SlotMeta{Example: "collections.get: $list { index: 0; as: $item }"})
+
 	// ARRAY.POP
 	eng.Register("array.pop", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		targetName := strings.TrimPrefix(coerce.ToString(node.Value), "$")

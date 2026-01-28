@@ -1,0 +1,35 @@
+// meta_eval_test.zl
+
+// 1. Basic Evaluation
+$x: 10
+meta.eval: "$x: 20"
+assert.eq: { expected: 20, actual: $x }
+print: "Basic eval passed: x is now 20"
+
+// 2. Dynamic Slot Execution
+$path: "/api/dynamic"
+meta.eval: "
+    $result: 'Running from eval'
+"
+assert.eq: { expected: "Running from eval", actual: $result }
+print: "Dynamic slot passed: $result"
+
+// 3. Conditional Generation (Simulated)
+$logic: "if: true { then: { $status: 'active' } }"
+meta.eval: $logic
+assert.eq: { expected: "active", actual: $status }
+print: "Conditional eval passed: status is active"
+
+// 4. Introspection (meta.scope)
+$a: 100
+$b: 200
+meta.scope {
+    as: $vars
+}
+
+// Verify we captured local variables
+assert.eq: { expected: 100, actual: $vars.a }
+assert.eq: { expected: 200, actual: $vars.b }
+print: "Introspection passed: captured variables a and b"
+
+print: "ALL META.EVAL TESTS PASSED"

@@ -50,6 +50,9 @@ func (a *Arena) AllocScope(parent *Scope) *Scope {
 	ptr := a.Alloc(int(unsafe.Sizeof(Scope{})))
 	s := (*Scope)(ptr)
 
+	// ZERO-INITIALIZE memory to prevent mutex corruption from reused arenas!
+	*s = Scope{}
+
 	// Initialize the Scope
 	s.parent = parent
 	// Note: We still use a regular map for variables for compatibility.

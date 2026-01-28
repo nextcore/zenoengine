@@ -1,0 +1,42 @@
+// meta_ast_test.zl
+
+// 1. Parse Code
+$code: "print: 'Hello from Original'"
+meta.parse: $code {
+    as: $ast
+}
+
+// Verify AST Structure
+// Structure: root -> print -> Value ("Hello...")
+// Workaround: Use collections.get since parser doesn't support $a[0]
+collections.get: $ast.children {
+    index: 0
+    as: $stmt
+}
+
+// Check name
+assert.eq: { expected: "print", actual: $stmt.name }
+
+// Modify value
+$stmt.value: "Hello from Modified"
+
+// 3. Run Modified AST
+print: "--- Executing Modified AST ---"
+meta.run: $ast
+print: "--- Execution Complete ---"
+
+// 4. Dynamic Logic Construction via Parse
+// Instead of manually defining complex maps (which requires array syntax support),
+// we use meta.parse to bootstrap our AST.
+$source: "
+    $x: 500
+"
+meta.parse: $source {
+    as: $manualAst
+}
+
+meta.run: $manualAst
+assert.eq: { expected: 500, actual: $x }
+print: "Manual AST execution passed: x is 500"
+
+print: "ALL AST TESTS PASSED"

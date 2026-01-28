@@ -42,6 +42,8 @@ include: src/tutorial/max/utils/helpers.zl
 // 4. AUTHENTICATION MODULE
 // ==========================================
 include: src/tutorial/max/modules/auth/routes.zl
+// METAPROGRAMMING DEMO: Dynamic Admin Generator
+
 
 // ==========================================
 // 5. TASK MANAGEMENT MODULE

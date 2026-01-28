@@ -68,13 +68,9 @@ func clearNodeCache(node *Node) {
 	}
 }
 
-func parseFile(path string) (*Node, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	l := NewLexer(string(data))
+// ParseString memproses string kode ZenoLang menjadi AST Node
+func ParseString(content string, filename string) (*Node, error) {
+	l := NewLexer(content)
 	root := &Node{Name: "root"}
 	stack := []*Node{root}
 	var lastNode *Node
@@ -92,7 +88,7 @@ func parseFile(path string) (*Node, error) {
 				Name:     tok.Literal,
 				Line:     tok.Line,
 				Col:      tok.Column,
-				Filename: path,
+				Filename: filename,
 			}
 			parent := stack[len(stack)-1]
 			parent.Children = append(parent.Children, node)
@@ -160,7 +156,7 @@ func parseFile(path string) (*Node, error) {
 					Name:     "",
 					Line:     tok.Line,
 					Col:      tok.Column,
-					Filename: path,
+					Filename: filename,
 				}
 				parent := stack[len(stack)-1]
 				parent.Children = append(parent.Children, node)
@@ -174,9 +170,19 @@ func parseFile(path string) (*Node, error) {
 			}
 
 		case TokenError:
-			return nil, fmt.Errorf("lexical error at line %d, col %d in %s: %s", tok.Line, tok.Column, path, tok.Literal)
+			return nil, fmt.Errorf("lexical error at line %d, col %d in %s: %s", tok.Line, tok.Column, filename, tok.Literal)
 		}
 	}
 
 	return root, nil
 }
+
+func parseFile(path string) (*Node, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseString(string(data), path)
+}
+

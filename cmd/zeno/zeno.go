@@ -61,6 +61,30 @@ func main() {
 		return // STOP HERE for CLI commands
 	}
 
+	// 1.5 EARLY PORT CHECK
+	// Check if port is available BEFORE loading heavy dependencies (logger, DB, etc.)
+	port := os.Getenv("APP_PORT")
+	if port == "" {
+		port = ":3000"
+	}
+	// Try to bind early
+	ln, err := net.Listen("tcp", port)
+	if err != nil {
+		fmt.Println("\n" + strings.Repeat("=", 60))
+		fmt.Println("❌ FAILED TO START SERVER")
+		fmt.Println(strings.Repeat("=", 60))
+		fmt.Printf("Error: Port %s is already in use by another application.\n", port)
+		fmt.Println("\nTroubleshooting Suggestions:")
+		fmt.Println("1. Ensure no other ZenoEngine instance is running.")
+		fmt.Println("2. Use the command 'lsof -i " + port + "' to check for applications using this port.")
+		fmt.Println("3. Change APP_PORT in the .env file to use a different port.")
+		fmt.Println(strings.Repeat("=", 60) + "\n")
+		os.Exit(1)
+	}
+	// Close listener here? No, we want to keep the reservation.
+	// But net/http Server.Serve takes a listener. We can pass it down.
+	// However, if we keep it open, we must pass 'ln' to startServer.
+
 	// 2. CORE SETUP (Logger, DB)
 	appEnv := os.Getenv("APP_ENV")
 	logger.Setup(appEnv)
@@ -134,7 +158,8 @@ func main() {
 	}
 
 	// 6. HTTP SERVER
-	startServer(appCtx, cancelWorker, &workerWG, liveReloadEnabled)
+	// 6. HTTP SERVER
+	startServer(ln, port, appCtx, cancelWorker, &workerWG, liveReloadEnabled) // Pass ln and port
 }
 
 // --- HELPER FUNCTIONS ---
@@ -381,12 +406,7 @@ func validateAllScripts() error {
 	return nil
 }
 
-func startServer(appCtx *app.AppContext, cancelWorker context.CancelFunc, workerWG *sync.WaitGroup, liveReloadEnabled bool) {
-	port := os.Getenv("APP_PORT")
-	if port == "" {
-		port = ":3000"
-	}
-
+func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWorker context.CancelFunc, workerWG *sync.WaitGroup, liveReloadEnabled bool) {
 	// Root Mux for Split Routing (Safe Live Reload)
 	rootMux := http.NewServeMux()
 
@@ -408,20 +428,7 @@ func startServer(appCtx *app.AppContext, cancelWorker context.CancelFunc, worker
 		Handler: rootMux, // Use Root Mux instead of Hot directly
 	}
 
-	// Start Listener first to catch "port in use" error cleanly
-	ln, err := net.Listen("tcp", port)
-	if err != nil {
-		fmt.Println("\n" + strings.Repeat("=", 60))
-		fmt.Println("❌ FAILED TO START SERVER")
-		fmt.Println(strings.Repeat("=", 60))
-		fmt.Printf("Error: Port %s is already in use by another application.\n", port)
-		fmt.Println("\nTroubleshooting Suggestions:")
-		fmt.Println("1. Ensure no other ZenoEngine instance is running.")
-		fmt.Println("2. Use the command 'lsof -i " + port + "' to check for applications using this port.")
-		fmt.Println("3. Change APP_PORT in the .env file to use a different port.")
-		fmt.Println(strings.Repeat("=", 60) + "\n")
-		os.Exit(1)
-	}
+	// Listener is already opened in main()
 
 	go func() {
 		slog.Info("🚀 Engine Ready", "port", port)
