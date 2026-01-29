@@ -8,6 +8,7 @@
 - **Multi-Tenant Ready**: Built-in support for multi-tenant database architectures.
 - **Database Agnostic**: Support for MySQL, SQLite, Postgres, and SQLServer.
 - **Hot Reload**: Automatic live reloading during development.
+- **Metaprogramming**: Capabilities for code generation, dynamic execution (`meta.eval`), and runtime introspection (`meta.scope`).
 - **Rich Integrated Features**: Integrated auth, mailing, workers, and API documentation.
 
 ## 🚀 Quick Start
