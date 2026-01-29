@@ -43,90 +43,11 @@ func buildQuery(node *engine.Node, scope *engine.Scope) (string, string, []inter
 		}
 		// Add support for 'bind' parameter
 		if c.Name == "bind" {
-			// Check if bind has 'val' children
+			// Check if bind has children (any keyname is allowed, order is preserved)
 			if len(c.Children) > 0 {
 				for _, child := range c.Children {
-					if child.Name == "val" {
-						valStr := fmt.Sprintf("%v", child.Value)
-
-						// Recursive resolution: keep resolving until we get a non-variable value
-						resolvedVal := valStr
-						maxDepth := 10 // Prevent infinite loops
-						depth := 0
-
-						for depth < maxDepth && strings.HasPrefix(resolvedVal, "$") {
-							varName := strings.TrimPrefix(resolvedVal, "$")
-
-							// Handle dot notation (e.g., request.body.email)
-							if strings.Contains(varName, ".") {
-								parts := strings.Split(varName, ".")
-								rootKey := parts[0]
-
-								if rootVal, ok := scope.Get(rootKey); ok {
-									// Navigate through the path
-									curr := rootVal
-									for j := 1; j < len(parts); j++ {
-										targetKey := parts[j]
-
-										// Handle maps
-										if m, ok := curr.(map[string]interface{}); ok {
-											if val, exists := m[targetKey]; exists {
-												curr = val
-												continue
-											}
-										}
-
-										// Not found
-										curr = nil
-										break
-									}
-
-									if curr != nil {
-										// Check if result is still a variable reference
-										currStr := fmt.Sprintf("%v", curr)
-										if strings.HasPrefix(currStr, "$") {
-											resolvedVal = currStr
-											depth++
-											continue
-										} else {
-											// Final value
-											args = append(args, curr)
-											break
-										}
-									} else {
-										args = append(args, nil)
-										break
-									}
-								} else {
-									args = append(args, nil)
-									break
-								}
-							} else {
-								// Simple variable
-								if val, ok := scope.Get(varName); ok {
-									valStr := fmt.Sprintf("%v", val)
-
-									// Check if it's still a variable reference
-									if strings.HasPrefix(valStr, "$") {
-										resolvedVal = valStr
-										depth++
-										continue
-									} else {
-										// Final value
-										args = append(args, val)
-										break
-									}
-								} else {
-									args = append(args, nil)
-									break
-								}
-							}
-						}
-
-						if depth >= maxDepth {
-							args = append(args, nil)
-						}
-					}
+					val := parseNodeValue(child, scope)
+					args = append(args, val)
 				}
 			}
 		}

@@ -54,13 +54,13 @@
 | `db.join` | `table: "t2"`, `on: ["t1.id", "=", "t2.fk"]` | INNER JOIN. |
 | `db.left_join` | `table: "t2"`, `on: [...]` | LEFT JOIN. |
 | `db.transaction`| `do: { ... }` | Atomic transaction. Auto-rollback on error. |
-| `db.select` | `sql: "SQL"`, `bind: { val: $p1 }`, `as: $res` | Raw SQL Select. Uses `bind` for safe parameters. |
+| `db.select` | `sql: "SQL"`, `bind: { p1: $val }`, `as: $res` | Raw SQL Select. Uses `bind` (any keys) for safe parameters. |
 | `gsheet.get` | `id: "s_id"`, `range: "A1:B10"`, `creds: $json`, `as: $rows` | Fetch rows from Google Sheet. |
 | `gsheet.find` | `id: "s_id"`, `range: "A1:Z"`, `where: { Col: val }`, `creds: $json`, `as: $rows` | Search for rows by criteria. |
 | `gsheet.append` | `id: "s_id"`, `range: "A1"`, `values: [[...]]`, `creds: $json` | Add rows to Google Sheet. |
 | `gsheet.update` | `id: "s_id"`, `range: "A1:B2"`, `values: [[...]]`, `creds: $json` | Update cells in Google Sheet. |
 | `gsheet.clear`  | `id: "s_id"`, `range: "A1:B10"`, `creds: $json` | Clear data from Google Sheet. |
-| `db.execute` | `sql: "SQL"`, `bind: { val: $p1 }` | Raw SQL Execute. Uses `bind` for safe parameters. |
+| `db.execute` | `sql: "SQL"`, `bind: { p1: $val }` | Raw SQL Execute. Uses `bind` (any keys) for safe parameters. |
 
 ### 2.2 HTTP Server & Client
 **Router**: Uses `chi` under the hood. **MUST use `{id}` for parameters**.
