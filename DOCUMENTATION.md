@@ -238,8 +238,8 @@ Use `db.select` and `db.execute` for complex queries. Always use `bind` to preve
 db.select: {
   sql: "SELECT * FROM users WHERE email = ? AND status = ?"
   bind: {
-    val: $email
-    val: "active"
+    email: $email
+    status: "active"
   }
   as: $users
 }
@@ -248,8 +248,8 @@ db.select: {
 db.execute: {
   sql: "UPDATE users SET role = ? WHERE id = ?"
   bind: {
-    val: "admin"
-    val: $user_id
+    role: "admin"
+    id: $user_id
   }
 }
 ```
@@ -385,4 +385,31 @@ mail.send: $email {
   user: $smtp_user
   pass: $smtp_pass
 }
+```
+
+---
+
+## 8. Metaprogramming
+ZenoLang supports powerful metaprogramming capabilities, allowing code to treat other code as data.
+
+### 8.1 Dynamic Execution
+Use `meta.eval` to execute valid ZenoLang code strings at runtime.
+```javascript
+meta.eval: "log: 'Hello from meta'"
+```
+
+### 8.2 Scope Introspection
+Use `meta.scope` to retrieve the current execution variables as a Map.
+```javascript
+var: $data { val: meta.scope }
+```
+
+### 8.3 Code Generation
+You can use Blade templates to generate ZenoLang code and then execute it.
+```javascript
+meta.template: "codegen/route.blade.zl" {
+  resource: "products"
+  as: $code
+}
+meta.eval: $code
 ```
