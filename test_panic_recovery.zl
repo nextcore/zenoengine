@@ -1,0 +1,61 @@
+// Test script untuk memverifikasi panic recovery
+// Script ini akan intentionally panic, tapi runtime harus tetap berjalan
+
+http.get: "/test/panic/nil" {
+    do {
+        // Test 1: Nil pointer dereference
+        $user: null
+        log.info: $user.name  // This should panic but be caught
+        
+        http.response {
+            status: 200
+            body: "This should never be reached"
+        }
+    }
+}
+
+http.get: "/test/panic/explicit" {
+    do {
+        // Test 2: Explicit panic (jika ada slot panic)
+        log.info: "Before panic"
+        
+        // Simulate panic by accessing invalid data
+        $data: "string"
+        $result: $data / 10  // Type error should be caught
+        
+        http.response {
+            status: 200
+            body: "This should never be reached"
+        }
+    }
+}
+
+http.get: "/test/normal" {
+    do {
+        // Test 3: Normal execution should still work
+        log.info: "Normal request working fine"
+        
+        http.response {
+            status: 200
+            body: "✅ Normal execution works! Runtime is immortal."
+        }
+    }
+}
+
+http.get: "/test/panic/recovery" {
+    do {
+        // Test 4: Multiple operations, one panics
+        log.info: "Starting operations"
+        
+        $x: 10
+        $y: 0
+        $result: $x / $y  // Division by zero
+        
+        log.info: "This should not execute"
+        
+        http.response {
+            status: 200
+            body: "This should never be reached"
+        }
+    }
+}

@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings" // [BARU] Import strings untuk manipulasi nama variabel
@@ -45,9 +47,39 @@ func (e *Engine) Register(name string, fn HandlerFunc, meta SlotMeta) {
 	e.Docs[name] = meta
 }
 
-func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) error {
+// Execute executes a node with comprehensive panic recovery to ensure runtime immortality.
+// Any panic from user scripts will be caught, logged, and converted to an error.
+func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err error) {
+	// ==========================================
+	// PANIC RECOVERY - IMMORTAL RUNTIME
+	// ==========================================
+	// This defer ensures that ANY panic from user scripts is caught and converted to an error.
+	// The runtime will NEVER crash, even with nil pointer dereferences, division by zero, etc.
+	defer func() {
+		if r := recover(); r != nil {
+			// Capture full stack trace for debugging
+			stack := string(debug.Stack())
+
+			// Log the panic with comprehensive context
+			slog.Error("🔥 PANIC RECOVERED IN EXECUTOR",
+				"panic", r,
+				"slot", node.Name,
+				"file", node.Filename,
+				"line", node.Line,
+				"col", node.Col,
+				"stack", stack,
+			)
+
+			// Convert panic to error for graceful degradation
+			// This allows the HTTP middleware to return a proper 500 error
+			err = fmt.Errorf("[%s:%d:%d] PANIC in '%s': %v\n\nStack Trace:\n%s",
+				node.Filename, node.Line, node.Col, node.Name, r, stack)
+		}
+	}()
+
 	// Inject engine into context for slots use
 	ctx = context.WithValue(ctx, "engine", e)
+
 
 	// FASTEST PATH: Try optimized fast paths for common operations (2-3x faster)
 	if used, err := TryFastPath(ctx, node, scope); used {
