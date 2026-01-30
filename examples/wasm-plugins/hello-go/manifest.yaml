@@ -1,0 +1,51 @@
+name: hello
+version: 1.0.0
+author: ZenoEngine Team
+description: Simple hello world WASM plugin
+license: MIT
+homepage: https://github.com/zenoengine/plugin-hello
+
+# WASM binary file
+binary: hello.wasm
+
+# Minimum ZenoEngine version required
+requires:
+  zeno: ">=0.3.0"
+
+# Permissions required by this plugin
+permissions:
+  # Scope access (read/write variables)
+  scope:
+    - read
+    - write
+  
+  # No network access needed
+  network: []
+  
+  # No filesystem access needed
+  filesystem: []
+  
+  # No database access needed
+  database: []
+  
+  # No environment variables needed
+  env: []
+
+# Configuration parameters (none for this simple plugin)
+config: {}
+
+# Slots provided by this plugin
+slots:
+  - name: hello.greet
+    description: Greet someone with a personalized message
+    example: |
+      hello.greet {
+        name: "World"
+      }
+    
+  - name: hello.log
+    description: Log a message using host logging
+    example: |
+      hello.log {
+        message: "Hello from plugin!"
+      }

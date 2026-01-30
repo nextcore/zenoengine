@@ -38,4 +38,7 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 	slots.RegisterHTTPClientSlots(eng)
 	slots.RegisterFunctionSlots(eng)
 	slots.RegisterMetaSlots(eng)
+
+	// Register WASM plugins (if enabled)
+	slots.RegisterWASMPluginSlots(eng, r, dbMgr)
 }
