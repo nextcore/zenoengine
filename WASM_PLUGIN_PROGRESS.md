@@ -72,9 +72,11 @@ Documentation:
 
 ### 1. Enable WASM Plugins
 
+Add the following to your `.env` file:
+
 ```bash
-export ZENO_PLUGINS_ENABLED=true
-export ZENO_PLUGIN_DIR=./plugins  # optional, default: ./plugins
+ZENO_PLUGINS_ENABLED=true
+# ZENO_PLUGIN_DIR=./plugins  # optional, default: ./plugins
 ```
 
 ### 2. Create Plugin Directory

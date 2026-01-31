@@ -6,10 +6,10 @@
 
 ## 🚀 Quick Start
 
-### Enable Plugins
+### Enable Plugins (.env)
 ```bash
-export ZENO_PLUGINS_ENABLED=true
-export ZENO_PLUGIN_DIR=./plugins  # optional
+ZENO_PLUGINS_ENABLED=true
+# ZENO_PLUGIN_DIR=./plugins  # optional
 ```
 
 ### Directory Structure
@@ -120,9 +120,8 @@ tinygo build -o hello.wasm -target=wasi main.go
 mkdir -p ../../../plugins/hello
 cp hello.wasm manifest.yaml ../../../plugins/hello/
 
-# 3. Run
-export ZENO_PLUGINS_ENABLED=true
-cd ../../..
+# 3. Enable & Run
+# Add ZENO_PLUGINS_ENABLED=true to your .env
 zeno run test.zl
 ```
 

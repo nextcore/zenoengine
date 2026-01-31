@@ -1,24 +1,32 @@
 # WASM Plugin Configuration Guide
 
-## Environment Variables
+## Configuration (.env)
 
-### Enable/Disable Plugins
+The easiest way to configure WASM plugins is via your `.env` file. This is especially recommended for Windows users.
 
+### 1. Enable Plugins
+
+Add this to your `.env`:
 ```bash
-# Enable WASM plugins
-export ZENO_PLUGINS_ENABLED=true
-
-# Disable WASM plugins (default)
-export ZENO_PLUGINS_ENABLED=false
+ZENO_PLUGINS_ENABLED=true
 ```
 
-### Plugin Directory
+### 2. Set Plugin Directory (Optional)
+
+Default is `./plugins`. You can change it if needed:
+```bash
+ZENO_PLUGIN_DIR=./plugins
+```
+
+---
+
+## Alternative: Environment Variables (Linux/macOS)
+
+You can also use `export` if you prefer not to use a `.env` file:
 
 ```bash
-# Set custom plugin directory
-export ZENO_PLUGIN_DIR=/path/to/plugins
-
-# Default: ./plugins
+export ZENO_PLUGINS_ENABLED=true
+export ZENO_PLUGIN_DIR=./plugins
 ```
 
 ## Configuration File
