@@ -30,9 +30,9 @@ Use `view.blade: "filename"` or `view('basename')`.
 Ensure the view file exists in `views/` directory.
 
 ### 3. AI Artisan (`ai_dev.zl`)
-The `ai_dev.zl` script is designed to generate code using Gemini.
-- If API Keys fail (404/403), the script can be bypassed by manually creating files in `app/controllers`, `views`, and `routes`.
-- Ensure `.env` has `GEMINI_API_KEY` loaded if attempting to use it.
+The `ai_dev.zl` script is a neural-scaffolding tool that generates features using Gemini.
+- **Security**: API Keys are loaded from `.env` via `system.env: 'GEMINI_API_KEY'`.
+- Jangan hardcode API Key di script untuk keamanan repository.
 
 ### 4. Security Configuration
 The framework middleware (`securecookie`) requires 32-byte keys in `.env`:
@@ -45,49 +45,63 @@ The framework middleware (`securecookie`) requires 32-byte keys in `.env`:
  Zeno Artisan adalah tool baris perintah untuk mempercepat development, sekarang sudah didukung oleh **Zeno Metaprogramming**.
  
  ### Perintah Utama
- Jalankan menggunakan execute script:
  ```bash
- # Membuat Controller baru
+ # Membuat Controller & Migration
  .\zeno.exe run artisan.zl make:controller ProfileController
- 
- # Membuat Migration baru
  .\zeno.exe run artisan.zl make:migration create_users_table
- ```
  
- ### 🧩 Metaprogramming: Code as Data
- Artisan menggunakan sistem **Stubs** yang tersimpan di `views/stubs/`. Setiap file di-generate menggunakan engine `meta.template`, sehingga boilerplate-nya sangat bersih dan mudah dimodifikasi.
+ # Scaffolding Auth (Stateless JWT)
+ .\zeno.exe run artisan.zl make:auth
+ ```
  
  ---
  
- ## 🗄️ ZenoORM: Fluent Migrations
+ ## 🗄️ ZenoORM: Fluent & Relational
  
- Zeno-X sekarang mendukung migrasi berbasis kode (DDL) tanpa perlu menulis raw SQL.
+ ZenoORM bukan cuma DDL, tapi sudah mendukung **Advanced Relationships** dan **Eager Loading**.
  
- ### Contoh Migration (`database/migrations/*.zl`)
+ ### 1. Schema Builder (DDL)
  ```zenolang
- schema.create: 'products' {
+ schema.create: 'posts' {
      column.id: 'id'
-     column.string: 'name'
-     column.integer: 'price'
+     column.integer: 'user_id'
+     column.string: 'title'
      column.timestamps
  }
  ```
  
- ### Keunggulan Engine
- Zeno Engine sekarang sudah mendukung:
- - **Global `$args`**: Argument CLI otomatis masuk ke scope script.
- - **Schema Builder**: Abstract DDL yang mendukung SQLite, MySQL, dan Postgres.
- - **Metaprogramming**: Rendering kode dinamis menggunakan template Blade.
- - **Professional Exit**: Keluar dari script dengan `return` tanpa log error tambahan.
+ ### 2. Relationships & Eager Loading
+ Mendukung relasi antar tabel secara native di engine:
+ ```zenolang
+ // Define in script or model
+ orm.model: 'users' { orm.hasMany: 'posts' { as: 'posts' } }
  
- ## 📂 Generated Structure
+ // Eager load relationships
+ orm.model: 'users'
+ orm.with: 'posts' {
+     orm.find: 1 { as: $user }
+ }
+ // $user.posts sekarang terisi otomatis!
+ ```
+ 
+ ### 3. Data Seeding
+ Gunakan slot `db.seed` untuk mengisi data awal:
+ ```zenolang
+ db.seed: {
+     orm.model: 'users'
+     orm.save: { name: 'Budi' }
+ }
+ ```
+ 
+ ## 📂 Project Structure
  ```text
  examples/zeno-x/
  ├── artisan.zl (Command Router)
- ├── app/controllers/ (Controllers Area)
- ├── database/migrations/ (ZenoLang Migrations)
+ ├── ai_dev.zl (AI Feature Generator)
+ ├── app/controllers/ (Application Logic)
+ ├── database/migrations/ (DB Version Control)
  ├── views/stubs/ (Blade Templates for Scaffolding)
- └── ...
+ └── .env (Environment Config)
  ```
  
  ## 🏃 Running the Project

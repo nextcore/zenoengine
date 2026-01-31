@@ -2,10 +2,7 @@
 log: "--- 🤖 Zeno-X: AI Developer (Artisan) ---"
 
 // 1. Config
-strings.concat {
-    val: "AIzaSyBKB0qSukQuc3hwqEEAhv5VzD29iRWl1u0"
-    as: $api_key
-}
+system.env: 'GEMINI_API_KEY' { as: $api_key }
 
 // 2. Define The Mission (Combined System Prompt + Mission)
 strings.concat {
