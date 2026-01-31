@@ -1,0 +1,160 @@
+
+log: "--- 🤖 Zeno-X: AI Developer (Artisan) ---"
+
+// 1. Config
+strings.concat {
+    val: "AIzaSyBKB0qSukQuc3hwqEEAhv5VzD29iRWl1u0"
+    as: $api_key
+}
+
+// 2. Define The Mission (Combined System Prompt + Mission)
+strings.concat {
+    val: "You are the Zeno-X Framework architect. Output JSON ONLY. Structure: { \"files\": [ { \"path\": \"string\", \"content\": \"string\" } ] }. NO markdown."
+    val: " Mission: Create a 'Contact Us' feature."
+    as: $m1
+}
+strings.concat {
+    val: " 1. Controller 'app/controllers/ContactController.zl' with 'index' (renders view) and 'process' (logic)."
+    as: $m2
+}
+strings.concat {
+    val: " 2. View 'views/contact.blade.zl' with a simple form."
+    as: $m3
+}
+strings.concat {
+    val: " 3. Route snippet for 'routes/contact.zl' mapping /contact to the controller."
+    as: $m4
+}
+
+strings.concat {
+    val: $m1
+    val: $m2
+    val: $m3
+    val: $m4
+    as: $mission
+}
+
+log: "🎯 Mission: "
+log: $mission
+
+// 3. Prompt Engineering
+
+// A. User Content
+map.set: $part_map { text: $mission }
+
+var: $parts_list // Init Array
+array.push: $parts_list { val: $part_map }
+
+map.set: $user_content { 
+    role: "user" 
+    parts: $parts_list 
+}
+
+var: $contents_list // Init Array
+array.push: $contents_list { val: $user_content }
+
+// B. Body (Simplified for v1)
+map.set: $body {
+    contents: $contents_list
+}
+
+// Build URL (v1)
+strings.concat {
+    val: "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key="
+    as: $base_url
+}
+strings.concat {
+    val: $base_url
+    val: $api_key
+    as: $api_url
+}
+
+log: "📡 Contacting Neural Core..."
+http.request: $api_url {
+    method: 'POST'
+    body: $body
+    as: $response
+}
+
+// 4. Parse Response
+var: $res_body { val: $response.body }
+var: $status { val: $response.status }
+
+// Check API Error
+if: $status != 200 {
+    then: {
+        log: "❌ API Error. Status: "
+        log: $status
+        log: "Response Body: "
+        log: $res_body
+        return: "Failed"
+    }
+}
+
+// Extract Candidates from Body
+var: $candidates { val: $res_body.candidates }
+
+if: is_null($candidates) {
+    then: {
+        log: "❌ AI Error: 'candidates' missing. Body:"
+        log: $res_body
+        return: "Failed"
+    }
+}
+
+collections.get: $candidates { index: 0; as: $cand_0 }
+var: $content { val: $cand_0.content }
+var: $parts { val: $content.parts }
+collections.get: $parts { index: 0; as: $part_0 }
+// Text might contain markdown json block, need stripping
+var: $raw_text { val: $part_0.text }
+
+log: "✨ AI Resolved. Decoding JSON..."
+// Simple strip if AI adds markdown code blocks
+// Not perfect, but v1 gemini pro often chats
+log: "Raw Response Text: "
+log: $raw_text
+
+// Try Direct Decode first (Best Case)
+$data: json.decode: $raw_text
+var: $files { val: $data.files }
+
+// If direct decode matches files structure
+if: is_null($files) {
+    then: {
+        log: "⚠️ JSON Direct Decode Empty. Might be Markdown wrapped. Check Raw Response."
+        // For verify, we return failed if strict json fails, but at least we see output
+        return: "Failed"
+    }
+}
+
+// 5. Build Files
+foreach: $files {
+    as: $file
+    do: {
+        var: $rel_path { val: $file.path }
+        var: $file_content { val: $file.content }
+        
+        // Build Full Path
+        strings.concat {
+            val: "examples/zeno-x/"
+            val: $rel_path
+            as: $full_path
+        }
+        
+        // Log
+        strings.concat {
+            val: "🔨 Building: "
+            val: $rel_path
+            as: $build_log
+        }
+        log: $build_log
+        
+        io.file.write {
+            path: $full_path
+            content: $file_content
+        }
+    }
+}
+
+log: "✅ Feature Deployed! Check examples/zeno-x/app and views."

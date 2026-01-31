@@ -1,0 +1,5 @@
+<h1>Welcome to {{ $title }}</h1>
+<p>Running on ZenoEngine v{{ $version }}</p>
+<p>
+    Powered by AI-Native Architecture.
+</p>

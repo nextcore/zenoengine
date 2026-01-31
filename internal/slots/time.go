@@ -3,6 +3,7 @@ package slots
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 	"zeno/pkg/engine"
@@ -26,8 +27,23 @@ func RegisterTimeSlots(eng *engine.Engine) {
 		}
 
 		// Support simple string output by default or object if requested
-		scope.Set(target, now.Format(layout))
+		formattedText := now.Format(layout)
+		scope.Set(target, formattedText)
 		scope.Set(target+"_obj", now)
+
+		// [FIX] Support Blade Echo: Write to writer if in template context
+		if w, ok := ctx.Value("httpWriter").(http.ResponseWriter); ok {
+			// If target is default "now" or "as" was NOT explicitly provided by child
+			hasAs := false
+			for _, c := range node.Children {
+				if c.Name == "as" {
+					hasAs = true; break
+				}
+			}
+			if !hasAs {
+				w.Write([]byte(formattedText))
+			}
+		}
 		return nil
 	}, engine.SlotMeta{
 		Description: "Mengambil waktu saat ini.",

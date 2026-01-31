@@ -1,0 +1,8 @@
+// Migration: create_services_table
+
+log: "ð Running migration: create_services_table"
+
+db.exec: "CREATE TABLE IF NOT EXISTS create_services_table (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);"

@@ -1,0 +1,147 @@
+// ZenoORM Advanced Test (Phase 6)
+
+log: "--- Starting Advanced ORM Test ---"
+
+// 1. Setup Tables
+schema.create: 'users' {
+    column.id: 'id'
+    column.string: 'name'
+    column.timestamps
+}
+
+schema.create: 'posts' {
+    column.id: 'id'
+    column.integer: 'user_id'
+    column.string: 'title'
+    column.text: 'content'
+    column.timestamps
+}
+log: "✅ Tables 'users' and 'posts' created."
+
+// 2. Data Seeding
+db.seed: {
+    orm.model: 'users'
+    var: $user1 { 
+        val: { 
+            name: "Budi" 
+        } 
+    }
+    var: $user2 { 
+        val: { 
+            name: "Ani" 
+        } 
+    }
+    orm.save: $user1
+    orm.save: $user2
+
+    orm.model: 'posts'
+    var: $p1 { 
+        val: { 
+            user_id: $user1.id
+            title: "Post Budi 1"
+            content: "Halo"
+        }
+    }
+    var: $p2 { 
+        val: { 
+            user_id: $user1.id
+            title: "Post Budi 2"
+            content: "Dunia"
+        }
+    }
+    var: $p3 { 
+        val: { 
+            user_id: $user2.id
+            title: "Post Ani 1"
+            content: "Belajar Zeno"
+        }
+    }
+    
+    var: $b_title { val: $p1.title }
+    strings.concat: "Saving p1: " { 
+        val: $b_title 
+        as: $save_msg 
+    }
+    log: $save_msg
+    orm.save: $p1
+    orm.save: $p2
+    orm.save: $p3
+}
+log: "✅ Data seeded successfully."
+
+// 3. Define Relationships
+orm.model: 'users'
+orm.hasMany: 'posts' { 
+    as: 'posts'
+    fk: 'user_id' 
+}
+
+orm.model: 'posts'
+orm.belongsTo: 'users' { 
+    as: 'author'
+    fk: 'user_id' 
+}
+log: "✅ Relationships defined."
+
+// 4. Test Eager Loading (hasMany)
+log: "--- Testing hasMany (User -> Posts) ---"
+orm.model: 'users'
+orm.with: 'posts' {
+    orm.find: $user1.id { 
+        as: $budi 
+    }
+}
+
+if: $budi != nil {
+    then: {
+        var: $b_name { val: $budi.name }
+        strings.concat: "✅ User: " { 
+            val: $b_name 
+            as: $msg1 
+        }
+        log: $msg1
+        
+        strings.concat: "   Posts count: " { val: "[Multiple]" as: $msg2 }
+        log: $msg2
+        
+        foreach: $budi.posts {
+            as: $post
+            do: {
+                var: $pt { val: $post.title }
+                strings.concat: "     - " { 
+                    val: $pt 
+                    as: $msg3 
+                }
+                log: $msg3
+            }
+        }
+    }
+}
+
+// 5. Test Eager Loading (belongsTo)
+log: "--- Testing belongsTo (Post -> Author) ---"
+orm.model: 'posts'
+orm.with: 'author' {
+    orm.find: $p3.id { 
+        as: $aniPost 
+    }
+}
+
+if: $aniPost != nil {
+    then: {
+        var: $apt { val: $aniPost.title }
+        var: $apa { val: $aniPost.author.name }
+        strings.concat: "✅ Post: " { 
+            val: $apt 
+            as: $msg4 
+        }
+        strings.concat: "   Author: " { 
+            val: $apa 
+            as: $msg5 
+        }
+        log: $msg4
+        log: $msg5
+    }
+}
+
+log: "--- Advanced ORM Test Completed ---"

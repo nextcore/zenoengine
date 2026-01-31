@@ -184,8 +184,8 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 
 		err := handler(ctx, node, scope)
 		if err != nil {
-			// Jika error sudah punya info baris, biarkan. Jika belum, tambahkan.
-			return fmt.Errorf("[%s:%d:%d] execution error in '%s': %v", node.Filename, node.Line, node.Col, node.Name, err)
+			// [FIX] Use %w to allow errors.Is/errors.As
+			return fmt.Errorf("[%s:%d:%d] execution error in '%s': %w", node.Filename, node.Line, node.Col, node.Name, err)
 		}
 		return nil
 	}

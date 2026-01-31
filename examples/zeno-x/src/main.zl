@@ -1,0 +1,6 @@
+
+// Zeno-X Entry Point
+// Redirects to routes
+
+// Load Web Routes
+include: "routes/web.zl"

@@ -1,0 +1,21 @@
+
+log: "📦 Starting Migration..."
+
+// Define Table Schema
+var: $sql {
+    val: "CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );"
+}
+
+// Execute
+try: {
+    db.exec: $sql
+    log: "✅ Table 'messages' created successfully."
+} catch: {
+    log: "❌ Migration Failed: " + $error
+}

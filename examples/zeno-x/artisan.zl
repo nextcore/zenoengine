@@ -1,0 +1,165 @@
+// Zeno Artisan: The "Laravel Killer" CLI Tool
+
+log: "🔨 Zeno Artisan CLI v1.9 (Metaprogramming Edition)"
+
+try: {
+    do: {
+        // 1. Get command
+        var: $cmd {
+            val: $args[0]
+        }
+        
+        if: $cmd == nil {
+            then: {
+                log: "Usage: zeno run artisan.zl [command] [args...]"
+                return: 1
+            }
+        }
+        
+        // 2. Dispatch
+        if: $cmd == "make:controller" {
+            then: {
+                var: $name { val: $args[1] }
+                if: $name == nil {
+                    then: { 
+                        log: "❌ Error: Controller name is required."
+                        return: 1 
+                    }
+                }
+                
+                strings.concat: {
+                    val: "app/controllers/"
+                    val: $name
+                    val: ".zl"
+                    as: $path
+                }
+                
+                date.now: { as: $now }
+
+                // Metaprogramming: Render template using meta.template
+                meta.template: "stubs/controller" {
+                    name: $name
+                    date: $now
+                    as: $content
+                }
+                
+                io.file.write: {
+                    path: $path
+                    content: $content
+                }
+
+                strings.concat: {
+                    val: "✨ Controller "
+                    val: $name
+                    val: " created using Metaprogramming!"
+                    as: $msg
+                }
+                log: $msg
+                return: 0
+            }
+        }
+        
+        if: $cmd == "make:migration" {
+            then: {
+                var: $name { val: $args[1] }
+                if: $name == nil {
+                    then: { 
+                        log: "❌ Error: Migration name is required."
+                        return: 1 
+                    }
+                }
+                
+                strings.concat: {
+                    val: "database/migrations/"
+                    val: $name
+                    val: ".zl"
+                    as: $path
+                }
+                
+                date.now: { as: $now }
+                
+                // Metaprogramming: Render template using meta.template
+                meta.template: "stubs/migration" {
+                    name: $name
+                    date: $now
+                    as: $content
+                }
+                
+                io.file.write: {
+                    path: $path
+                    content: $content
+                }
+
+                strings.concat: {
+                    val: "📦 Migration "
+                    val: $name
+                    val: " created using Metaprogramming!"
+                    as: $msg
+                }
+                log: $msg
+                return: 0
+            }
+        }
+
+        if: $cmd == "make:auth" {
+            then: {
+                date.now: { as: $now }
+                
+                // 1. Controller
+                meta.template: "stubs/auth_controller" {
+                    name: "AuthController"
+                    date: $now
+                    as: $controllerContent
+                }
+                io.file.write: {
+                    path: "app/controllers/AuthController.zl"
+                    content: $controllerContent
+                }
+
+                // 2. Migration
+                meta.template: "stubs/user_migration" {
+                    name: "create_users_table"
+                    date: $now
+                    as: $migrationContent
+                }
+                io.file.write: {
+                    path: "database/migrations/create_users_table.zl"
+                    content: $migrationContent
+                }
+
+                log: "🔒 Stateless Auth System (JWT) scaffolded successfully!"
+                log: "   - Controller: app/controllers/AuthController.zl"
+                log: "   - Migration: database/migrations/create_users_table.zl"
+                return: 0
+            }
+        }
+
+        if: $cmd == "make:seeder" {
+            then: {
+                var: $name { val: $arg1 ?? "NewSeeder" }
+                var: $path { val: strings.concat("database/seeders/", $name, ".zl") }
+                
+                date.now: { as: $now }
+                
+                meta.template: "stubs/seeder" {
+                    name: $name
+                    date: $now
+                    as: $content
+                }
+                
+                io.file.write: {
+                    path: $path
+                    content: $content
+                }
+                
+                log: strings.concat("🌱 Seeder ", $name, " created!")
+                return: 0
+            }
+        }
+        
+        log: strings.concat("❓ Unknown command: ", $cmd)
+    }
+} catch: {
+    log: "❌ Artisan Error"
+    log: $error
+}

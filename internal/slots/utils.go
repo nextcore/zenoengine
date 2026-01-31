@@ -64,13 +64,16 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 			}
 
 			parts := strings.Split(normalizedKey, ".")
-			rootKey := parts[0]
+			rootKey := strings.TrimSpace(parts[0])
 
 			if rootVal, ok := scope.Get(rootKey); ok {
 				curr := rootVal
 				isValidPath := true
 				for i := 1; i < len(parts); i++ {
-					targetKey := parts[i]
+					targetKey := strings.TrimSpace(parts[i])
+					if targetKey == "" {
+						continue
+					}
 
 					// 1. Handle Maps
 					if m, ok := curr.(map[string]interface{}); ok {
@@ -101,7 +104,7 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 		}
 
 		// B. Cek Variabel Biasa
-		if v, ok := scope.Get(key); ok {
+		if v, ok := scope.Get(strings.TrimSpace(key)); ok {
 			return v
 		}
 		return nil
@@ -137,27 +140,37 @@ func RegisterUtilSlots(eng *engine.Engine) {
 	// 2. STRINGS CONCAT
 	eng.Register("strings.concat", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		var builder strings.Builder
-		target := "concat_result"
+		target := ""
+
+		if node.Value != nil {
+			builder.WriteString(coerce.ToString(resolveValue(node.Value, scope)))
+		}
+
+		// 2. Include children
 		for _, c := range node.Children {
-			if c.Name == "as" {
-				// [FIX] Bersihkan awalan $ agar variabel tersimpan benar
+			if c.Name == "as" || c.Name == "target" {
 				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 				continue
 			}
-			if c.Name == "val" {
-				val := parseNodeValue(c, scope)
-				builder.WriteString(coerce.ToString(val))
+			// General children (val, arg, or just positional)
+			val := parseNodeValue(c, scope)
+			builder.WriteString(coerce.ToString(val))
+		}
+
+		result := builder.String()
+		if target != "" {
+			scope.Set(target, result)
+		} else {
+			if w, ok := ctx.Value("httpWriter").(http.ResponseWriter); ok {
+				w.Write([]byte(result))
+			} else {
+				fmt.Println("[LOG]:", result)
 			}
 		}
-		scope.Set(target, builder.String())
 		return nil
 	}, engine.SlotMeta{
-		Description: "Menggabungkan beberapa string menjadi satu.",
-		Example:     "strings.concat\n  val: 'Hello '\n  val: $name\n  as: $greeting",
-		Inputs: map[string]engine.InputMeta{
-			"val": {Description: "Nilai yang akan digabung (Bisa banyak)", Required: true, Type: "string"},
-			"as":  {Description: "Variabel penyimpan hasil", Required: false, Type: "string"},
-		},
+		Description: "Menggabungkan beberapa string menjadi satu secara fleksibel.",
+		Example:     "strings.concat: 'Hello '\n  val: $name\n  as: $greeting",
 	})
 
 	// 2.5 STRINGS REPLACE
@@ -258,8 +271,6 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		return eng.Execute(ctx, root, scope)
 	}, engine.SlotMeta{})
 
-	// 6. SYSTEM ENV
-	// 6. SYSTEM ENV
 	eng.Register("system.env", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		envKey := coerce.ToString(node.Value)
 		val := os.Getenv(envKey)
@@ -274,6 +285,33 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		scope.Set(targetBucket, val)
 		return nil
 	}, engine.SlotMeta{})
+
+	// 6.5 SYSTEM ARGS
+	eng.Register("system.args", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		args, ok := ctx.Value("zenoArgs").([]string)
+		if !ok {
+			args = []string{}
+		}
+
+		// Convert to []interface{} for better compatibility with coerce.ToSlice
+		ifaceArgs := make([]interface{}, len(args))
+		for i, v := range args {
+			ifaceArgs[i] = v
+		}
+
+		target := "args"
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		scope.Set(target, ifaceArgs)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Mengambil argument command line yang dilewatkan ke script.",
+		Example:     "system.args: { as: $my_args }",
+	})
 
 	// 7. HTTP RESPONSE
 	eng.Register("http.response", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {

@@ -1,0 +1,9 @@
+
+// Route for Contact Us
+route.get: "/contact" {
+    use: "ContactController@index"
+}
+
+route.post: "/contact" {
+    use: "ContactController@process"
+}

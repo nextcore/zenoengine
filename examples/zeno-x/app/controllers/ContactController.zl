@@ -1,0 +1,20 @@
+
+// app/controllers/ContactController.zl
+
+fn: index {
+    // Render the view
+    // Using hypothetical 'view' slot for Zeno-X
+    view: "contact" { as: $html }
+    return: $html
+}
+
+fn: process {
+    // Handle form submission
+    http.form: $form_data
+    
+    log: "📥 Contact Form Data:"
+    log: $form_data
+    
+    // Redirect back with success flag
+    redirect: "/contact?success=1"
+}

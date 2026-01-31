@@ -686,6 +686,7 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 			qs.Dialect.QuoteIdentifier(qs.Table), strings.Join(cols, ", "), strings.Join(placeholders, ", "))
+
 		executor, dialect, err := getExecutor(scope, dbMgr, qs.DBName)
 		if err != nil {
 			return err

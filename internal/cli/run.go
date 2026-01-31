@@ -2,10 +2,12 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"zeno/internal/app"
+	"zeno/internal/slots"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
 	"zeno/pkg/logger"
@@ -124,7 +126,23 @@ func HandleRun(args []string) {
 	r := chi.NewRouter()
 	app.RegisterAllSlots(eng, r, dbMgr, queue, nil)
 
-	if err := eng.Execute(context.Background(), root, engine.NewScope(nil)); err != nil {
+	// Pass remaining CLI arguments through context and scope
+	cliArgs := args[1:]
+	ifaceArgs := make([]interface{}, len(cliArgs))
+	for i, v := range cliArgs {
+		ifaceArgs[i] = v
+	}
+
+	ctx := context.WithValue(context.Background(), "zenoArgs", cliArgs)
+	scope := engine.NewScope(nil)
+	scope.Set("args", ifaceArgs)
+
+	if err := eng.Execute(ctx, root, scope); err != nil {
+		// Ignore control flow signals at the root level (return, break, continue)
+		// These are used by slots like 'return' to halt execution gracefully.
+		if errors.Is(err, slots.ErrReturn) || errors.Is(err, slots.ErrBreak) || errors.Is(err, slots.ErrContinue) {
+			os.Exit(0)
+		}
 		fmt.Printf("❌ Execution Error: %v\n", err)
 		os.Exit(1)
 	}

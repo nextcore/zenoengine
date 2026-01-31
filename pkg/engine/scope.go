@@ -25,6 +25,13 @@ func (s *Scope) Set(key string, val interface{}) {
 	s.vars[key] = val
 }
 
+// Delete menghapus variabel dari scope current level
+func (s *Scope) Delete(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.vars, key)
+}
+
 // Get mengambil variabel dengan dukungan Dot Notation (user.id, form.judul)
 func (s *Scope) Get(key string) (interface{}, bool) {
 	s.mu.RLock()
@@ -93,6 +100,14 @@ func (s *Scope) Get(key string) (interface{}, bool) {
 }
 
 // ToMap mengonversi scope menjadi map standar (berguna untuk template rendering)
+// GetDefault returns the value of the key if found, otherwise returns the default value.
+func (s *Scope) GetDefault(key string, defaultValue interface{}) interface{} {
+	if val, ok := s.Get(key); ok {
+		return val
+	}
+	return defaultValue
+}
+
 func (s *Scope) ToMap() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
