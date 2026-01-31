@@ -1,0 +1,39 @@
+// Test WASM Plugin - Rust Edition
+
+// Test 1: Greet
+rust.greet {
+    name: "ZenoEngine"
+}
+
+log.info: "Message from Rust plugin:"
+log.info: $message
+
+// Test 2: Calculate - Addition
+rust.calculate {
+    a: 10.0
+    b: 5.0
+    op: "add"
+}
+
+log.info: "10 + 5 ="
+log.info: $result
+
+// Test 3: Calculate - Multiplication  
+rust.calculate {
+    a: 7.0
+    b: 6.0
+    op: "mul"
+}
+
+log.info: "7 * 6 ="
+log.info: $result
+
+// Test 4: Calculate - Division
+rust.calculate {
+    a: 100.0
+    b: 4.0
+    op: "div"
+}
+
+log.info: "100 / 4 ="
+log.info: $result
