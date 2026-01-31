@@ -73,6 +73,13 @@ Artisan dan ORM bekerja berdasarkan folder tempat script dijalankan. Pastikan An
  # Membuat Controller & Migration
  .\zeno.exe run artisan.zl make:controller ProfileController
  .\zeno.exe run artisan.zl make:migration create_users_table
+ 
+ # 🆕 Scaffolding Baru (v1.9)
+ .\zeno.exe run artisan.zl make:model Post             # Membuat Model ZenoORM
+ .\zeno.exe run artisan.zl make:middleware AdminCheck  # Membuat Middleware
+ 
+ # 🔥 Rapid Development (CRUD Generator)
+ .\zeno.exe run artisan.zl make:crud Product           # Generate Model + Migration + Controller sekaligus!
  ```
  
  ---
