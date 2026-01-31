@@ -1,0 +1,8 @@
+// Test WASM Plugin Permission Enforcement
+
+// This should work - plugin has scope read/write permission
+rust.greet {
+    name: "Permission Test"
+}
+
+log.info: $message

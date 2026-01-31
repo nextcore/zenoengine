@@ -50,6 +50,8 @@ func main() {
 			cli.HandleMakeAuth()
 		case "key:generate":
 			cli.HandleKeyGenerate()
+		case "plugin":
+			cli.HandlePlugin(os.Args[2:])
 		case "version":
 			cli.HandleVersion()
 		default:
@@ -449,6 +451,9 @@ func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWor
 	cancelWorker()
 	workerWG.Wait()
 	slog.Info("✅ Worker Stopped")
+
+	// Cleanup WASM Plugins
+	slots.CleanupWASMPlugins()
 
 	// Shutdown HTTP Server (30s timeout for SSE connections)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

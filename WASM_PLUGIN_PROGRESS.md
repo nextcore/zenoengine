@@ -171,25 +171,27 @@ log.info: $message  # "Hello, World! 👋"
 
 ## 🐛 Known Issues & TODOs
 
-### Minor Issues
+### Completed ✅
 
 1. **HTTP Request Implementation**
-   - Location: `internal/slots/wasm.go:154`
-   - Status: Placeholder implementation
-   - TODO: Implement actual HTTP request using `net/http`
-   - Priority: Medium
+   - Location: `internal/slots/wasm.go:152`
+   - Status: ✅ **COMPLETED** - Full `net/http` implementation
+   - Features: All HTTP methods, headers, JSON body, 30s timeout
+   - Priority: High
 
 2. **File Access Security**
-   - Location: `internal/slots/wasm.go:175-180`
-   - Status: Currently blocked
-   - TODO: Implement path-based permission checking
-   - Priority: Low
+   - Location: `internal/slots/wasm.go:245`
+   - Status: ✅ **COMPLETED** - Path validation and sanitization
+   - Features: Prevents absolute paths and parent directory access
+   - Priority: Medium
 
 3. **Plugin Manager Cleanup**
-   - Location: `internal/slots/wasm.go:76`
-   - Status: No cleanup on shutdown
-   - TODO: Store plugin manager for graceful shutdown
-   - Priority: Low
+   - Location: `internal/slots/wasm.go:83`
+   - Status: ✅ **COMPLETED** - Graceful shutdown implemented
+   - Features: `CleanupWASMPlugins()` called on server shutdown
+   - Priority: Medium
+
+### Remaining (Low Priority)
 
 4. **Lazy Loading**
    - Status: Not implemented
