@@ -131,6 +131,37 @@ Details: open plugins/nonexistent/manifest.yaml: no such file or directory
 
 ---
 
+### `zeno plugin reload [name]`
+
+Reload a specific plugin or all plugins without restarting the server.
+
+**Usage:**
+```bash
+# Reload specific plugin
+zeno plugin reload <plugin-name>
+
+# Reload all plugins
+zeno plugin reload
+```
+
+**Example:**
+```bash
+zeno plugin reload hello-rust
+```
+
+**What It Does:**
+- Unloads the existing plugin
+- Reloads code from disk
+- Re-registers all slots
+- Updates configuration
+
+**Use Cases:**
+- Development workflow (hot reload)
+- Updating plugins in production
+- Resetting plugin state
+
+---
+
 ### `zeno plugin validate <path>`
 
 Validate a plugin directory before installation with comprehensive checks.

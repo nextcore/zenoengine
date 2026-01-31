@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +31,8 @@ func HandlePlugin(args []string) {
 		handlePluginInfo(subargs)
 	case "validate":
 		handlePluginValidate(subargs)
+	case "reload":
+		handlePluginReload(subargs)
 	case "help", "--help", "-h":
 		printPluginHelp()
 	default:
@@ -48,6 +53,7 @@ Available Commands:
   list              List all installed plugins
   info <name>       Show detailed information about a plugin
   validate <path>   Validate a plugin before installation
+  reload [name]     Reload a specific plugin or all plugins
   help              Show this help message
 
 Examples:
@@ -324,4 +330,55 @@ func readManifest(path string) (*wasm.PluginManifest, error) {
 	}
 
 	return &manifest, nil
+}
+
+// handlePluginReload sends a reload request to the running server
+func handlePluginReload(args []string) {
+	// Check if server is reachable
+	port := os.Getenv("APP_PORT")
+	if port == "" {
+		port = ":3000"
+	}
+	// Handle port with or without colon
+	if strings.HasPrefix(port, ":") {
+		port = "localhost" + port
+	}
+
+	url := fmt.Sprintf("http://%s/api/admin/plugins/reload", port)
+
+	if len(args) > 0 {
+		pluginName := args[0]
+		url += "?name=" + pluginName
+		fmt.Printf("Reloading plugin '%s'...\n", pluginName)
+	} else {
+		fmt.Println("Reloading all plugins...")
+	}
+
+	// Send POST request
+	resp, err := http.Post(url, "application/json", nil)
+	if err != nil {
+		fmt.Printf("❌ Failed to contact server: %v\n", err)
+		fmt.Println("Make sure ZenoEngine server is running.")
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	// Parse response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("❌ Failed to read response: %v\n", err)
+		os.Exit(1)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp map[string]string
+		if err := json.Unmarshal(body, &errResp); err == nil && errResp["error"] != "" {
+			fmt.Printf("❌ Reload failed: %s\n", errResp["error"])
+		} else {
+			fmt.Printf("❌ Reload failed (Status %d): %s\n", resp.StatusCode, string(body))
+		}
+		os.Exit(1)
+	}
+
+	fmt.Println("✅ Reload successful!")
 }

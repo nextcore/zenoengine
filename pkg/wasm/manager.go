@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -49,6 +50,7 @@ type PluginManager struct {
 	hostFunctions *HostFunctions
 	plugins       map[string]*LoadedPlugin
 	pluginDir     string
+	mu            sync.RWMutex // Protects plugins map for hot reload
 }
 
 // LoadedPlugin represents a loaded WASM plugin
@@ -56,6 +58,7 @@ type LoadedPlugin struct {
 	Manifest *PluginManifest
 	Plugin   *WASMPlugin
 	Slots    []SlotDefinition
+	Path     string // Path to plugin directory for reload
 }
 
 // NewPluginManager creates a new plugin manager
@@ -104,8 +107,11 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 		return fmt.Errorf("plugin binary is required")
 	}
 
-	// Check if already loaded
-	if _, exists := pm.plugins[manifest.Name]; exists {
+	// Check if already loaded (with read lock)
+	pm.mu.RLock()
+	_, exists := pm.plugins[manifest.Name]
+	pm.mu.RUnlock()
+	if exists {
 		return fmt.Errorf("plugin %s already loaded", manifest.Name)
 	}
 
@@ -134,12 +140,15 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 		return fmt.Errorf("failed to get plugin slots: %w", err)
 	}
 
-	// Store loaded plugin
+	// Store loaded plugin (with write lock)
+	pm.mu.Lock()
 	pm.plugins[manifest.Name] = &LoadedPlugin{
 		Manifest: &manifest,
 		Plugin:   plugin,
 		Slots:    slots,
+		Path:     pluginPath,
 	}
+	pm.mu.Unlock()
 
 	slog.Info("✅ Plugin loaded",
 		"name", manifest.Name,
@@ -196,6 +205,9 @@ func (pm *PluginManager) LoadPluginsFromDir(dir string) error {
 
 // GetPlugin returns a loaded plugin by name
 func (pm *PluginManager) GetPlugin(name string) (*LoadedPlugin, error) {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	
 	plugin, exists := pm.plugins[name]
 	if !exists {
 		return nil, fmt.Errorf("plugin %s not loaded", name)
@@ -233,6 +245,9 @@ func (pm *PluginManager) ExecuteSlot(pluginName, slotName string, params map[str
 
 // ListPlugins returns all loaded plugins
 func (pm *PluginManager) ListPlugins() []*LoadedPlugin {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	
 	plugins := make([]*LoadedPlugin, 0, len(pm.plugins))
 	for _, p := range pm.plugins {
 		plugins = append(plugins, p)
@@ -397,4 +412,73 @@ func matchPattern(pattern, url string) bool {
 		return strings.HasPrefix(url, prefix)
 	}
 	return pattern == url
+}
+
+// ReloadPlugin reloads a specific plugin by name
+func (pm *PluginManager) ReloadPlugin(name string) error {
+	slog.Info("Reloading plugin...", "name", name)
+
+	// 1. Get plugin path and verify existence
+	pm.mu.RLock()
+	plugin, exists := pm.plugins[name]
+	pm.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("plugin %s not found", name)
+	}
+
+	path := plugin.Path
+
+	// 2. Unload existing plugin
+	// Note: We remove from map first to allow LoadPlugin to succeed
+	pm.mu.Lock()
+	delete(pm.plugins, name)
+	pm.mu.Unlock()
+
+	// Unload from runtime
+	if err := pm.runtime.UnloadModule(name); err != nil {
+		slog.Warn("Failed to unload module during reload", "name", name, "error", err)
+		// Continue anyway to try loading new version
+	}
+
+	// 3. Load plugin again
+	if err := pm.LoadPlugin(path); err != nil {
+		// If load fails, try to restore old plugin entry (best effort)
+		pm.mu.Lock()
+		pm.plugins[name] = plugin
+		pm.mu.Unlock()
+		return fmt.Errorf("failed to reload plugin: %w", err)
+	}
+
+	slog.Info("✅ Plugin reloaded successfully", "name", name)
+	return nil
+}
+
+// ReloadAllPlugins reloads all currently loaded plugins
+func (pm *PluginManager) ReloadAllPlugins() map[string]error {
+	slog.Info("Reloading all plugins...")
+
+	// Get list of plugins to reload
+	pm.mu.RLock()
+	plugins := make([]string, 0, len(pm.plugins))
+	for name := range pm.plugins {
+		plugins = append(plugins, name)
+	}
+	pm.mu.RUnlock()
+
+	errors := make(map[string]error)
+	for _, name := range plugins {
+		if err := pm.ReloadPlugin(name); err != nil {
+			slog.Error("Failed to reload plugin", "name", name, "error", err)
+			errors[name] = err
+		}
+	}
+
+	if len(errors) > 0 {
+		slog.Warn("Reload completed with errors", "errors", len(errors))
+	} else {
+		slog.Info("✅ All plugins reloaded successfully")
+	}
+
+	return errors
 }

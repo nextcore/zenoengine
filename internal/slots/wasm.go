@@ -84,8 +84,40 @@ func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DB
 			"slots", totalSlots)
 	}
 
-	// Store plugin manager for cleanup on shutdown
+	// Store plugin manager for cleanup
 	globalPluginManager = pm
+
+	// Register admin API for hot reload
+	r.Post("/api/admin/plugins/reload", func(w http.ResponseWriter, req *http.Request) {
+		// Check for specific plugin name query param
+		pluginName := req.URL.Query().Get("name")
+		
+		var err error
+		if pluginName != "" {
+			err = pm.ReloadPlugin(pluginName)
+		} else {
+			// Reload all if no name specified
+			errs := pm.ReloadAllPlugins()
+			if len(errs) > 0 {
+				// Aggregate errors
+				errStr := []string{}
+				for p, e := range errs {
+					errStr = append(errStr, fmt.Sprintf("%s: %v", p, e))
+				}
+				err = fmt.Errorf("reload failed for: %s", strings.Join(errStr, ", "))
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "reloaded"})
+	})
 }
 
 // CleanupWASMPlugins gracefully shuts down all WASM plugins
