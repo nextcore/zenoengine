@@ -66,18 +66,18 @@ http.post: /api/v1/sales/ {
 **1. auth.go** (3 locations):
 ```go
 // auth.login
-jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+jwtSecret := "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
 
 // auth.middleware  
-jwtSecret := "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+jwtSecret := "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
 
 // jwt.verify
-secret = "rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar"
+secret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
 ```
 
 **2. .env**:
 ```bash
-JWT_SECRET=rahasia_dapur_pekalongan_kota_2025_!@#_jgn_disebar
+JWT_SECRET=458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar
 ```
 
 **3. ZenoLang**:
