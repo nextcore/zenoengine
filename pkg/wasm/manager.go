@@ -125,7 +125,7 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 	plugin := NewWASMPlugin(pm.runtime, manifest.Name)
 
 	// Get plugin metadata
-	metadata, err := plugin.GetMetadata()
+	metadata, err := plugin.GetMetadata(context.Background())
 	if err != nil {
 		pm.runtime.UnloadModule(manifest.Name)
 		return fmt.Errorf("failed to get plugin metadata: %w", err)
@@ -134,7 +134,7 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 	slog.Info("Plugin metadata", "name", metadata.Name, "version", metadata.Version)
 
 	// Get plugin slots
-	slots, err := plugin.GetSlots()
+	slots, err := plugin.GetSlots(context.Background())
 	if err != nil {
 		pm.runtime.UnloadModule(manifest.Name)
 		return fmt.Errorf("failed to get plugin slots: %w", err)
@@ -216,7 +216,7 @@ func (pm *PluginManager) GetPlugin(name string) (*LoadedPlugin, error) {
 }
 
 // ExecuteSlot executes a plugin slot
-func (pm *PluginManager) ExecuteSlot(pluginName, slotName string, params map[string]interface{}) (*PluginResponse, error) {
+func (pm *PluginManager) ExecuteSlot(ctx context.Context, pluginName, slotName string, params map[string]interface{}) (*PluginResponse, error) {
 	plugin, err := pm.GetPlugin(pluginName)
 	if err != nil {
 		return nil, err
@@ -240,7 +240,7 @@ func (pm *PluginManager) ExecuteSlot(pluginName, slotName string, params map[str
 		Parameters: params,
 	}
 
-	return plugin.Plugin.Execute(request)
+	return plugin.Plugin.Execute(ctx, request)
 }
 
 // ListPlugins returns all loaded plugins
@@ -263,7 +263,7 @@ func (pm *PluginManager) UnloadPlugin(name string) error {
 	}
 
 	// Cleanup plugin
-	if err := plugin.Plugin.Cleanup(); err != nil {
+	if err := plugin.Plugin.Cleanup(context.Background()); err != nil {
 		slog.Error("Failed to cleanup plugin", "name", name, "error", err)
 	}
 
@@ -305,49 +305,49 @@ func (pm *PluginManager) Close() error {
 func (pm *PluginManager) SetHostCallback(name string, callback interface{}) error {
 	switch name {
 	case "log":
-		if cb, ok := callback.(func(string, string)); ok {
+		if cb, ok := callback.(func(context.Context, string, string)); ok {
 			pm.hostFunctions.OnLog = cb
 		} else {
 			return fmt.Errorf("invalid callback type for log")
 		}
 	case "db_query":
-		if cb, ok := callback.(func(string, string, map[string]interface{}) ([]map[string]interface{}, error)); ok {
+		if cb, ok := callback.(func(context.Context, string, string, map[string]interface{}) ([]map[string]interface{}, error)); ok {
 			pm.hostFunctions.OnDBQuery = cb
 		} else {
 			return fmt.Errorf("invalid callback type for db_query")
 		}
 	case "http_request":
-		if cb, ok := callback.(func(string, string, map[string]interface{}, map[string]interface{}) (map[string]interface{}, error)); ok {
+		if cb, ok := callback.(func(context.Context, string, string, map[string]interface{}, map[string]interface{}) (map[string]interface{}, error)); ok {
 			pm.hostFunctions.OnHTTPRequest = cb
 		} else {
 			return fmt.Errorf("invalid callback type for http_request")
 		}
 	case "scope_get":
-		if cb, ok := callback.(func(string) (interface{}, error)); ok {
+		if cb, ok := callback.(func(context.Context, string) (interface{}, error)); ok {
 			pm.hostFunctions.OnScopeGet = cb
 		} else {
 			return fmt.Errorf("invalid callback type for scope_get")
 		}
 	case "scope_set":
-		if cb, ok := callback.(func(string, interface{}) error); ok {
+		if cb, ok := callback.(func(context.Context, string, interface{}) error); ok {
 			pm.hostFunctions.OnScopeSet = cb
 		} else {
 			return fmt.Errorf("invalid callback type for scope_set")
 		}
 	case "file_read":
-		if cb, ok := callback.(func(string) (string, error)); ok {
+		if cb, ok := callback.(func(context.Context, string) (string, error)); ok {
 			pm.hostFunctions.OnFileRead = cb
 		} else {
 			return fmt.Errorf("invalid callback type for file_read")
 		}
 	case "file_write":
-		if cb, ok := callback.(func(string, string) error); ok {
+		if cb, ok := callback.(func(context.Context, string, string) error); ok {
 			pm.hostFunctions.OnFileWrite = cb
 		} else {
 			return fmt.Errorf("invalid callback type for file_write")
 		}
 	case "env_get":
-		if cb, ok := callback.(func(string) string); ok {
+		if cb, ok := callback.(func(context.Context, string) string); ok {
 			pm.hostFunctions.OnEnvGet = cb
 		} else {
 			return fmt.Errorf("invalid callback type for env_get")

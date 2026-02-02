@@ -65,7 +65,12 @@ func (r *Runtime) LoadModule(name string, wasmPath string) error {
 
 // CallFunction calls an exported function from a loaded module
 // Returns result and any error. Includes panic recovery.
-func (r *Runtime) CallFunction(moduleName string, functionName string, params ...uint64) (results []uint64, err error) {
+func (r *Runtime) CallFunction(ctx context.Context, moduleName string, functionName string, params ...uint64) (results []uint64, err error) {
+	// Use provided context or fallback to runtime context
+	if ctx == nil {
+		ctx = r.ctx
+	}
+
 	// Panic recovery for WASM execution
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -93,7 +98,7 @@ func (r *Runtime) CallFunction(moduleName string, functionName string, params ..
 	}
 
 	// Call function
-	results, err = fn.Call(r.ctx, params...)
+	results, err = fn.Call(ctx, params...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call %s.%s: %w", moduleName, functionName, err)
 	}
@@ -133,7 +138,10 @@ func (r *Runtime) ReadString(moduleName string, ptr, length uint32) (string, err
 
 // WriteString writes a string to WASM memory
 // Returns pointer to the written string
-func (r *Runtime) WriteString(moduleName string, data string) (ptr uint32, length uint32, err error) {
+func (r *Runtime) WriteString(ctx context.Context, moduleName string, data string) (ptr uint32, length uint32, err error) {
+	if ctx == nil {
+		ctx = r.ctx
+	}
 	memory, err := r.GetMemory(moduleName)
 	if err != nil {
 		return 0, 0, err
@@ -148,7 +156,7 @@ func (r *Runtime) WriteString(moduleName string, data string) (ptr uint32, lengt
 		return 0, 0, fmt.Errorf("module %s does not export 'alloc' function", moduleName)
 	}
 
-	results, err := allocFn.Call(r.ctx, uint64(length))
+	results, err := allocFn.Call(ctx, uint64(length))
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to allocate memory: %w", err)
 	}

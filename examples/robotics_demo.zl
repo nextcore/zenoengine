@@ -1,5 +1,7 @@
 // ZenoLang Robotics Mission Demo
 // Pattern: Sense -> Think -> Act
+// NOTE: This demo requires the 'robotics' WASM plugin to be installed.
+// See 'examples/wasm-plugins/robotics/' for the plugin source code.
 
 log: "🚀 Initializing Robot Brain..."
 
