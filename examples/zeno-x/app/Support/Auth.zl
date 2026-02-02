@@ -1,0 +1,253 @@
+// Auth: Authentication Helper Functions
+// Laravel-like authentication for Zeno-X Framework
+
+// Global auth state
+var: $authUser { val: nil }
+var: $authToken { val: nil }
+
+// auth.attempt: Attempt to authenticate user with credentials
+// Usage:
+//   auth.attempt({ email: $email, password: $password }) { as: $success }
+
+function: 'authAttempt' {
+    params: ['credentials']
+    do: {
+        var: $email { val: $credentials.email }
+        var: $password { val: $credentials.password }
+        
+        // Find user by email
+        orm.model: 'users'
+        orm.where: 'email' { val: $email }
+        orm.first: { as: $user }
+        
+        if: $user == nil {
+            then: {
+                return: false
+            }
+        }
+        
+        // Verify password
+        call: 'hashCheck' {
+            args: [$password, $user.password]
+            as: $isValid
+        }
+        
+        if: $isValid == false {
+            then: {
+                return: false
+            }
+        }
+        
+        // Generate JWT token
+        jwt.sign: {
+            payload: {
+                user_id: $user.id
+                email: $user.email
+            }
+            secret: env('JWT_SECRET', 'default-secret')
+            expiresIn: 86400  // 24 hours
+            as: $token
+        }
+        
+        // Store in global state
+        var: $authUser { val: $user }
+        var: $authToken { val: $token }
+        
+        // Store in session
+        try: {
+            do: {
+                session.put: 'user_id' { value: $user.id }
+                session.put: 'auth_token' { value: $token }
+            }
+        } catch: {
+            // Session not available
+        }
+        
+        return: true
+    }
+}
+
+// auth.user: Get authenticated user
+// Usage:
+//   auth.user() { as: $user }
+
+function: 'authUser' {
+    params: []
+    do: {
+        if: $authUser != nil {
+            then: {
+                return: $authUser
+            }
+        }
+        
+        // Try to load from session
+        try: {
+            do: {
+                session.get: 'user_id' { as: $userId }
+                
+                if: $userId != nil {
+                    then: {
+                        orm.model: 'users'
+                        orm.find: $userId { as: $user }
+                        
+                        var: $authUser { val: $user }
+                        return: $user
+                    }
+                }
+            }
+        } catch: {
+            // Session not available
+        }
+        
+        return: nil
+    }
+}
+
+// auth.check: Check if user is authenticated
+// Usage:
+//   auth.check() { as: $isAuthenticated }
+
+function: 'authCheck' {
+    params: []
+    do: {
+        call: 'authUser' {
+            args: []
+            as: $user
+        }
+        
+        if: $user != nil {
+            then: { return: true }
+        }
+        
+        return: false
+    }
+}
+
+// auth.guest: Check if user is guest (not authenticated)
+// Usage:
+//   auth.guest() { as: $isGuest }
+
+function: 'authGuest' {
+    params: []
+    do: {
+        call: 'authCheck' {
+            args: []
+            as: $isAuth
+        }
+        
+        return: !$isAuth
+    }
+}
+
+// auth.id: Get authenticated user ID
+// Usage:
+//   auth.id() { as: $userId }
+
+function: 'authId' {
+    params: []
+    do: {
+        call: 'authUser' {
+            args: []
+            as: $user
+        }
+        
+        if: $user != nil {
+            then: {
+                return: $user.id
+            }
+        }
+        
+        return: nil
+    }
+}
+
+// auth.logout: Logout user
+// Usage:
+//   auth.logout()
+
+function: 'authLogout' {
+    params: []
+    do: {
+        // Clear global state
+        var: $authUser { val: nil }
+        var: $authToken { val: nil }
+        
+        // Clear session
+        try: {
+            do: {
+                session.forget: 'user_id'
+                session.forget: 'auth_token'
+                session.regenerate
+            }
+        } catch: {
+            // Session not available
+        }
+        
+        return: true
+    }
+}
+
+// auth.login: Manually login a user
+// Usage:
+//   auth.login($user)
+
+function: 'authLogin' {
+    params: ['user']
+    do: {
+        // Generate JWT token
+        jwt.sign: {
+            payload: {
+                user_id: $user.id
+                email: $user.email
+            }
+            secret: env('JWT_SECRET', 'default-secret')
+            expiresIn: 86400
+            as: $token
+        }
+        
+        // Store in global state
+        var: $authUser { val: $user }
+        var: $authToken { val: $token }
+        
+        // Store in session
+        try: {
+            do: {
+                session.put: 'user_id' { value: $user.id }
+                session.put: 'auth_token' { value: $token }
+            }
+        } catch: {
+            // Session not available
+        }
+        
+        return: $token
+    }
+}
+
+// auth.token: Get current auth token
+// Usage:
+//   auth.token() { as: $token }
+
+function: 'authToken' {
+    params: []
+    do: {
+        if: $authToken != nil {
+            then: {
+                return: $authToken
+            }
+        }
+        
+        // Try to load from session
+        try: {
+            do: {
+                session.get: 'auth_token' { as: $token }
+                return: $token
+            }
+        } catch: {
+            // Session not available
+        }
+        
+        return: nil
+    }
+}
+
+log: "✅ Auth helpers loaded"

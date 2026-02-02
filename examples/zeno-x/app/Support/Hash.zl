@@ -1,0 +1,50 @@
+// Hash: Password Hashing Utilities
+// Laravel-like password hashing for Zeno-X Framework
+
+// hash.make: Hash a password using bcrypt
+// Usage:
+//   hash.make('password123') { as: $hashed }
+
+function: 'hashMake' {
+    params: ['password']
+    do: {
+        // Use bcrypt hashing
+        crypto.bcrypt: $password {
+            cost: 10
+            as: $hashed
+        }
+        
+        return: $hashed
+    }
+}
+
+// hash.check: Verify a password against a hash
+// Usage:
+//   hash.check('password123', $hashedPassword) { as: $isValid }
+
+function: 'hashCheck' {
+    params: ['password', 'hashedPassword']
+    do: {
+        crypto.bcrypt.verify: $password {
+            hash: $hashedPassword
+            as: $isValid
+        }
+        
+        return: $isValid
+    }
+}
+
+// hash.needsRehash: Check if hash needs rehashing
+// Usage:
+//   hash.needsRehash($hash) { as: $needsRehash }
+
+function: 'hashNeedsRehash' {
+    params: ['hash']
+    do: {
+        // Check if hash uses old algorithm or cost
+        // For now, always return false (bcrypt is current standard)
+        return: false
+    }
+}
+
+log: "✅ Hash utilities loaded"

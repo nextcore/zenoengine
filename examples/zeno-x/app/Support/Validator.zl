@@ -1,0 +1,288 @@
+// Validator: Request Validation System
+// Laravel-like validation for Zeno-X Framework
+
+// validate.request: Validate request data
+// Usage:
+//   validate.request: {
+//       data: $formData
+//       rules: {
+//           name: 'required|min:3|max:50'
+//           email: 'required|email'
+//           age: 'numeric|min:18'
+//       }
+//       messages: {
+//           'name.required': 'Name is required'
+//           'email.email': 'Invalid email format'
+//       }
+//       as: $validator
+//   }
+//
+//   if: $validator.fails {
+//       then: {
+//           return: response.json({ errors: $validator.errors }, 422)
+//       }
+//   }
+
+// Helper: Parse validation rules
+function: 'parseRules' {
+    params: ['ruleString']
+    do: {
+        // Split by pipe
+        strings.split: $ruleString {
+            delimiter: '|'
+            as: $rules
+        }
+        return: $rules
+    }
+}
+
+// Helper: Validate required field
+function: 'validateRequired' {
+    params: ['value']
+    do: {
+        if: $value == nil {
+            then: { return: false }
+        }
+        
+        if: $value == '' {
+            then: { return: false }
+        }
+        
+        return: true
+    }
+}
+
+// Helper: Validate email format
+function: 'validateEmail' {
+    params: ['value']
+    do: {
+        // Check for @ symbol
+        strings.contains: $value {
+            search: '@'
+            as: $hasAt
+        }
+        
+        if: $hasAt == false {
+            then: { return: false }
+        }
+        
+        // Check for dot after @
+        strings.contains: $value {
+            search: '.'
+            as: $hasDot
+        }
+        
+        return: $hasDot
+    }
+}
+
+// Helper: Validate minimum length/value
+function: 'validateMin' {
+    params: ['value', 'min']
+    do: {
+        // For strings, check length
+        strings.length: $value { as: $length }
+        
+        if: $length < $min {
+            then: { return: false }
+        }
+        
+        return: true
+    }
+}
+
+// Helper: Validate maximum length/value
+function: 'validateMax' {
+    params: ['value', 'max']
+    do: {
+        strings.length: $value { as: $length }
+        
+        if: $length > $max {
+            then: { return: false }
+        }
+        
+        return: true
+    }
+}
+
+// Helper: Validate numeric
+function: 'validateNumeric' {
+    params: ['value']
+    do: {
+        try: {
+            do: {
+                // Try to convert to number
+                math.parse: $value { as: $num }
+                return: true
+            }
+        } catch: {
+            return: false
+        }
+    }
+}
+
+// Main validation function
+function: 'validate' {
+    params: ['data', 'rules', 'messages']
+    do: {
+        var: $errors { val: {} }
+        var: $hasErrors { val: false }
+        
+        // Iterate through rules
+        foreach: $rules {
+            as: $field
+            as: $ruleString
+            do: {
+                // Get field value
+                var: $value { val: $data[$field] }
+                
+                // Parse rules
+                call: 'parseRules' {
+                    args: [$ruleString]
+                    as: $fieldRules
+                }
+                
+                // Validate each rule
+                foreach: $fieldRules {
+                    as: $rule
+                    do: {
+                        var: $isValid { val: true }
+                        var: $errorKey { val: '' }
+                        
+                        // Check rule type
+                        if: $rule == 'required' {
+                            then: {
+                                call: 'validateRequired' {
+                                    args: [$value]
+                                    as: $isValid
+                                }
+                                strings.concat: {
+                                    val: $field
+                                    val: '.required'
+                                    as: $errorKey
+                                }
+                            }
+                        }
+                        
+                        if: $rule == 'email' {
+                            then: {
+                                call: 'validateEmail' {
+                                    args: [$value]
+                                    as: $isValid
+                                }
+                                strings.concat: {
+                                    val: $field
+                                    val: '.email'
+                                    as: $errorKey
+                                }
+                            }
+                        }
+                        
+                        // Handle min:X rule
+                        strings.contains: $rule {
+                            search: 'min:'
+                            as: $isMinRule
+                        }
+                        if: $isMinRule {
+                            then: {
+                                strings.split: $rule {
+                                    delimiter: ':'
+                                    as: $parts
+                                }
+                                var: $minValue { val: $parts[1] }
+                                
+                                call: 'validateMin' {
+                                    args: [$value, $minValue]
+                                    as: $isValid
+                                }
+                                strings.concat: {
+                                    val: $field
+                                    val: '.min'
+                                    as: $errorKey
+                                }
+                            }
+                        }
+                        
+                        // Handle max:X rule
+                        strings.contains: $rule {
+                            search: 'max:'
+                            as: $isMaxRule
+                        }
+                        if: $isMaxRule {
+                            then: {
+                                strings.split: $rule {
+                                    delimiter: ':'
+                                    as: $parts
+                                }
+                                var: $maxValue { val: $parts[1] }
+                                
+                                call: 'validateMax' {
+                                    args: [$value, $maxValue]
+                                    as: $isValid
+                                }
+                                strings.concat: {
+                                    val: $field
+                                    val: '.max'
+                                    as: $errorKey
+                                }
+                            }
+                        }
+                        
+                        if: $rule == 'numeric' {
+                            then: {
+                                call: 'validateNumeric' {
+                                    args: [$value]
+                                    as: $isValid
+                                }
+                                strings.concat: {
+                                    val: $field
+                                    val: '.numeric'
+                                    as: $errorKey
+                                }
+                            }
+                        }
+                        
+                        // If validation failed, add error
+                        if: $isValid == false {
+                            then: {
+                                var: $hasErrors { val: true }
+                                
+                                // Check for custom message
+                                var: $errorMessage { val: $messages[$errorKey] }
+                                
+                                if: $errorMessage == nil {
+                                    then: {
+                                        // Default message
+                                        strings.concat: {
+                                            val: "The "
+                                            val: $field
+                                            val: " field is invalid"
+                                            as: $errorMessage
+                                        }
+                                    }
+                                }
+                                
+                                // Add to errors
+                                var: $errors {
+                                    val: {
+                                        ...$errors
+                                        [$field]: $errorMessage
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Return validator object
+        return: {
+            fails: $hasErrors
+            passes: !$hasErrors
+            errors: $errors
+        }
+    }
+}
+
+log: "✅ Validator module loaded"

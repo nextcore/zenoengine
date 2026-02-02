@@ -2,5 +2,11 @@
 // Zeno-X Entry Point
 // Redirects to routes
 
+// Load Framework
+include: "bootstrap.zl"
+
+// Load Controllers
+include: "app/controllers/AuthController.zl"
+
 // Load Web Routes
 include: "routes/web.zl"

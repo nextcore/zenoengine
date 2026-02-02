@@ -1,0 +1,284 @@
+// Response: Response Helper Functions
+// Laravel-like response helpers for Zeno-X Framework
+
+// response.json: Return JSON response with status code
+// Usage:
+//   return: response.json({ message: 'Success', data: $data }, 200)
+//   return: response.json({ error: 'Not found' }, 404)
+
+function: 'responseJson' {
+    params: ['data', 'statusCode']
+    do: {
+        var: $code { val: $statusCode ?? 200 }
+        
+        http.status: $code
+        http.header: 'Content-Type' { value: 'application/json' }
+        
+        json.encode: $data { as: $jsonString }
+        return: $jsonString
+    }
+}
+
+// response.success: Success response wrapper
+// Usage:
+//   return: response.success('User created', $user)
+//   return: response.success('Operation completed')
+
+function: 'responseSuccess' {
+    params: ['message', 'data']
+    do: {
+        var: $response {
+            val: {
+                success: true
+                message: $message
+            }
+        }
+        
+        if: $data != nil {
+            then: {
+                var: $response {
+                    val: {
+                        ...$response
+                        data: $data
+                    }
+                }
+            }
+        }
+        
+        call: 'responseJson' {
+            args: [$response, 200]
+            as: $result
+        }
+        
+        return: $result
+    }
+}
+
+// response.error: Error response wrapper
+// Usage:
+//   return: response.error('Not found', 404)
+//   return: response.error('Validation failed', 422, $errors)
+
+function: 'responseError' {
+    params: ['message', 'statusCode', 'errors']
+    do: {
+        var: $code { val: $statusCode ?? 400 }
+        
+        var: $response {
+            val: {
+                success: false
+                message: $message
+            }
+        }
+        
+        if: $errors != nil {
+            then: {
+                var: $response {
+                    val: {
+                        ...$response
+                        errors: $errors
+                    }
+                }
+            }
+        }
+        
+        call: 'responseJson' {
+            args: [$response, $code]
+            as: $result
+        }
+        
+        return: $result
+    }
+}
+
+// response.created: 201 Created response
+// Usage:
+//   return: response.created('Resource created', $resource)
+
+function: 'responseCreated' {
+    params: ['message', 'data']
+    do: {
+        var: $msg { val: $message ?? 'Resource created successfully' }
+        
+        call: 'responseSuccess' {
+            args: [$msg, $data]
+            as: $response
+        }
+        
+        http.status: 201
+        return: $response
+    }
+}
+
+// response.noContent: 204 No Content response
+// Usage:
+//   return: response.noContent()
+
+function: 'responseNoContent' {
+    params: []
+    do: {
+        http.status: 204
+        return: ''
+    }
+}
+
+// response.notFound: 404 Not Found response
+// Usage:
+//   return: response.notFound('User not found')
+
+function: 'responseNotFound' {
+    params: ['message']
+    do: {
+        var: $msg { val: $message ?? 'Resource not found' }
+        
+        call: 'responseError' {
+            args: [$msg, 404, nil]
+            as: $result
+        }
+        
+        return: $result
+    }
+}
+
+// response.unauthorized: 401 Unauthorized response
+// Usage:
+//   return: response.unauthorized('Invalid credentials')
+
+function: 'responseUnauthorized' {
+    params: ['message']
+    do: {
+        var: $msg { val: $message ?? 'Unauthorized' }
+        
+        call: 'responseError' {
+            args: [$msg, 401, nil]
+            as: $result
+        }
+        
+        return: $result
+    }
+}
+
+// response.forbidden: 403 Forbidden response
+// Usage:
+//   return: response.forbidden('Access denied')
+
+function: 'responseForbidden' {
+    params: ['message']
+    do: {
+        var: $msg { val: $message ?? 'Forbidden' }
+        
+        call: 'responseError' {
+            args: [$msg, 403, nil]
+            as: $result
+        }
+        
+        return: $result
+    }
+}
+
+// response.validationError: 422 Validation Error response
+// Usage:
+//   return: response.validationError($validator.errors)
+
+function: 'responseValidationError' {
+    params: ['errors']
+    do: {
+        call: 'responseError' {
+            args: ['Validation failed', 422, $errors]
+            as: $result
+        }
+        
+        return: $result
+    }
+}
+
+// response.redirect: Redirect with optional flash message
+// Usage:
+//   return: response.redirect('/dashboard')
+//   return: response.redirect('/login', 'Please login first')
+
+function: 'responseRedirect' {
+    params: ['url', 'flashMessage']
+    do: {
+        if: $flashMessage != nil {
+            then: {
+                // Store flash message in session (if session module exists)
+                try: {
+                    do: {
+                        session.flash: 'message' { value: $flashMessage }
+                    }
+                } catch: {
+                    // Session not available, skip
+                    log: "Flash message not stored (session unavailable)"
+                }
+            }
+        }
+        
+        http.redirect: $url
+    }
+}
+
+// response.back: Redirect back with optional flash message
+// Usage:
+//   return: response.back('Changes saved')
+
+function: 'responseBack' {
+    params: ['flashMessage']
+    do: {
+        // Get referrer URL
+        http.header: 'Referer' { as: $referrer }
+        
+        var: $url { val: $referrer ?? '/' }
+        
+        call: 'responseRedirect' {
+            args: [$url, $flashMessage]
+            as: $result
+        }
+        
+        return: $result
+    }
+}
+
+// response.download: File download response
+// Usage:
+//   return: response.download('/path/to/file.pdf', 'document.pdf')
+
+function: 'responseDownload' {
+    params: ['filePath', 'fileName']
+    do: {
+        // Read file
+        io.file.read: $filePath { as: $content }
+        
+        // Set headers
+        http.header: 'Content-Type' { value: 'application/octet-stream' }
+        
+        strings.concat: {
+            val: 'attachment; filename="'
+            val: $fileName
+            val: '"'
+            as: $disposition
+        }
+        http.header: 'Content-Disposition' { value: $disposition }
+        
+        return: $content
+    }
+}
+
+// response.view: View response with status code
+// Usage:
+//   return: response.view('welcome', { title: 'Home' }, 200)
+
+function: 'responseView' {
+    params: ['viewName', 'data', 'statusCode']
+    do: {
+        var: $code { val: $statusCode ?? 200 }
+        
+        http.status: $code
+        
+        view.blade: $viewName {
+            ...$data
+        }
+    }
+}
+
+log: "✅ Response helpers loaded"

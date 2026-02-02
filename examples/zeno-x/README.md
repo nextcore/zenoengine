@@ -40,16 +40,34 @@ The framework middleware (`securecookie`) requires 32-byte keys in `.env`:
 
  ## 🚀 Cara Menggunakan (Getting Started)
 
-Zeno-X didesain sebagai framework mandiri. Anda bisa membiarkannya di folder `examples` untuk eksperimen, atau menyalin folder `zeno-x` ke lokasi manapun di komputer Anda untuk memulai proyek baru.
+Zeno-X didesain sebagai framework mandiri. Anda bisa membiarkannya di folder `examples` untuk eksperimen, atau membuat proyek baru dengan mudah menggunakan generator.
 
-### 1. Persiapan Environment
-Pastikan binary `zeno.exe` sudah ada di root folder engine atau di dalam PATH sistem Anda.
+### Membuat Proyek Baru
+
+Cara tercepat untuk memulai proyek Zeno-X baru:
+
+```bash
+# Dari root folder ZenoEngine
+zeno run new-project.zl nama-proyek-anda
+
+# Contoh:
+zeno run new-project.zl my-blog
+```
+
+Generator akan otomatis:
+- Membuat folder proyek baru
+- Menyalin template Zeno-X
+- Generate security keys yang aman
+- Membuat README khusus untuk proyek Anda
+
+### 1. Persiapan Environment (Jika Menggunakan Template Langsung)
+Jika Anda ingin menggunakan folder `examples/zeno-x` langsung untuk eksperimen:
+
 ```bash
 # Salin file .env.example menjadi .env
 cp .env.example .env
 
-# Generate Key (Opsional, pastikan 32 karakter untuk blok keamanan)
-# Edit .env dan masukkan GEMINI_API_KEY Anda
+# Edit .env dan masukkan GEMINI_API_KEY Anda (opsional, untuk AI features)
 ```
 
 ### 2. Struktur Proyek

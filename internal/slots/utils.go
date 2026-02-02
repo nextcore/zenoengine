@@ -463,7 +463,7 @@ func RegisterUtilSlots(eng *engine.Engine) {
 
 	// 10. ARRAY LENGTH
 	eng.Register("arrays.length", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		val := parseNodeValue(node, scope)
+		val := resolveValue(node.Value, scope)
 		list, _ := coerce.ToSlice(val)
 		target := fmt.Sprintf("%v_length", node.Value)
 		for _, c := range node.Children {
