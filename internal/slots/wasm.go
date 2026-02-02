@@ -87,6 +87,10 @@ func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DB
 	// Store plugin manager for cleanup
 	globalPluginManager = pm
 
+	if r == nil {
+		return
+	}
+
 	// Register admin API for hot reload
 	r.Post("/api/admin/plugins/reload", func(w http.ResponseWriter, req *http.Request) {
 		// Check for specific plugin name query param

@@ -7,8 +7,8 @@ import (
 )
 
 type AnalysisResult struct {
-	Errors   []string
-	Warnings []string
+	Errors   []engine.Diagnostic
+	Warnings []engine.Diagnostic
 }
 
 type Analyzer struct {
@@ -55,8 +55,17 @@ func (a *Analyzer) walk(node *engine.Node, res *AnalysisResult) {
 			// Load and Analyze
 			includedRoot, err := engine.LoadScript(path)
 			if err != nil {
-				res.Errors = append(res.Errors, fmt.Sprintf("[%s:%d:%d] include error: failed to load %s: %v",
-					node.Filename, node.Line, node.Col, path, err))
+				if diag, ok := err.(engine.Diagnostic); ok {
+					res.Errors = append(res.Errors, diag)
+				} else {
+					res.Errors = append(res.Errors, engine.Diagnostic{
+						Type:     "error",
+						Message:  fmt.Sprintf("include error: failed to load %s: %v", path, err),
+						Filename: node.Filename,
+						Line:     node.Line,
+						Col:      node.Col,
+					})
+				}
 			} else {
 				a.walk(includedRoot, res)
 			}
@@ -98,8 +107,14 @@ func (a *Analyzer) walk(node *engine.Node, res *AnalysisResult) {
 				}
 
 				if !isCallArg {
-					res.Errors = append(res.Errors, fmt.Sprintf("[%s:%d:%d] static error: unknown slot '%s'",
-						node.Filename, node.Line, node.Col, node.Name))
+					res.Errors = append(res.Errors, engine.Diagnostic{
+						Type:     "error",
+						Message:  fmt.Sprintf("static error: unknown slot '%s'", node.Name),
+						Filename: node.Filename,
+						Line:     node.Line,
+						Col:      node.Col,
+						Slot:     node.Name,
+					})
 				}
 			}
 		} else {
@@ -114,8 +129,14 @@ func (a *Analyzer) walk(node *engine.Node, res *AnalysisResult) {
 						dummy := *node
 						dummy.Children = nil
 						if err := a.engine.ValidateValueType(a.engine.ResolveShorthandValue(&dummy, nil), meta.ValueType, node, node.Name); err != nil {
-							res.Errors = append(res.Errors, fmt.Sprintf("[%s:%d:%d] static check failed: %v",
-								node.Filename, node.Line, node.Col, err))
+							res.Errors = append(res.Errors, engine.Diagnostic{
+								Type:     "error",
+								Message:  fmt.Sprintf("static check failed: %v", err),
+								Filename: node.Filename,
+								Line:     node.Line,
+								Col:      node.Col,
+								Slot:     node.Name,
+							})
 						}
 					}
 				}
@@ -148,8 +169,14 @@ func (a *Analyzer) walk(node *engine.Node, res *AnalysisResult) {
 					}
 
 					if !found {
-						res.Errors = append(res.Errors, fmt.Sprintf("[%s:%d:%d] static error: missing required attribute '%s' for slot '%s'",
-							node.Filename, node.Line, node.Col, name, node.Name))
+						res.Errors = append(res.Errors, engine.Diagnostic{
+							Type:     "error",
+							Message:  fmt.Sprintf("static error: missing required attribute '%s' for slot '%s'", name, node.Name),
+							Filename: node.Filename,
+							Line:     node.Line,
+							Col:      node.Col,
+							Slot:     node.Name,
+						})
 					}
 				}
 			}
@@ -164,8 +191,14 @@ func (a *Analyzer) walk(node *engine.Node, res *AnalysisResult) {
 					}
 				}
 				if !found {
-					res.Errors = append(res.Errors, fmt.Sprintf("[%s:%d:%d] static error: missing required block '%s:' for slot '%s'",
-						node.Filename, node.Line, node.Col, blockName, node.Name))
+					res.Errors = append(res.Errors, engine.Diagnostic{
+						Type:     "error",
+						Message:  fmt.Sprintf("static error: missing required block '%s:' for slot '%s'", blockName, node.Name),
+						Filename: node.Filename,
+						Line:     node.Line,
+						Col:      node.Col,
+						Slot:     node.Name,
+					})
 				}
 			}
 
@@ -176,8 +209,14 @@ func (a *Analyzer) walk(node *engine.Node, res *AnalysisResult) {
 						valStr := fmt.Sprintf("%v", child.Value)
 						if valStr != "" && !strings.HasPrefix(valStr, "$") && !strings.Contains(valStr, "??") {
 							if err := a.engine.ValidateValueType(a.engine.ResolveShorthandValue(child, nil), input.Type, child, node.Name); err != nil {
-								res.Errors = append(res.Errors, fmt.Sprintf("[%s:%d:%d] static check failed: %v",
-									child.Filename, child.Line, child.Col, err))
+								res.Errors = append(res.Errors, engine.Diagnostic{
+									Type:     "error",
+									Message:  fmt.Sprintf("static check failed: %v", err),
+									Filename: child.Filename,
+									Line:     child.Line,
+									Col:      child.Col,
+									Slot:     node.Name,
+								})
 							}
 						}
 					}

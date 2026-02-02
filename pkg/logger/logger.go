@@ -18,9 +18,9 @@ func Setup(env string) {
 	}
 
 	if env == "production" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		handler = slog.NewJSONHandler(os.Stderr, opts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		handler = slog.NewTextHandler(os.Stderr, opts)
 	}
 
 	Log = slog.New(handler)
