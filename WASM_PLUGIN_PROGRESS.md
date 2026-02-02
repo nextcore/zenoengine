@@ -116,22 +116,19 @@ log.info: $message  # "Hello, World! 👋"
 
 ## 📋 Next Steps (Optional Enhancements)
 
-### Phase 4: Developer Tools & CLI (Optional)
+### Phase 4: Developer Tools & CLI
 
-**Priority: Medium**  
-**Estimated Time:** 1-2 days
+**Status:** ✅ **COMPLETE**
 
-- [ ] `zeno plugin list` - List installed plugins
-- [ ] `zeno plugin info <name>` - Show plugin details
-- [ ] `zeno plugin validate <path>` - Validate plugin before install
+- ✅ `zeno plugin list` - List installed plugins
+- ✅ `zeno plugin info <name>` - Show plugin details
+- ✅ `zeno plugin validate <path>` - Validate plugin before install
+- ✅ `zeno plugin reload [name]` - Hot-reload plugins via API
 - [ ] Plugin template generator
 - [ ] Plugin testing framework
 
-**Files to Create:**
-- `cmd/zeno/plugin.go` - CLI commands
-- `pkg/wasm/cli.go` - CLI helpers
-- `templates/plugin-go/` - Go plugin template
-- `templates/plugin-rust/` - Rust plugin template
+**Files Created:**
+- `internal/cli/plugin.go` - CLI commands
 
 ### Phase 5: Testing & Examples (Recommended)
 
@@ -379,7 +376,7 @@ go test ./pkg/wasm/...
 | Documentation | ✅ Complete | Comprehensive docs |
 | Example Plugin | ✅ Complete | Hello World working |
 | Testing | ⚠️ Partial | Unit tests only |
-| CLI Tools | ❌ Not Started | Optional enhancement |
+| CLI Tools | ✅ Complete | List, Info, Validate, Reload |
 | Marketplace | ❌ Not Started | Future feature |
 
 ---

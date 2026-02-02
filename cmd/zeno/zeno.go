@@ -177,6 +177,13 @@ func initDB() *dbmanager.DBManager {
 	var primaryDSN string
 	if driver == "sqlite" {
 		primaryDSN = os.Getenv("DB_NAME")
+		// Ensure directory exists for SQLite
+		dir := filepath.Dir(primaryDSN)
+		if dir != "." {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				slog.Error("❌ Failed to create database directory", "dir", dir, "error", err)
+			}
+		}
 	} else if driver == "sqlserver" || driver == "mssql" {
 		// SQL Server DSN format: sqlserver://user:pass@host?database=dbname
 		primaryDSN = fmt.Sprintf("sqlserver://%s:%s@%s?database=%s",
@@ -268,6 +275,13 @@ func initDB() *dbmanager.DBManager {
 
 		if driver == "sqlite" {
 			dsn = name
+			// Ensure directory exists for SQLite
+			dir := filepath.Dir(dsn)
+			if dir != "." {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					slog.Error("❌ Failed to create database directory", "dir", dir, "error", err)
+				}
+			}
 		} else if driver == "sqlserver" || driver == "mssql" {
 			dsn = fmt.Sprintf("sqlserver://%s:%s@%s?database=%s", user, pass, host, name)
 		} else if driver == "postgres" || driver == "postgresql" {

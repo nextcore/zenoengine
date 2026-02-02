@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"zeno/internal/app"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
@@ -23,6 +24,10 @@ func HandleMigrate() {
 	var dsn string
 	if dbDriver == "sqlite" {
 		dsn = os.Getenv("DB_NAME")
+		dir := filepath.Dir(dsn)
+		if dir != "." {
+			os.MkdirAll(dir, 0755)
+		}
 	} else {
 		dsn = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true",
 			os.Getenv("DB_USER"), os.Getenv("DB_PASS"),

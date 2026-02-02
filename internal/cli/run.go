@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"zeno/internal/app"
 	"zeno/internal/slots"
@@ -43,6 +44,10 @@ func HandleRun(args []string) {
 	var dsn string
 	if dbDriver == "sqlite" {
 		dsn = os.Getenv("DB_NAME")
+		dir := filepath.Dir(dsn)
+		if dir != "." {
+			os.MkdirAll(dir, 0755)
+		}
 	} else {
 		dsn = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
 			os.Getenv("DB_USER"), os.Getenv("DB_PASS"),
@@ -105,6 +110,10 @@ func HandleRun(args []string) {
 
 		if driver == "sqlite" {
 			dsn = name
+			dir := filepath.Dir(dsn)
+			if dir != "." {
+				os.MkdirAll(dir, 0755)
+			}
 		} else if driver == "sqlserver" || driver == "mssql" {
 			dsn = fmt.Sprintf("sqlserver://%s:%s@%s?database=%s", user, pass, host, name)
 		} else if driver == "postgres" || driver == "postgresql" {
