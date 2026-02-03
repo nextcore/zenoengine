@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"bytes"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -66,8 +68,16 @@ func WAF(next http.Handler) http.Handler {
 		// 3. Check Body (for form data / small payloads)
 		// Note: We don't read the whole body for large files to avoid performance hit
 		if r.ContentLength > 0 && r.ContentLength < 1024*1024 { // < 1MB
-			// Peek logic or full read could be here, but for now we focus on URL/Headers
-			// for performance reasons. In a real WAF, we might use a TeeReader.
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err == nil {
+				// Check content
+				if detectMaliciousContent(string(bodyBytes)) {
+					blockRequest(w, r, "Malicious Body Content Detected")
+					return
+				}
+				// Restore body
+				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
 		}
 
 		next.ServeHTTP(w, r)
