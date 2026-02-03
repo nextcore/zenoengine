@@ -29,9 +29,14 @@ pub fn main() !void {
         if (std.mem.eql(u8, slot_name, "plugin_init")) {
             try stdout.print("{{\"success\": true, \"data\": {{\"name\": \"php-native\", \"version\": \"1.2.0\", \"description\": \"Zig-compiled PHP Bridge (Production Ready)\"}}}}\n", .{});
         } else if (std.mem.eql(u8, slot_name, "plugin_register_slots")) {
-            try stdout.print("{{\"success\": true, \"data\": {{\"slots\": [ {{\"name\": \"php.run\", \"description\": \"Run high-performance PHP script\"}}, {{\"name\": \"php.laravel\", \"description\": \"Invoke Laravel Artisan command\"}}, {{\"name\": \"php.health\", \"description\": \"Check PHP bridge health\"}} ]}}}}\n", .{});
+            try stdout.print("{{\"success\": true, \"data\": {{\"slots\": [ {{\"name\": \"php.run\", \"description\": \"Run high-performance PHP script\"}}, {{\"name\": \"php.laravel\", \"description\": \"Invoke Laravel Artisan command\"}}, {{\"name\": \"php.health\", \"description\": \"Check PHP bridge health\"}}, {{\"name\": \"php.db_proxy\", \"description\": \"Execute DB query via Zeno pool\"}} ]}}}}\n", .{});
         } else if (std.mem.eql(u8, slot_name, "php.health")) {
              try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"status\": \"healthy\", \"uptime\": \"online\"}}}}\n", .{id});
+        } else if (std.mem.eql(u8, slot_name, "php.db_proxy")) {
+            // --- DEMO: PHP MEMINTA QUERY KE GO POOL ---
+            try stdout.print("{{\"type\": \"host_call\", \"id\": \"db1\", \"function\": \"db_query\", \"parameters\": {{\"connection\": \"default\", \"sql\": \"SELECT 1 as pool_check\"}}}}\n", .{});
+            // Result handling ignored in mock
+            try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"message\": \"Query proxied to Zeno Pool\"}}}}\n", .{id});
         } else if (std.mem.eql(u8, slot_name, "php.run") or std.mem.eql(u8, slot_name, "php.laravel")) {
             // --- KONSEP STATEFUL WORKER (v2.0) ---
             // Bridge ini bertindak sebagai 'Persistent Worker'.

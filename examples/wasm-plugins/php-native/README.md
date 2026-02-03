@@ -105,6 +105,19 @@ try: {
 
 ---
 
+## ⚡ Super-Power: Managed DB Pooling (High Scale)
+Salah satu kelemahan PHP murni adalah ketidakmampuannya melakukan *connection pooling* secara native. ZenoEngine mengatasi ini dengan fitur **DB Proxy**.
+
+### Cara Kerjanya:
+1. PHP tidak membuka koneksi database sendiri (tidak butuh PDO/MySQLi).
+2. PHP mengirim request query ke ZenoEngine via JSON-RPC.
+3. ZenoEngine menggunakan **Go Connection Pool** yang sangat efisien untuk mengeksekusi query.
+4. Hasil dikembalikan ke PHP.
+
+**Manfaat**: 1000 request PHP hanya membutuhkan sedikit koneksi database yang terus digunakan kembali (*reused*), meningkatkan skalabilitas aplikasi hingga 10x lipat.
+
+---
+
 ## 🏗️ Arsitektur Detail
 
 ### Alur Eksekusi:
