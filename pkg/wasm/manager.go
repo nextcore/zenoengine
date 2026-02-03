@@ -129,7 +129,7 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 	var plugin Plugin
 
 	if manifest.Type == "sidecar" {
-		plugin = NewSidecarPlugin(manifest.Binary, pluginPath)
+		plugin = NewSidecarPlugin(manifest.Name, manifest.Binary, pluginPath, pm)
 	} else {
 		// Default: WASM
 		// Load WASM module
