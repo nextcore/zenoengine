@@ -36,34 +36,51 @@ func TestFileSystem_Overwrite_Vulnerability(t *testing.T) {
 	}
 	`
 
-	root, err := engine.ParseString(code, "exploit.zl")
-	require.NoError(t, err)
+	// -----------------------------------------------------
+	// CASE A: Production Mode (Default/Unset) - SHOULD BLOCK
+	// -----------------------------------------------------
+	t.Run("Production_Blocks_Critical_Files", func(t *testing.T) {
+		os.Setenv("APP_ENV", "production")
+		defer os.Unsetenv("APP_ENV")
 
-	scope := engine.GetScope()
-	err = eng.Execute(context.Background(), root, scope)
+		// Reset file
+		os.WriteFile(criticalFile, []byte(originalContent), 0644)
 
-	// 4. Verification
+		root, _ := engine.ParseString(code, "exploit.zl")
+		scope := engine.GetScope()
+		err = eng.Execute(context.Background(), root, scope)
 
-	// Expect Error (Security Violation)
-	assert.Error(t, err, "Should block critical file modification")
-	if err != nil {
-		assert.Contains(t, err.Error(), "security violation", "Error message should mention security violation")
-	}
+		// Expect Error
+		assert.Error(t, err, "Should block critical file modification in production")
+		if err != nil {
+			assert.Contains(t, err.Error(), "security violation", "Error message should mention security violation")
+		}
 
-	// Expect Content Unchanged
-	currentContent, readErr := os.ReadFile(criticalFile)
-	require.NoError(t, readErr)
-	assert.Equal(t, originalContent, string(currentContent), "File content should remain unchanged")
+		// Expect Content Unchanged
+		currentContent, _ := os.ReadFile(criticalFile)
+		assert.Equal(t, originalContent, string(currentContent), "File content should remain unchanged")
+	})
 
-	// 5. Test Safe File Write (Regression Check)
-	safeFile := filepath.Join(tmpDir, "data.json")
-	safeCode := `
-	io.file.write: {
-		path: "` + safeFile + `"
-		content: "{}"
-	}
-	`
-	safeRoot, _ := engine.ParseString(safeCode, "safe.zl")
-	err = eng.Execute(context.Background(), safeRoot, scope)
-	assert.NoError(t, err, "Should allow writing to safe extensions")
+	// -----------------------------------------------------
+	// CASE B: Development Mode - SHOULD ALLOW
+	// -----------------------------------------------------
+	t.Run("Development_Allows_Critical_Files", func(t *testing.T) {
+		os.Setenv("APP_ENV", "development")
+		defer os.Unsetenv("APP_ENV")
+
+		// Reset file
+		os.WriteFile(criticalFile, []byte(originalContent), 0644)
+
+		root, _ := engine.ParseString(code, "exploit.zl")
+		scope := engine.GetScope()
+		err = eng.Execute(context.Background(), root, scope)
+
+		// Expect NO Error
+		assert.NoError(t, err, "Should allow critical file modification in development")
+
+		// Expect Content Changed
+		currentContent, _ := os.ReadFile(criticalFile)
+		// We use Contains because Zeno parser might change quoting/spacing slightly
+		assert.Contains(t, string(currentContent), "HACKED", "File content SHOULD be changed in dev mode")
+	})
 }

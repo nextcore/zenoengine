@@ -11,4 +11,4 @@
 ## 2026-02-03 - Unrestricted File Write (RCE Risk)
 **Vulnerability:** The `io.file.write` slot allowed writing to any file extension, including `.zl` (ZenoLang source) and `.go` files. This could allow an attacker with filesystem write access (e.g., via an upload feature utilizing this slot) to modify the application's source code, leading to Remote Code Execution (RCE).
 **Learning:** General-purpose filesystem APIs in an interpreted language engine must have strict boundaries. Allowing self-modification of source code is almost always a critical vulnerability.
-**Prevention:** Implement a blocklist (or allowlist) of file extensions for filesystem write operations. Explicitly forbid writing to source code extensions (`.zl`, `.go`), configuration files (`.env`), and version control directories (`.git`).
+**Prevention:** Implement a blocklist (or allowlist) of file extensions for filesystem write operations. Explicitly forbid writing to source code extensions (`.zl`, `.go`), configuration files (`.env`), and version control directories (`.git`) in production environments. Exception made for `APP_ENV=development` to support tooling like source generators.
