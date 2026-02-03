@@ -7,8 +7,8 @@ Plugin ini menggunakan arsitektur **Sidecar**. ZenoEngine (Go) bertindak sebagai
 
 ### Mengapa menggunakan Zig?
 - **Performa Tinggi**: Zig menghasilkan binary mesin yang sangat optimal.
-- **C-Interop**: Memudahkan pemanggilan `libphp` secara langsung di masa depan.
-- **Portable**: Memungkinkan kompilasi untuk Windows (.exe) tanpa dependensi runtime tambahan.
+- **C-Interop & Static Linking**: Zig memungkinkan kita melakukan *static link* terhadap `libphp` sehingga interpreter PHP tertanam langsung di dalam satu file binary.
+- **Portable (Zero Installation)**: Pengguna tidak perlu menginstal PHP di sistem. Cukup satu file `php_bridge.exe`, semua fitur PHP dan Laravel langsung aktif.
 
 ---
 
@@ -37,10 +37,10 @@ zig build-exe main.zig -O ReleaseSafe --name php_bridge
 ```
 *Hasil: `php_bridge`*
 
-### 2. Pemasangan Plugin
+### 2. Pemasangan Plugin (True Portability)
 1. Buat direktori `plugins/php-native` di root project ZenoEngine Anda.
 2. Salin file berikut ke direktori tersebut:
-   - `php_bridge` (atau `php_bridge.exe`)
+   - `php_bridge` (atau `php_bridge.exe`) -> *File ini sudah berisi interpreter PHP.*
    - `manifest.yaml`
 3. Pastikan `ZENO_PLUGINS_ENABLED=true` di file `.env` ZenoEngine Anda.
 

@@ -1,11 +1,21 @@
 const std = @import("std");
 
+// --- KONSEP EMBEDDED PHP ---
+// Di implementasi nyata, kita melakukan link ke header libphp
+// const php = @cImport({
+//     @cInclude("sapi/embed/php_embed.h");
+// });
+
 pub fn main() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
     var buffer: [65536]u8 = undefined;
 
     const allocator = std.heap.page_allocator;
+
+    // --- Inisialisasi PHP Internal (Konsep) ---
+    // if (php.php_embed_init(0, null) == php.FAILURE) return error.PhpInitFailed;
+    // defer php.php_embed_shutdown();
 
     while (try stdin.readUntilDelimiterOrEof(&buffer, '\n')) |line| {
         var parsed = try std.json.parseFromSlice(std.json.Value, allocator, line, .{});
