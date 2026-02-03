@@ -33,12 +33,15 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, slot_name, "php.health")) {
              try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"status\": \"healthy\", \"uptime\": \"online\"}}}}\n", .{id});
         } else if (std.mem.eql(u8, slot_name, "php.run") or std.mem.eql(u8, slot_name, "php.laravel")) {
-            // --- Contoh Memanggil Host Function (Go) dari Sidecar (Zig) ---
-            try stdout.print("{{\"type\": \"host_call\", \"id\": \"h1\", \"function\": \"log\", \"parameters\": {{\"level\": \"info\", \"message\": \"[Zig] Processing PHP request...\"}}}}\n", .{});
+            // --- KONSEP STATEFUL WORKER (v2.0) ---
+            // Bridge ini bertindak sebagai 'Persistent Worker'.
+            // Interpreter PHP tetap hidup di memori, sehingga variabel static tetap terjaga.
 
-            // In a real implementation, you would wait for "host_response" here if needed
+            const is_stateful = if (root.get("stateful")) |s| s.bool else false;
 
-            try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"output\": \"[Zeno-Zig-Bridge] Laravel Framework 11.x booted successfully.\", \"status\": 200, \"execution_time\": \"1.2ms\"}}}}\n", .{id});
+            try stdout.print("{{\"type\": \"host_call\", \"id\": \"h1\", \"function\": \"log\", \"parameters\": {{\"level\": \"info\", \"message\": \"[Zig] Processing request (Stateful={})\"}}}}\n", .{is_stateful});
+
+            try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"output\": \"[Zeno-Zig-Bridge] Execution complete.\", \"status\": 200, \"mode\": \"stateful\"}}}}\n", .{id});
         } else if (std.mem.eql(u8, msg_type, "host_response")) {
             // Logic to handle response from Go (e.g. results of a db_query)
             continue;

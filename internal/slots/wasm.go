@@ -384,6 +384,10 @@ func executeWASMSlot(ctx context.Context, pm *wasm.PluginManager, pluginName, sl
 		params["value"] = node.Value
 	}
 
+	// [NEW] DEEP SCOPE INJECTION
+	// Inject current scope into parameters for better PHP context
+	params["_zeno_scope"] = scope.ToMap()
+
 	// Add children as parameters
 	for _, child := range node.Children {
 		var value interface{}
@@ -412,7 +416,17 @@ func executeWASMSlot(ctx context.Context, pm *wasm.PluginManager, pluginName, sl
 		}
 	}
 
-	// Execute plugin slot
+	// [NEW] ASYNC EXECUTION SUPPORT
+	isAsync, _ := params["async"].(bool)
+	if isAsync {
+		go func() {
+			_, _ = pm.ExecuteSlot(ctx, pluginName, slotName, params)
+			// Note: result is ignored for fire-and-forget async
+		}()
+		return nil
+	}
+
+	// Execute plugin slot (Synchronous)
 	response, err := pm.ExecuteSlot(ctx, pluginName, slotName, params)
 	if err != nil {
 		return fmt.Errorf("plugin execution failed: %w", err)

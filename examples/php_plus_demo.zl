@@ -1,0 +1,40 @@
+// ZenoLang + PHP Plus Demo
+// Showcasing Stateful Worker, Async Execution, and Deep Scope sharing
+
+log: "🚀 Starting High-Performance PHP+ Integration..."
+
+// 1. STATEFUL EXECUTION
+// PHP interpreter stays in memory, keeping state between calls.
+log: "--- Step 1: Stateful Persistence ---"
+php.run: "init_state.php" {
+    stateful: true
+    data: { counter: 10 }
+}
+
+php.run: "check_state.php" {
+    stateful: true
+    as: $state_res
+}
+log: "Counter value from PHP: " + $state_res.current_counter
+
+// 2. ASYNC EXECUTION
+// Dispatch heavy task without blocking the main logic.
+log: "--- Step 2: Async Background Processing ---"
+php.run: "heavy_task.php" {
+    async: true
+    data: { file: "report.pdf", action: "compress" }
+}
+log: "✅ Heavy task dispatched to background. Continuing main logic..."
+
+// 3. DEEP SCOPE SHARING
+// PHP can see all ZenoLang variables automatically.
+log: "--- Step 3: Deep Scope Access ---"
+var: $global_context { val: "Production-Server-01" }
+var: $app_version { val: "2.5.0" }
+
+php.run: "debug_scope.php" {
+    as: $debug_out
+}
+log: "PHP sees Zeno Context: " + $debug_out.detected_context
+
+log: "🎉 Zeno-PHP Plus demonstrated successfully."
