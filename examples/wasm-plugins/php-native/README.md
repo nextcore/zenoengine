@@ -12,11 +12,23 @@ Plugin ini menggunakan arsitektur **Sidecar**. ZenoEngine (Go) bertindak sebagai
 
 ---
 
-## 🛠️ Prasyarat
-Sebelum memulai, pastikan Anda memiliki:
-1. **ZenoEngine** terpasang.
-2. **Zig Compiler** (v0.13.0 atau terbaru) terpasang di path sistem.
-3. **PHP CLI** terpasang (untuk menjalankan script PHP).
+## ✅ Kompatibilitas
+
+| Fitur | Status | Keterangan |
+| :--- | :--- | :--- |
+| **Sistem Operasi** | Windows, Linux, macOS | Mendukung arsitektur x86_64 dan ARM64. |
+| **Versi PHP** | 8.1, 8.2, 8.3+ | Kompatibel dengan fitur terbaru seperti Enums dan Fibers. |
+| **Framework** | Laravel 10/11+ | Mendukung penuh Artisan, ORM Eloquent, dan Service Container. |
+| **Extension C** | Terbatas | Extension standar (pdo, mbstring, openssl) tersedia. Extension kustom butuh di-link saat build bridge. |
+
+---
+
+## ⚠️ Limitasi
+
+1. **Stateless Execution**: Secara default, variabel PHP tidak bertahan di memori antar panggilan slot kecuali Anda menggunakan *Persistent State* di level bridge (mirip FrankenPHP worker).
+2. **Blocking Nature**: Slot `php.run` bersifat sinkron. ZenoEngine akan menunggu hasil eksekusi PHP selesai sebelum lanjut ke baris berikutnya (kecuali dijalankan di dalam worker asinkron).
+3. **Resource Isolation**: Meskipun berjalan di proses terpisah, plugin ini tidak memiliki sandbox seketat WASM. Plugin memiliki izin akses penuh ke filesystem sesuai user yang menjalankan ZenoEngine.
+4. **Multithreading**: PHP pada dasarnya *single-threaded*. Pemanggilan paralel dari ZenoLang akan ditangani secara antrean oleh satu proses bridge, atau Anda harus menyalakan beberapa instance bridge.
 
 ---
 
@@ -31,12 +43,6 @@ zig build-exe main.zig -O ReleaseSafe --name php_bridge
 ```
 *Hasil: `php_bridge.exe`*
 
-**Untuk Linux/macOS:**
-```bash
-zig build-exe main.zig -O ReleaseSafe --name php_bridge
-```
-*Hasil: `php_bridge`*
-
 ### 2. Pemasangan Plugin (True Portability)
 1. Buat direktori `plugins/php-native` di root project ZenoEngine Anda.
 2. Salin file berikut ke direktori tersebut:
@@ -46,59 +52,55 @@ zig build-exe main.zig -O ReleaseSafe --name php_bridge
 
 ---
 
-## ⚙️ Konfigurasi (manifest.yaml)
+## 💻 Contoh Penggunaan Lanjutan
 
-File `manifest.yaml` mengatur bagaimana ZenoEngine mengenali dan menjalankan plugin ini.
+### 1. Integrasi Laravel Artisan
+ZenoLang bisa mengotomasi tugas administratif Laravel.
 
-```yaml
-name: php-native
-version: 1.0.0
-type: sidecar          # Menggunakan tipe sidecar (bukan wasm)
-binary: ./php_bridge   # Path ke file binary hasil compile zig
+```javascript
+// Menjalankan migrasi dan clear cache
+php.laravel: "migrate --force" { as: $m }
+php.laravel: "optimize:clear" { as: $c }
 
-sidecar:
-  protocol: json-rpc   # Protokol komunikasi
-  auto_start: true     # Nyalakan otomatis saat ZenoEngine start
-  keep_alive: true     # Restart otomatis jika proses mati
-
-permissions:
-  filesystem: ["*"]    # Izin akses file untuk PHP
-  network: ["*"]       # Izin akses jaringan
+log: "Laravel Migration: " + $m.output
 ```
 
----
-
-## 💻 Penggunaan di ZenoLang
-
-Setelah terpasang, Anda akan mendapatkan akses ke slot `php.*`.
-
-### 1. Menjalankan Perintah Laravel Artisan
-ZenoLang bisa memerintah Laravel untuk melakukan tugas-tugas administratif.
+### 2. Memproses Data Kompleks
+Anda bisa mengirimkan objek/map dari ZenoLang untuk diolah oleh logic PHP.
 
 ```javascript
 // main.zl
-php.laravel: "migrate --force" {
+$form_data: {
+    username: "zeno_user"
+    bio: "I love ZenoEngine and PHP"
+    tags: ["speed", "native", "zig"]
+}
+
+php.run: "analyze_profile.php" {
+    data: $form_data
     as: $result
 }
-log: $result.output
+
+if: $result.status == 200 {
+    then: {
+        log: "Analysis Score: " + $result.score
+    }
+}
 ```
 
-### 2. Menjalankan Script PHP Kustom
-Anda bisa mengirim data dari ZenoLang ke PHP untuk diproses secara intensif.
+### 3. Error Handling
+Menangkap kesalahan yang terjadi di sisi PHP.
 
 ```javascript
-// main.zl
-$data: {
-    user_id: 42
-    action: "generate_report"
+try: {
+    do: {
+        php.run: "faulty_script.php" { as: $out }
+    }
+    catch: {
+        log: "PHP Execution Failed: " + $error
+        // $error akan berisi pesan dari StdErr sidecar
+    }
 }
-
-php.run: "process.php" {
-    params: $data
-    as: $php_output
-}
-
-log: "Status: " + $php_output.status
 ```
 
 ---
@@ -106,18 +108,19 @@ log: "Status: " + $php_output.status
 ## 🏗️ Arsitektur Detail
 
 ### Alur Eksekusi:
-1. **ZenoEngine** membaca `main.zl`.
-2. Saat menemui slot `php.*`, ZenoEngine mengirim pesan JSON ke **Sidecar Bridge** (Zig).
-3. **Bridge** menerima pesan, memanggil interpreter **PHP**, dan menangkap hasilnya.
-4. **Bridge** mengirimkan balik hasil eksekusi dalam format JSON ke ZenoEngine.
-5. ZenoEngine memasukkan hasil tersebut ke dalam variabel (**Scope**) ZenoLang.
+1. **ZenoEngine** mengirim pesan JSON ke **Sidecar Bridge** (Zig).
+2. **Bridge** menerima pesan, memanggil interpreter **PHP** internal, dan menangkap hasilnya.
+3. **Bridge** mengirimkan balik hasil eksekusi dalam format JSON ke ZenoEngine.
 
 ### Protokol JSON-RPC:
 **Request (Zeno -> Zig):**
 ```json
 {
   "slot_name": "php.run",
-  "parameters": { "script": "test.php" }
+  "parameters": {
+    "script": "test.php",
+    "data": { "key": "value" }
+  }
 }
 ```
 
@@ -125,16 +128,9 @@ log: "Status: " + $php_output.status
 ```json
 {
   "success": true,
-  "data": { "output": "Hello from PHP!", "status": 200 }
+  "data": { "output": "...", "status": 200 }
 }
 ```
 
 ---
-
-## ❓ Troubleshooting
-- **Error: Sidecar process not found**: Pastikan path `binary` di `manifest.yaml` sudah benar dan file sudah di-compile.
-- **Permission Denied**: Di Linux/macOS, pastikan file binary memiliki izin eksekusi (`chmod +x php_bridge`).
-- **PHP Not Found**: Pastikan binary PHP dapat diakses oleh proses bridge.
-
----
-*Dokumentasi ini dibuat secara otomatis oleh ZenoEngine Assistant.*
+*Dokumentasi ini diperbarui untuk ZenoEngine v0.5.0.*
