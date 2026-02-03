@@ -13,6 +13,7 @@ Sebagai engine yang bertujuan untuk bisa *front-facing* langsung ke internet, Ze
 | **HTTP -> HTTPS Redirect** | ✅ Otomatis via Auto-HTTPS | ✅ Otomatis |
 | **Security Headers** | ✅ Bawaan (XSS, Clickjacking, HSTS) | ✅ Konfigurasi Manual / Plugin |
 | **Rate Limiting** | ✅ Bawaan (IP-based) | ✅ Plugin (caddy-ratelimit) |
+| **Built-in WAF** | ✅ Bawaan (SQLi, XSS, Path Traversal) | ❌ Perlu Plugin Eksternal |
 | **CSRF Protection** | ✅ Bawaan | ❌ Perlu Layer Aplikasi |
 | **Memory Safety** | ✅ Go (Memory Safe) | ✅ Go (Memory Safe) |
 | **Logging** | ✅ Structured JSON (slog) | ✅ Structured JSON |
@@ -23,7 +24,7 @@ Sebagai engine yang bertujuan untuk bisa *front-facing* langsung ke internet, Ze
 
 1.  **Standar TLS Modern**: Kami menggunakan `crypto/tls` milik Go yang secara rutin diaudit dan diperbarui. ZenoEngine menonaktifkan protokol lama yang rentan (seperti SSLv3, TLS 1.0, 1.1) dan hanya menggunakan *Cipher Suites* yang memiliki *Perfect Forward Secrecy*.
 2.  **Imunitas terhadap Buffer Overflow**: Karena ditulis dalam bahasa Go, ZenoEngine secara native terlindung dari serangan *memory corruption* yang sering menghantui server berbasis C/C++ (seperti Nginx atau Apache lama).
-3.  **Application-Layer Defense**: Berbeda dengan Caddy yang hanya bekerja di layer web server, ZenoEngine memiliki proteksi **CSRF** dan **Rate Limiting** yang terintegrasi langsung dengan lifecycle request. Ini berarti proteksi aktif bahkan sebelum script ZenoLang Anda dijalankan.
+3.  **Application-Layer Defense (WAF)**: Berbeda dengan Caddy yang hanya bekerja di layer web server, ZenoEngine memiliki proteksi **WAF**, **CSRF**, dan **Rate Limiting** yang terintegrasi langsung dengan lifecycle request. Ini berarti setiap request "dicuci" dari pola serangan SQLi dan XSS bahkan sebelum script ZenoLang Anda dijalankan.
 4.  **Structured Diagnostics**: Jika terjadi serangan atau error, ZenoEngine mengeluarkan log dalam format JSON yang bisa langsung dianalisa oleh sistem IDS (Intrusion Detection System) atau AI Agent untuk mitigasi instan.
 
 ---
