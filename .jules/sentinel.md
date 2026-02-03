@@ -7,3 +7,8 @@
 **Vulnerability:** The `http.static` slot in SPA mode (`spa: true`) leaked file existence information outside the root directory. It used `os.Stat` on the resolved path (which could traverse out of root via `..`) *before* checking if the file was inside the root. This created an Oracle: existing external files returned 404 (via `http.FileServer` rejection), while non-existing files returned 200 (serving `index.html`).
 **Learning:** Even if the final file server (`http.FileServer`) is secure against traversal, preliminary checks (like `os.Stat`) performed on unsafe paths can introduce side channels or information disclosure vulnerabilities.
 **Prevention:** Always validate that a resolved path is within the expected root directory (using `filepath.Rel` or prefix checks) *before* performing any filesystem operations (like `os.Stat` or `os.Open`) on it.
+
+## 2026-02-03 - Unrestricted File Write (RCE Risk)
+**Vulnerability:** The `io.file.write` slot allowed writing to any file extension, including `.zl` (ZenoLang source) and `.go` files. This could allow an attacker with filesystem write access (e.g., via an upload feature utilizing this slot) to modify the application's source code, leading to Remote Code Execution (RCE).
+**Learning:** General-purpose filesystem APIs in an interpreted language engine must have strict boundaries. Allowing self-modification of source code is almost always a critical vulnerability.
+**Prevention:** Implement a blocklist (or allowlist) of file extensions for filesystem write operations. Explicitly forbid writing to source code extensions (`.zl`, `.go`), configuration files (`.env`), and version control directories (`.git`).

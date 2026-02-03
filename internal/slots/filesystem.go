@@ -37,6 +37,13 @@ func RegisterFileSystemSlots(eng *engine.Engine) {
 		}
 
 		cleanPath := filepath.Clean(filepath.FromSlash(path))
+
+		// [SECURITY] Block writing to critical source/config files
+		ext := strings.ToLower(filepath.Ext(cleanPath))
+		if ext == ".zl" || ext == ".go" || ext == ".env" || strings.Contains(cleanPath, ".git") {
+			return fmt.Errorf("security violation: modifying '%s' files is restricted", ext)
+		}
+
 		if err := os.MkdirAll(filepath.Dir(cleanPath), 0755); err != nil {
 			return err
 		}
