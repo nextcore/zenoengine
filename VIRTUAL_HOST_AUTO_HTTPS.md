@@ -4,6 +4,15 @@ ZenoEngine v1.4+ kini mendukung pengelolaan multi-domain (Virtual Host) dan peng
 
 ---
 
+## ⚡ Performa Enterprise: Native Host-based Routing (O(1))
+
+Mulai v1.8, ZenoEngine tidak lagi menggunakan pengecekan linear (O(n)) untuk Virtual Host. Kami telah mengimplementasikan **Native Host Map**.
+
+*   **Skalabilitas Tinggi**: Waktu pencarian router tetap instan baik Anda memiliki 1 domain maupun 10.000 domain.
+*   **Zero Overhead**: Dispatcher menggunakan lookup tabel hash yang sangat efisien di layer middleware awal.
+
+---
+
 ## 1. Penggunaan Virtual Host (Domain & Subdomain)
 
 Anda dapat mengelompokkan route berdasarkan domain atau subdomain menggunakan slot `http.host`.
@@ -129,7 +138,7 @@ Untuk menggunakan fitur ini secara maksimal di server:
 | :--- | :--- | :--- | :--- |
 | **Konfigurasi** | Di dalam kode ZenoLang | File Config Terpisah | Caddyfile |
 | **SSL Otomatis** | ✅ Bawaan | ❌ Perlu Certbot | ✅ Bawaan |
-| **Virtual Host** | ✅ Slot-based | ❌ Config-based | ✅ Config-based |
+| **Virtual Host** | ✅ O(1) Scalable | ❌ O(n) Linear | ✅ O(1) Scalable |
 | **Latensi** | ⚡ Sangat Rendah | ⬇️ Medium (Hop+) | ⚡ Rendah |
 
 ---

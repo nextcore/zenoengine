@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -229,29 +228,12 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			return fmt.Errorf("http.host: domain/host is required")
 		}
 
-		// Register domain for ACME (Automatic HTTPS)
-		hostPkg.GlobalManager.RegisterDomain(host)
-
 		// Create host-specific router
 		hostRouter := chi.NewRouter()
 
-		// [AUTOMATIC] Host Dispatcher Middleware
-		// This intercepts requests for this specific host and routes them to the hostRouter
-		rootRouter.Use(func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Check host (handle optional port)
-				reqHost := r.Host
-				if h, _, err := net.SplitHostPort(reqHost); err == nil {
-					reqHost = h
-				}
-
-				if reqHost == host {
-					hostRouter.ServeHTTP(w, r)
-					return
-				}
-				next.ServeHTTP(w, r)
-			})
-		})
+		// [AUTOMATIC] Register to Native Host Map (O(1) lookup)
+		// This is much faster than linear middleware checks
+		hostPkg.GlobalManager.RegisterRouter(host, hostRouter)
 
 		// Logic: Cari 'do'. Jika tidak ada, pakai 'node' itu sendiri (Implicit)
 		var childrenToExec []*engine.Node

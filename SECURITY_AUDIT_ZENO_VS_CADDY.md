@@ -9,6 +9,7 @@ Sebagai engine yang bertujuan untuk bisa *front-facing* langsung ke internet, Ze
 | Fitur Keamanan | ZenoEngine (v1.6+) | Caddy Server |
 | :--- | :--- | :--- |
 | **TLS/SSL Otomatis** | ✅ Let's Encrypt (ACME) | ✅ Let's Encrypt / ZeroSSL |
+| **VHost Performance** | ✅ Native Map (O(1)) | ✅ Native Map (O(1)) |
 | **TLS Hardening** | ✅ Min TLS 1.2, Modern Ciphers | ✅ Min TLS 1.2, Modern Ciphers |
 | **HTTP -> HTTPS Redirect** | ✅ Otomatis via Auto-HTTPS | ✅ Otomatis |
 | **Security Headers** | ✅ Bawaan (XSS, Clickjacking, HSTS) | ✅ Konfigurasi Manual / Plugin |
