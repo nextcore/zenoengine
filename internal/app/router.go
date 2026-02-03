@@ -18,6 +18,7 @@ import (
 	"zeno/pkg/middleware"
 
 	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
 	"github.com/gorilla/csrf"
@@ -29,6 +30,9 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 	r := chi.NewRouter()
 	r.Use(logger.Middleware)
 	r.Use(metrics.Middleware) // PROMETHEUS METRICS (Place early)
+	r.Use(middleware.WAF)     // [WAF] Shield up early
+	r.Use(middleware.HostDispatcher) // [VHOST] O(1) Scalable Host Routing
+	r.Use(chiMiddleware.Compress(5))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.SecurityHeaders) // New Security Middleware
 
