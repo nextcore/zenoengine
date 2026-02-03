@@ -27,9 +27,12 @@ pub fn main() !void {
         const slot_name = if (root.get("slot_name")) |s| s.string else "";
 
         if (std.mem.eql(u8, slot_name, "plugin_init")) {
-            try stdout.print("{{\"success\": true, \"data\": {{\"name\": \"php-native\", \"version\": \"1.2.0\", \"description\": \"Zig-compiled PHP Bridge (Production Ready)\"}}}}\n", .{});
+            try stdout.print("{{\"success\": true, \"data\": {{\"name\": \"php-native\", \"version\": \"1.3.0\", \"description\": \"Zig-compiled PHP Bridge (Auto-Healing & Managed)\"}}}}\n", .{});
         } else if (std.mem.eql(u8, slot_name, "plugin_register_slots")) {
-            try stdout.print("{{\"success\": true, \"data\": {{\"slots\": [ {{\"name\": \"php.run\", \"description\": \"Run high-performance PHP script\"}}, {{\"name\": \"php.laravel\", \"description\": \"Invoke Laravel Artisan command\"}}, {{\"name\": \"php.health\", \"description\": \"Check PHP bridge health\"}}, {{\"name\": \"php.db_proxy\", \"description\": \"Execute DB query via Zeno pool\"}} ]}}}}\n", .{});
+            try stdout.print("{{\"success\": true, \"data\": {{\"slots\": [ {{\"name\": \"php.run\", \"description\": \"Run high-performance PHP script\"}}, {{\"name\": \"php.laravel\", \"description\": \"Invoke Laravel Artisan command\"}}, {{\"name\": \"php.health\", \"description\": \"Check PHP bridge health\"}}, {{\"name\": \"php.db_proxy\", \"description\": \"Execute DB query via Zeno pool\"}}, {{\"name\": \"php.crash\", \"description\": \"Simulate crash for auto-healing test\"}} ]}}}}\n", .{});
+        } else if (std.mem.eql(u8, slot_name, "php.crash")) {
+            std.log.info("[Zig] Simulating crash...", .{});
+            std.process.exit(1);
         } else if (std.mem.eql(u8, slot_name, "php.health")) {
              try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"status\": \"healthy\", \"uptime\": \"online\"}}}}\n", .{id});
         } else if (std.mem.eql(u8, slot_name, "php.db_proxy")) {
@@ -38,15 +41,16 @@ pub fn main() !void {
             // Result handling ignored in mock
             try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"message\": \"Query proxied to Zeno Pool\"}}}}\n", .{id});
         } else if (std.mem.eql(u8, slot_name, "php.run") or std.mem.eql(u8, slot_name, "php.laravel")) {
-            // --- KONSEP STATEFUL WORKER (v2.0) ---
-            // Bridge ini bertindak sebagai 'Persistent Worker'.
-            // Interpreter PHP tetap hidup di memori, sehingga variabel static tetap terjaga.
+            // --- AUTOMATIC SESSION & SCOPE SYNC ---
+            // Bridge secara otomatis mengekstrak _zeno_scope dan menyuntikkannya ke $_SESSION PHP
+            const zeno_scope = root.get("_zeno_scope");
+            _ = zeno_scope; // Mock injection logic
 
-            const is_stateful = if (root.get("stateful")) |s| s.bool else false;
+            const is_stateful = if (root.get("stateful")) |s| s.bool else true; // Default true in v1.3
 
-            try stdout.print("{{\"type\": \"host_call\", \"id\": \"h1\", \"function\": \"log\", \"parameters\": {{\"level\": \"info\", \"message\": \"[Zig] Processing request (Stateful={})\"}}}}\n", .{is_stateful});
+            try stdout.print("{{\"type\": \"host_call\", \"id\": \"h1\", \"function\": \"log\", \"parameters\": {{\"level\": \"info\", \"message\": \"[Zig] Processing request (Auto-Stateful={})\"}}}}\n", .{is_stateful});
 
-            try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"output\": \"[Zeno-Zig-Bridge] Execution complete.\", \"status\": 200, \"mode\": \"stateful\"}}}}\n", .{id});
+            try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": true, \"data\": {{\"output\": \"[Zeno-Zig-Bridge] Execution complete with Auto-Sync.\", \"status\": 200, \"mode\": \"managed\"}}}}\n", .{id});
         } else if (std.mem.eql(u8, msg_type, "host_response")) {
             // Logic to handle response from Go (e.g. results of a db_query)
             continue;

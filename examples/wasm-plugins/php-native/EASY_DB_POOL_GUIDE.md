@@ -1,6 +1,6 @@
 # 🚀 Cara Termudah: DB Pool "Default" di Laravel
 
-Jika implementasi manual dirasa terlalu rumit, ZenoEngine mendukung metode **"Drop-in Bridge"** yang membuat penggunaan Connection Pool menjadi otomatis (Default) tanpa perlu mengubah banyak kode di Laravel.
+ZenoEngine v1.3+ kini menjadikan fitur Enterprise sebagai **Default**. Anda tidak perlu lagi melakukan banyak konfigurasi manual untuk mendapatkan performa maksimal.
 
 ---
 
@@ -71,8 +71,8 @@ ZenoEngine (Go) akan melihat `ZENO_MANAGED_POOL=true` dan secara otomatis menyia
 
 ---
 
-## 💡 Kesimpulan: "Set and Forget"
-Cara termudah adalah menggunakan **Metode Auto Prepend**. Dengan metode ini, developer Laravel di tim Anda tidak perlu tahu bahwa mereka menggunakan ZenoEngine. Mereka cukup menulis kode Eloquent seperti biasa:
+## 💡 Kesimpulan: "Set and Forget" (v1.3 Update)
+Mulai versi 1.3, ZenoEngine secara otomatis mencoba mendeteksi project Laravel dan menyuntikkan bridge. Developer Laravel di tim Anda tidak perlu tahu bahwa mereka menggunakan ZenoEngine. Mereka cukup menulis kode Eloquent seperti biasa:
 
 ```php
 // Ini akan otomatis menggunakan Go Connection Pool via Zeno

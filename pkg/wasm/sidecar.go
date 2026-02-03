@@ -28,6 +28,8 @@ type SidecarPlugin struct {
 	pluginName   string
 	pendingCalls map[string]chan *PluginResponse
 	callID       uint64
+	restarts     int
+	lastRestart  time.Time
 }
 
 // NewSidecarPlugin creates a new sidecar plugin wrapper
@@ -57,6 +59,11 @@ func (p *SidecarPlugin) start(ctx context.Context) error {
 
 	p.cmd = exec.CommandContext(procCtx, fullPath)
 	p.cmd.Dir = p.workDir
+
+	// [AUTOMATIC] Sync Environment Variables
+	p.cmd.Env = os.Environ()
+	p.cmd.Env = append(p.cmd.Env, "ZENO_PLUGIN_NAME="+p.pluginName)
+	p.cmd.Env = append(p.cmd.Env, "ZENO_SIDECAR=true")
 
 	var err error
 	p.stdin, err = p.cmd.StdinPipe()
@@ -102,12 +109,22 @@ func (p *SidecarPlugin) start(ctx context.Context) error {
 		p.mu.Unlock()
 		if err != nil {
 			slog.Error("❌ Sidecar process exited with error", "error", err, "binary", p.binaryPath)
+			// [AUTOMATIC] Auto-Healing: Restart if unexpected crash
+			if p.restarts < 5 { // Basic threshold to avoid infinite loop
+				p.restarts++
+				slog.Info("🔄 Auto-Healing: Restarting sidecar...", "attempt", p.restarts, "plugin", p.pluginName)
+				go func() {
+					time.Sleep(time.Duration(p.restarts) * time.Second)
+					p.start(context.Background())
+				}()
+			}
 		} else {
 			slog.Info("ℹ️ Sidecar process exited gracefully", "binary", p.binaryPath)
 		}
 	}()
 
 	p.initialized = true
+	p.lastRestart = time.Now()
 	slog.Info("🚀 Sidecar process started", "path", fullPath)
 	return nil
 }
