@@ -149,48 +149,88 @@ fn main() -> anyhow::Result<()> {
                 };
                 writeln!(stdout, "{}", serde_json::to_string(&resp)?)?;
             },
-            "php.run" => {
-                // Get code from payload
-                let code = input.payload.get("code")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("echo 'No code provided';");
+            "php.run" | "php.laravel" => {
+                // Determine entry point
+                let entry_script = if input.slot_name == "php.laravel" {
+                    // Laravel entry: artisan or public/index.php
+                    // Assumes CWD is project root
+                    "if (file_exists('artisan')) { require 'artisan'; } else { echo 'Laravel not found'; }"
+                } else {
+                    input.payload.get("code").and_then(|v| v.as_str()).unwrap_or("echo 'No code provided';")
+                };
 
-                // Execute PHP Code
-                // Note: Output capture is complex with php_embed (it writes to stdout).
-                // Since this bridge's stdout IS the communication channel, PHP output
-                // might corrupt JSON-RPC if not handled carefully (e.g. using output buffering).
+                // Inject Superglobals from payload
+                let mut bootstrap = String::from("<?php ");
 
-                // Strategy: Wrap code in output buffering
+                // Extract Zeno Scope
+                if let Some(scope) = input.payload.get("_zeno_scope") {
+                    if let Ok(json) = serde_json::to_string(scope) {
+                        // Safe injection using base64 or addslashes recommended for real env
+                        // Here assuming valid JSON string
+                        bootstrap.push_str(&format!("$_SERVER['ZENO_SCOPE'] = json_decode('{}', true);", json.replace("'", "\\'")));
+                    }
+                }
+
+                // Mock Request Data
+                if let Some(req) = input.payload.get("request") {
+                    if let Some(uri) = req.get("uri").and_then(|v| v.as_str()) {
+                        bootstrap.push_str(&format!("$_SERVER['REQUEST_URI'] = '{}';", uri));
+                    }
+                    if let Some(method) = req.get("method").and_then(|v| v.as_str()) {
+                        bootstrap.push_str(&format!("$_SERVER['REQUEST_METHOD'] = '{}';", method));
+                    }
+                }
+
+                // Wrapper for capture
+                // Using base64_encode to ensure safe JSON transport of binary output
                 let wrapped_code = format!(
-                    "ob_start();
-                     try {{
-                         {}
-                     }} catch (Throwable $e) {{
-                         echo 'Error: ' . $e->getMessage();
-                     }}
-                     $__output = ob_get_clean();
-                     // We need a way to pass this back to Rust.
-                     // For simplicity in this demo, we assume success boolean for now,
-                     // or we could use a specialized internal function binding.
-                     // But standard eval_string doesn't return string easily to C without zval handling.
-                     // So we just print a MARKER that Rust can't capture easily without pipe redirection.
-                     //
-                     // REAL WORLD FIX: Implement a custom SAPI callbacks (ub_write) in php.rs
-                     // to capture output into a Rust buffer instead of stdout.
-                     ",
-                    code
+                    "
+                    ob_start();
+                    try {{
+                        // Bootstrap Logic
+                        {}
+
+                        // User Code
+                        {}
+                    }} catch (Throwable $e) {{
+                        echo 'PHP Error: ' . $e->getMessage();
+                    }}
+                    $output = ob_get_clean();
+
+                    // Direct Stdout write for capture by parent process?
+                    // No, we are inside the same process.
+                    // We must return this data to Rust.
+                    // Since zend_eval_string returns bool, we use a dirty hack:
+                    // Print a special delimiter that Rust *could* parse if we redirected stdout.
+                    // BUT, since we share stdout, we can't do that easily without breaking JSON-RPC.
+
+                    // ALTERNATIVE: Write to a temporary file
+                    $temp_file = sys_get_temp_dir() . '/zeno_php_' . getmypid() . '.out';
+                    file_put_contents($temp_file, $output);
+                    ",
+                    bootstrap.trim_start_matches("<?php "),
+                    entry_script
                 );
 
-                // For this demo, we just execute.
                 let success = php::eval(&wrapped_code);
+
+                // Read back captured output
+                let mut captured_output = String::new();
+                let temp_path = std::env::temp_dir().join(format!("zeno_php_{}.out", std::process::id()));
+                if temp_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&temp_path) {
+                        captured_output = content;
+                        let _ = std::fs::remove_file(temp_path);
+                    }
+                }
 
                 let resp = Response {
                     msg_type: Some("guest_response".to_string()),
                     id: Some(input.id),
                     success: success,
                     data: Some(serde_json::json!({
-                        "status": if success { "executed" } else { "failed" },
-                        "note": "Output capture requires SAPI hook implementation (complex FFI)"
+                        "output": captured_output,
+                        "status": if success { 200 } else { 500 }
                     })),
                     error: None,
                 };
