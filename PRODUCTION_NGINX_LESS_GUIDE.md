@@ -23,7 +23,7 @@ ZenoEngine sudah dilengkapi dengan "Armor" produksi:
 
 ## 🔒 Konfigurasi HTTPS (TLS)
 
-ZenoEngine mendukung SSL/TLS secara native. Anda hanya perlu menyediakan file sertifikat:
+ZenoEngine mendukung SSL/TLS secara native dengan **Harden TLS Config** (Min TLS 1.2, Modern Ciphers) secara default. Anda hanya perlu menyediakan file sertifikat:
 
 ### 1. Siapkan Sertifikat (Let's Encrypt / Cloudflare)
 Pastikan Anda memiliki file `.crt` (atau `.pem`) dan `.key`.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -493,6 +494,16 @@ func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWor
 				go http.ListenAndServe(":80", m.HTTPHandler(nil))
 
 				srv.TLSConfig = m.TLSConfig()
+				srv.TLSConfig.MinVersion = tls.VersionTLS12
+				srv.TLSConfig.CurvePreferences = []tls.CurveID{tls.CurveP256, tls.X25519}
+				srv.TLSConfig.CipherSuites = []uint16{
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				}
 				slog.Info("🚀 Engine Ready (AUTO-HTTPS via Let's Encrypt)", "domains", domains, "port", port)
 
 				// Use ListenAndServeTLS for autocert (it handles its own certificates)
@@ -513,6 +524,21 @@ func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWor
 
 		if certFile != "" && keyFile != "" {
 			slog.Info("🚀 Engine Ready (HTTPS-Manual)", "port", port, "cert", certFile)
+
+			// Apply hardening to manual TLS as well
+			srv.TLSConfig = &tls.Config{
+				MinVersion:       tls.VersionTLS12,
+				CurvePreferences: []tls.CurveID{tls.CurveP256, tls.X25519},
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				},
+			}
+
 			if err := srv.ServeTLS(ln, certFile, keyFile); err != nil && err != http.ErrServerClosed {
 				slog.Error("❌ Manual HTTPS Listen failed", "error", err)
 				os.Exit(1)

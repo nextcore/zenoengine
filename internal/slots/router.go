@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"zeno/pkg/apidoc"
@@ -585,7 +586,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				path = coerce.ToString(parseNodeValue(c, scope))
 			}
 			if c.Name == "spa" {
-				isSPA = coerce.ToBool(parseNodeValue(c, scope))
+				isSPA, _ = coerce.ToBool(parseNodeValue(c, scope))
 			}
 		}
 
