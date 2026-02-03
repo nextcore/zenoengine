@@ -60,7 +60,32 @@ APP_PORT=:443
 
 ---
 
-## 3. Persiapan Deployment di Production
+## 3. Reverse Proxy (Caddy-Style)
+
+ZenoEngine v1.5+ kini mendukung fitur Reverse Proxy yang memungkinkan Anda meneruskan request ke layanan lain (seperti Node.js, Python, atau API eksternal).
+
+### Contoh Penggunaan:
+
+```javascript
+// Meneruskan semua trafik di /api ke backend Node.js
+http.proxy: "http://localhost:8080" {
+    path: "/api"
+}
+
+// Meneruskan subdomain tertentu ke layanan lain
+http.host: "dashboard.zeno.dev" {
+    http.proxy: "http://localhost:3000"
+}
+```
+
+### Keunggulan Proxy ZenoEngine:
+1.  **Automatic Header Handling**: Secara otomatis mengatur header `X-Forwarded-For` dan sinkronisasi `Host`.
+2.  **Zero-Configuration**: Langsung aktif sebagai slot ZenoLang.
+3.  **Unified Middleware**: Anda bisa memasang middleware (seperti `auth`) sebelum request diteruskan ke backend proxy.
+
+---
+
+## 4. Persiapan Deployment di Production
 
 Untuk menggunakan fitur ini secara maksimal di server:
 
