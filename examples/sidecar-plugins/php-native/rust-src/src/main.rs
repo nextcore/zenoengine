@@ -1,14 +1,8 @@
+mod php;
+
 use std::io::{self, BufRead, Write};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-// --- MOCK PHP EMBEDDING ---
-// In a real implementation, you would use 'unsafe' FFI calls to libphp here.
-// Example:
-// extern "C" {
-//     fn php_embed_init(argc: i32, argv: *mut *mut i8) -> i32;
-//     fn php_embed_shutdown();
-// }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RpcMessage {
@@ -48,13 +42,21 @@ struct HostCall {
 }
 
 fn main() -> anyhow::Result<()> {
+    // --- PHP Init ---
+    if !php::init() {
+        eprintln!("[Rust] Failed to initialize PHP Embed SAPI");
+        std::process::exit(1);
+    }
+
+    // Ensure PHP shutdown on exit
+    // Note: This simple defer might not run on process::exit, but works for normal loop exit.
+    // Ideally use a wrapper struct with Drop impl or similar.
+    defer_shutdown();
+
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut handle = stdin.lock();
     let mut buffer = String::new();
-
-    // --- PHP Init (Mock) ---
-    // unsafe { php_embed_init(0, std::ptr::null_mut()); }
 
     while handle.read_line(&mut buffer)? > 0 {
         if buffer.trim().is_empty() {
@@ -62,7 +64,15 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        let input: RpcMessage = serde_json::from_str(&buffer)?;
+        // Catch parse errors to keep the loop alive
+        let input: RpcMessage = match serde_json::from_str(&buffer) {
+            Ok(msg) => msg,
+            Err(e) => {
+                eprintln!("[Rust] JSON Parse Error: {}", e);
+                buffer.clear();
+                continue;
+            }
+        };
 
         match input.slot_name.as_str() {
             "plugin_init" => {
@@ -73,7 +83,7 @@ fn main() -> anyhow::Result<()> {
                     data: Some(serde_json::json!({
                         "name": "php-native",
                         "version": "1.3.0",
-                        "description": "Rust-compiled PHP Bridge (Auto-Healing & Managed)"
+                        "description": "Rust-compiled PHP Bridge (Real Embed)"
                     })),
                     error: None,
                 };
@@ -86,11 +96,11 @@ fn main() -> anyhow::Result<()> {
                     success: true,
                     data: Some(serde_json::json!({
                         "slots": [
-                            {"name": "php.run", "description": "Run high-performance PHP script"},
-                            {"name": "php.laravel", "description": "Invoke Laravel Artisan command"},
-                            {"name": "php.health", "description": "Check PHP bridge health"},
+                            {"name": "php.run", "description": "Execute PHP code directly"},
+                            {"name": "php.laravel", "description": "Invoke Laravel Artisan"},
+                            {"name": "php.health", "description": "Check bridge health"},
                             {"name": "php.db_proxy", "description": "Execute DB query via Zeno pool"},
-                            {"name": "php.crash", "description": "Simulate crash for auto-healing test"}
+                            {"name": "php.crash", "description": "Simulate crash"}
                         ]
                     })),
                     error: None,
@@ -109,14 +119,14 @@ fn main() -> anyhow::Result<()> {
                     data: Some(serde_json::json!({
                         "status": "healthy",
                         "uptime": "online",
-                        "backend": "rust"
+                        "backend": "rust-embed"
                     })),
                     error: None,
                 };
                 writeln!(stdout, "{}", serde_json::to_string(&resp)?)?;
             },
             "php.db_proxy" => {
-                // Host Call Request
+                // ... same mock implementation ...
                 let host_call = HostCall {
                     msg_type: "host_call".to_string(),
                     id: "db1".to_string(),
@@ -128,7 +138,6 @@ fn main() -> anyhow::Result<()> {
                 };
                 writeln!(stdout, "{}", serde_json::to_string(&host_call)?)?;
 
-                // Response to Zeno
                 let resp = Response {
                     msg_type: Some("guest_response".to_string()),
                     id: Some(input.id),
@@ -140,39 +149,55 @@ fn main() -> anyhow::Result<()> {
                 };
                 writeln!(stdout, "{}", serde_json::to_string(&resp)?)?;
             },
-            "php.run" | "php.laravel" => {
-                // Extract zeno scope if needed
-                let _zeno_scope = input.payload.get("_zeno_scope");
+            "php.run" => {
+                // Get code from payload
+                let code = input.payload.get("code")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("echo 'No code provided';");
 
-                // Logging Host Call
-                let host_call = HostCall {
-                    msg_type: "host_call".to_string(),
-                    id: "h1".to_string(),
-                    function: "log".to_string(),
-                    parameters: serde_json::json!({
-                        "level": "info",
-                        "message": "[Rust] Processing request (Auto-Stateful=true)"
-                    }),
-                };
-                writeln!(stdout, "{}", serde_json::to_string(&host_call)?)?;
+                // Execute PHP Code
+                // Note: Output capture is complex with php_embed (it writes to stdout).
+                // Since this bridge's stdout IS the communication channel, PHP output
+                // might corrupt JSON-RPC if not handled carefully (e.g. using output buffering).
+
+                // Strategy: Wrap code in output buffering
+                let wrapped_code = format!(
+                    "ob_start();
+                     try {{
+                         {}
+                     }} catch (Throwable $e) {{
+                         echo 'Error: ' . $e->getMessage();
+                     }}
+                     $__output = ob_get_clean();
+                     // We need a way to pass this back to Rust.
+                     // For simplicity in this demo, we assume success boolean for now,
+                     // or we could use a specialized internal function binding.
+                     // But standard eval_string doesn't return string easily to C without zval handling.
+                     // So we just print a MARKER that Rust can't capture easily without pipe redirection.
+                     //
+                     // REAL WORLD FIX: Implement a custom SAPI callbacks (ub_write) in php.rs
+                     // to capture output into a Rust buffer instead of stdout.
+                     ",
+                    code
+                );
+
+                // For this demo, we just execute.
+                let success = php::eval(&wrapped_code);
 
                 let resp = Response {
                     msg_type: Some("guest_response".to_string()),
                     id: Some(input.id),
-                    success: true,
+                    success: success,
                     data: Some(serde_json::json!({
-                        "output": "[Zeno-Rust-Bridge] Execution complete with Auto-Sync.",
-                        "status": 200,
-                        "mode": "managed"
+                        "status": if success { "executed" } else { "failed" },
+                        "note": "Output capture requires SAPI hook implementation (complex FFI)"
                     })),
                     error: None,
                 };
                 writeln!(stdout, "{}", serde_json::to_string(&resp)?)?;
             },
             _ => {
-                if input.msg_type == "host_response" {
-                    // Handle host response
-                } else {
+                if input.msg_type != "host_response" {
                     let resp = Response {
                         msg_type: Some("guest_response".to_string()),
                         id: Some(input.id),
@@ -189,4 +214,15 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+struct PhpGuard;
+impl Drop for PhpGuard {
+    fn drop(&mut self) {
+        php::shutdown();
+    }
+}
+
+fn defer_shutdown() -> PhpGuard {
+    PhpGuard
 }
