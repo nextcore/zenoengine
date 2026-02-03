@@ -170,12 +170,23 @@ func (p *SidecarPlugin) Cleanup(ctx context.Context) error {
 		p.stdin.Close()
 	}
 
-	p.cmd.Process.Signal(os.Interrupt)
-	time.AfterFunc(1*time.Second, func() {
-		if p.cmd != nil && p.cmd.Process != nil {
+	// Attempt graceful shutdown with SIGINT (Windows supports this via OS signal)
+	if p.cmd != nil && p.cmd.Process != nil {
+		slog.Info("⏳ Terminating sidecar process...", "binary", p.binaryPath)
+		p.cmd.Process.Signal(os.Interrupt)
+
+		// Force kill after 2 seconds if still alive
+		done := make(chan error, 1)
+		go func() { done <- p.cmd.Wait() }()
+
+		select {
+		case <-done:
+			slog.Info("✅ Sidecar process terminated gracefully", "binary", p.binaryPath)
+		case <-time.After(2 * time.Second):
+			slog.Warn("⚠️ Sidecar timed out on graceful shutdown, killing...", "binary", p.binaryPath)
 			p.cmd.Process.Kill()
 		}
-	})
+	}
 
 	p.initialized = false
 	return nil

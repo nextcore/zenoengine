@@ -146,4 +146,28 @@ Salah satu kelemahan PHP murni adalah ketidakmampuannya melakukan *connection po
 ```
 
 ---
-*Dokumentasi ini diperbarui untuk ZenoEngine v0.5.0.*
+
+## 📦 Deployment & Bundling (Production Ready)
+
+Untuk mendistribusikan aplikasi ZenoEngine + Laravel dalam satu paket:
+
+1.  **Struktur Folder**:
+    ```
+    /my-app
+    ├── zeno.exe (atau binary zeno)
+    ├── .env
+    ├── /plugins
+    │   └── /php-native
+    │       ├── php_bridge.exe
+    │       ├── manifest.yaml
+    │       └── /php (Jika ingin bundling PHP CLI murni)
+    ├── /laravel-project (Folder Laravel Anda)
+    └── src/main.zl
+    ```
+2.  **Langkah Akhir**:
+    - Kompilasi `main.zig` dengan flag `-O ReleaseSmall` untuk ukuran binary terkecil.
+    - Set `DB_DRIVER=sqlite` di `.env` agar database Laravel ikut terbawa dalam satu file `.db`.
+    - Gunakan `php.laravel: "config:cache"` saat pertama kali deployment untuk performa maksimal.
+
+---
+*Dokumentasi ini diperbarui untuk ZenoEngine v0.5.0 (Production Final).*

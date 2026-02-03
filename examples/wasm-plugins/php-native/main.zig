@@ -51,7 +51,8 @@ pub fn main() !void {
             // Logic to handle response from Go (e.g. results of a db_query)
             continue;
         } else {
-            try stdout.print("{{\"success\": false, \"error\": \"Unknown message or slot\"}}\n", .{});
+            // --- Error Reporting Terstruktur (v1.3) ---
+            try stdout.print("{{\"type\": \"guest_response\", \"id\": \"{s}\", \"success\": false, \"error\": \"Unknown slot: {s}\"}}\n", .{id, slot_name});
         }
     }
 }
