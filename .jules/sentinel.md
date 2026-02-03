@@ -2,3 +2,8 @@
 **Vulnerability:** The WAF middleware had an explicit check for request body size but the implementation block for inspecting the body content was empty/commented out, allowing malicious payloads in POST requests to bypass the WAF.
 **Learning:** Placeholder code or "TODO" comments in security-critical paths can create a false sense of security if not tracked or implemented immediately.
 **Prevention:** Ensure all security features documented or scaffolded are fully implemented or explicitly marked as "DISABLED/UNIMPLEMENTED" in a way that is visible during security audits. Use linter rules to flag empty blocks in security middleware.
+
+## 2026-02-03 - Path Traversal Oracle in SPA Static Hosting
+**Vulnerability:** The `http.static` slot in SPA mode (`spa: true`) leaked file existence information outside the root directory. It used `os.Stat` on the resolved path (which could traverse out of root via `..`) *before* checking if the file was inside the root. This created an Oracle: existing external files returned 404 (via `http.FileServer` rejection), while non-existing files returned 200 (serving `index.html`).
+**Learning:** Even if the final file server (`http.FileServer`) is secure against traversal, preliminary checks (like `os.Stat`) performed on unsafe paths can introduce side channels or information disclosure vulnerabilities.
+**Prevention:** Always validate that a resolved path is within the expected root directory (using `filepath.Rel` or prefix checks) *before* performing any filesystem operations (like `os.Stat` or `os.Open`) on it.

@@ -587,7 +587,25 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		getCurrentRouter(ctx).Handle(routePath+"*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// 1. Clean path and check if file exists
 			cleanPath := filepath.Join(root, strings.TrimPrefix(r.URL.Path, path))
-			_, err := os.Stat(cleanPath)
+
+			// [SECURITY] Prevent Path Traversal
+			// Ensure cleanPath is effectively inside root
+			// We use filepath.Rel to check if the path attempts to go above root
+			rel, err := filepath.Rel(root, cleanPath)
+			if err != nil || strings.HasPrefix(rel, "..") {
+				// Traversal attempt detected
+				if isSPA {
+					// For SPA, treat traversal as "page not found" -> serve index
+					// This prevents Oracle attacks (distinguishing files via 404 vs 200)
+					http.ServeFile(w, r, filepath.Join(root, "index.html"))
+					return
+				}
+				// For non-SPA, return 404
+				http.NotFound(w, r)
+				return
+			}
+
+			_, err = os.Stat(cleanPath)
 
 			// 2. If SPA and file not found, serve index.html
 			if isSPA && os.IsNotExist(err) {
