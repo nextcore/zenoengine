@@ -20,8 +20,11 @@ import (
 	"zeno/internal/slots"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
+	hostPkg "zeno/pkg/host"
 	"zeno/pkg/logger"
 	"zeno/pkg/worker"
+
+	"golang.org/x/crypto/acme/autocert"
 
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
@@ -466,18 +469,56 @@ func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWor
 	// Listener is already opened in main()
 
 	go func() {
+		// 1. Check for Automatic HTTPS (Caddy-style)
+		autoHTTPS := os.Getenv("AUTO_HTTPS") == "true"
+		if autoHTTPS {
+			domains := hostPkg.GlobalManager.GetDomains()
+			if d := os.Getenv("APP_DOMAIN"); d != "" {
+				// Add APP_DOMAIN if not already registered
+				hostPkg.GlobalManager.RegisterDomain(d)
+				domains = hostPkg.GlobalManager.GetDomains()
+			}
+
+			if len(domains) > 0 {
+				certDir := "data/certs"
+				os.MkdirAll(certDir, 0700)
+
+				m := &autocert.Manager{
+					Prompt:     autocert.AcceptTOS,
+					HostPolicy: autocert.HostWhitelist(domains...),
+					Cache:      autocert.DirCache(certDir),
+				}
+
+				// ACME requires port 80 for challenges and redirection
+				go http.ListenAndServe(":80", m.HTTPHandler(nil))
+
+				srv.TLSConfig = m.TLSConfig()
+				slog.Info("🚀 Engine Ready (AUTO-HTTPS via Let's Encrypt)", "domains", domains, "port", port)
+
+				// Use ListenAndServeTLS for autocert (it handles its own certificates)
+				// We might need to handle the port here. Autocert usually expects 443.
+				if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+					slog.Error("❌ Auto-HTTPS Listen failed", "error", err)
+					os.Exit(1)
+				}
+				return
+			} else {
+				slog.Warn("⚠️  AUTO_HTTPS=true but no domains registered via http.host or APP_DOMAIN. Falling back to HTTP.")
+			}
+		}
+
+		// 2. Check for Manual HTTPS
 		certFile := os.Getenv("SSL_CERT_PATH")
 		keyFile := os.Getenv("SSL_KEY_PATH")
 
 		if certFile != "" && keyFile != "" {
-			slog.Info("🚀 Engine Ready (HTTPS)", "port", port, "cert", certFile)
-			// When using TLS, srv.Serve will be used differently or we just use ListenAndServeTLS
-			// But we already have a listener 'ln'. For TLS over existing listener:
+			slog.Info("🚀 Engine Ready (HTTPS-Manual)", "port", port, "cert", certFile)
 			if err := srv.ServeTLS(ln, certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				slog.Error("❌ HTTPS Listen failed", "error", err)
+				slog.Error("❌ Manual HTTPS Listen failed", "error", err)
 				os.Exit(1)
 			}
 		} else {
+			// 3. Fallback to HTTP
 			slog.Info("🚀 Engine Ready (HTTP)", "port", port)
 			if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 				slog.Error("❌ HTTP Listen failed", "error", err)

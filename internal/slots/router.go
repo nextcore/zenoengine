@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 	"zeno/pkg/apidoc"
 	"zeno/pkg/engine"
+	hostPkg "zeno/pkg/host"
 	"zeno/pkg/middleware"
 	"zeno/pkg/utils/coerce"
 
@@ -214,6 +216,75 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		}
 		return base + sub
 	}
+
+	// ==========================================
+	// 0. HOST / DOMAIN GROUP
+	// ==========================================
+	eng.Register("http.host", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		host := coerce.ToString(resolveValue(node.Value, scope))
+		if host == "" {
+			return fmt.Errorf("http.host: domain/host is required")
+		}
+
+		// Register domain for ACME (Automatic HTTPS)
+		hostPkg.GlobalManager.RegisterDomain(host)
+
+		// Create host-specific router
+		hostRouter := chi.NewRouter()
+
+		// [AUTOMATIC] Host Dispatcher Middleware
+		// This intercepts requests for this specific host and routes them to the hostRouter
+		rootRouter.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Check host (handle optional port)
+				reqHost := r.Host
+				if h, _, err := net.SplitHostPort(reqHost); err == nil {
+					reqHost = h
+				}
+
+				if reqHost == host {
+					hostRouter.ServeHTTP(w, r)
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		})
+
+		// Logic: Cari 'do'. Jika tidak ada, pakai 'node' itu sendiri (Implicit)
+		var childrenToExec []*engine.Node
+		var doNode *engine.Node
+
+		for _, c := range node.Children {
+			if c.Name == "do" {
+				doNode = c
+				break
+			}
+		}
+
+		if doNode != nil {
+			childrenToExec = doNode.Children
+		} else {
+			for _, c := range node.Children {
+				if c.Name != "summary" && c.Name != "desc" {
+					childrenToExec = append(childrenToExec, c)
+				}
+			}
+		}
+
+		// Create new context with host-router
+		hostCtx := context.WithValue(ctx, routerKey{}, hostRouter)
+
+		// Execute children in host context
+		for _, child := range childrenToExec {
+			eng.Execute(hostCtx, child, scope)
+		}
+
+		fmt.Printf("   🌐 [VHOST] Registered domain: %s\n", host)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Mengelompokkan route berdasarkan Domain atau Subdomain tertentu.",
+		Example:     "http.host: \"api.zeno.dev\"\n  do:\n    http.get: \"/v1/users\" { ... }",
+	})
 
 	// ==========================================
 	// 1. ROUTE GROUP (Mendukung Implicit Do)
