@@ -67,7 +67,39 @@ The `PluginManager` will be extended to handle `type: sidecar`:
     ```
 -   **Lean Core**: Native binaries are kept in the plugin folder, keeping the ZenoEngine core purely Go.
 
-## 5. Implementation Path
+## 5. Ecosystem Example: .NET 8/9 Sidecar
+Because Sidecar plugins use standard OS processes, you can use **C# / .NET** to build high-performance plugins.
+
+### Sample C# Sidecar (`Program.cs`)
+```csharp
+using System.Text.Json;
+
+while (Console.ReadLine() is { } line) {
+    var request = JsonDocument.Parse(line);
+    var slotName = request.RootElement.GetProperty("slot_name").GetString();
+
+    object result = slotName switch {
+        "dotnet.greet" => new { message = "Hello from .NET NativeAOT!" },
+        _ => new { error = "Unknown slot" }
+    };
+
+    Console.WriteLine(JsonSerializer.Serialize(new {
+        success = true,
+        data = result
+    }));
+}
+```
+
+### Manifest for .NET Plugin
+```yaml
+name: dotnet-utils
+type: sidecar
+binary: ./DotnetPlugin.exe # Compiled with NativeAOT
+sidecar:
+  protocol: json-rpc
+```
+
+## 6. Implementation Path
 1.  **Refactor `LoadedPlugin`**: Add a `Driver` interface (WASMDriver, SidecarDriver).
 2.  **Implement `SidecarDriver`**: Handles process spawning and pipe-based communication.
 3.  **Update `PluginManager.LoadPlugin`**: Branch logic based on `type` field in manifest.
