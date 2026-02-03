@@ -466,10 +466,23 @@ func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWor
 	// Listener is already opened in main()
 
 	go func() {
-		slog.Info("🚀 Engine Ready", "port", port)
-		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			slog.Error("❌ Listen failed", "error", err)
-			os.Exit(1)
+		certFile := os.Getenv("SSL_CERT_PATH")
+		keyFile := os.Getenv("SSL_KEY_PATH")
+
+		if certFile != "" && keyFile != "" {
+			slog.Info("🚀 Engine Ready (HTTPS)", "port", port, "cert", certFile)
+			// When using TLS, srv.Serve will be used differently or we just use ListenAndServeTLS
+			// But we already have a listener 'ln'. For TLS over existing listener:
+			if err := srv.ServeTLS(ln, certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				slog.Error("❌ HTTPS Listen failed", "error", err)
+				os.Exit(1)
+			}
+		} else {
+			slog.Info("🚀 Engine Ready (HTTP)", "port", port)
+			if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+				slog.Error("❌ HTTP Listen failed", "error", err)
+				os.Exit(1)
+			}
 		}
 	}()
 
