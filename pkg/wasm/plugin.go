@@ -61,7 +61,7 @@ type HostResponse struct {
 	Error   string                 `json:"error,omitempty"`
 }
 
-// Plugin interface that all WASM plugins must implement
+// Plugin interface that all plugins (WASM or Sidecar) must implement
 type Plugin interface {
 	// GetMetadata returns plugin metadata
 	GetMetadata(ctx context.Context) (*PluginMetadata, error)

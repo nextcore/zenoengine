@@ -105,7 +105,7 @@ func TestCallFunction(t *testing.T) {
 	runtime.LoadModule("test", testWASM)
 
 	// Call function (assumes test.wasm exports "add" function)
-	results, err := runtime.CallFunction("test", "add", 5, 3)
+	results, err := runtime.CallFunction(ctx, "test", "add", 5, 3)
 	if err != nil {
 		t.Fatalf("Failed to call function: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestCallFunctionPanicRecovery(t *testing.T) {
 	defer runtime.Close()
 
 	// Try to call function on non-existent module (should not panic)
-	_, err = runtime.CallFunction("nonexistent", "test")
+	_, err = runtime.CallFunction(ctx, "nonexistent", "test")
 	if err == nil {
 		t.Error("Expected error for non-existent module, got nil")
 	}
@@ -154,7 +154,7 @@ func TestMemoryOperations(t *testing.T) {
 
 	// Test WriteString (if module exports alloc)
 	testStr := "Hello WASM"
-	ptr, length, err := runtime.WriteString("test", testStr)
+	ptr, length, err := runtime.WriteString(ctx, "test", testStr)
 	if err != nil {
 		// If alloc not available, skip this test
 		t.Skipf("Module does not support WriteString: %v", err)
@@ -203,6 +203,6 @@ func BenchmarkFunctionCall(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		runtime.CallFunction("test", "add", 5, 3)
+		runtime.CallFunction(ctx, "test", "add", 5, 3)
 	}
 }

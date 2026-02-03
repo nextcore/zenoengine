@@ -16,14 +16,24 @@ import (
 type PluginManifest struct {
 	Name        string                 `yaml:"name"`
 	Version     string                 `yaml:"version"`
+	Type        string                 `yaml:"type,omitempty"` // wasm (default) or sidecar
 	Author      string                 `yaml:"author,omitempty"`
 	Description string                 `yaml:"description,omitempty"`
 	License     string                 `yaml:"license,omitempty"`
 	Homepage    string                 `yaml:"homepage,omitempty"`
-	Binary      string                 `yaml:"binary"` // WASM file name
+	Binary      string                 `yaml:"binary"` // WASM file name or executable
 	Requires    map[string]string      `yaml:"requires,omitempty"`
 	Permissions Permissions            `yaml:"permissions,omitempty"`
 	Config      map[string]ConfigParam `yaml:"config,omitempty"`
+	Sidecar     *SidecarConfig         `yaml:"sidecar,omitempty"`
+}
+
+// SidecarConfig defines configuration for native sidecar plugins
+type SidecarConfig struct {
+	Protocol   string `yaml:"protocol"` // json-rpc, fastcgi, http
+	AutoStart  bool   `yaml:"auto_start"`
+	KeepAlive  bool   `yaml:"keep_alive"`
+	MaxRetries int    `yaml:"max_retries"`
 }
 
 // Permissions defines what a plugin can access
@@ -53,10 +63,10 @@ type PluginManager struct {
 	mu            sync.RWMutex // Protects plugins map for hot reload
 }
 
-// LoadedPlugin represents a loaded WASM plugin
+// LoadedPlugin represents a loaded plugin (WASM or Sidecar)
 type LoadedPlugin struct {
 	Manifest *PluginManifest
-	Plugin   *WASMPlugin
+	Plugin   Plugin
 	Slots    []SlotDefinition
 	Path     string // Path to plugin directory for reload
 }
@@ -115,14 +125,20 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 		return fmt.Errorf("plugin %s already loaded", manifest.Name)
 	}
 
-	// Load WASM module
-	wasmPath := filepath.Join(pluginPath, manifest.Binary)
-	if err := pm.runtime.LoadModule(manifest.Name, wasmPath); err != nil {
-		return fmt.Errorf("failed to load WASM module: %w", err)
-	}
+	// Create plugin based on type
+	var plugin Plugin
 
-	// Create plugin wrapper
-	plugin := NewWASMPlugin(pm.runtime, manifest.Name)
+	if manifest.Type == "sidecar" {
+		plugin = NewSidecarPlugin(manifest.Binary, pluginPath)
+	} else {
+		// Default: WASM
+		// Load WASM module
+		wasmPath := filepath.Join(pluginPath, manifest.Binary)
+		if err := pm.runtime.LoadModule(manifest.Name, wasmPath); err != nil {
+			return fmt.Errorf("failed to load WASM module: %w", err)
+		}
+		plugin = NewWASMPlugin(pm.runtime, manifest.Name)
+	}
 
 	// Get plugin metadata
 	metadata, err := plugin.GetMetadata(context.Background())
@@ -267,9 +283,11 @@ func (pm *PluginManager) UnloadPlugin(name string) error {
 		slog.Error("Failed to cleanup plugin", "name", name, "error", err)
 	}
 
-	// Unload WASM module
-	if err := pm.runtime.UnloadModule(name); err != nil {
-		return fmt.Errorf("failed to unload module: %w", err)
+	// Unload WASM module if applicable
+	if plugin.Manifest.Type != "sidecar" {
+		if err := pm.runtime.UnloadModule(name); err != nil {
+			return fmt.Errorf("failed to unload module: %w", err)
+		}
 	}
 
 	delete(pm.plugins, name)
@@ -435,10 +453,12 @@ func (pm *PluginManager) ReloadPlugin(name string) error {
 	delete(pm.plugins, name)
 	pm.mu.Unlock()
 
-	// Unload from runtime
-	if err := pm.runtime.UnloadModule(name); err != nil {
-		slog.Warn("Failed to unload module during reload", "name", name, "error", err)
-		// Continue anyway to try loading new version
+	// Unload from runtime if applicable
+	if plugin.Manifest.Type != "sidecar" {
+		if err := pm.runtime.UnloadModule(name); err != nil {
+			slog.Warn("Failed to unload module during reload", "name", name, "error", err)
+			// Continue anyway to try loading new version
+		}
 	}
 
 	// 3. Load plugin again
