@@ -85,7 +85,32 @@ http.host: "dashboard.zeno.dev" {
 
 ---
 
-## 4. Persiapan Deployment di Production
+## 4. Hosting SPA & Static Site
+
+ZenoEngine dapat bertindak sebagai file server berperforma tinggi untuk menghosting website statis atau aplikasi SPA modern (React, Vue, Angular).
+
+### Contoh Static Site:
+```javascript
+http.host: "blog.zeno.dev" {
+    http.static: "./my-blog-files"
+}
+```
+
+### Contoh SPA (React/Vue) dengan Fallback:
+Aplikasi SPA membutuhkan fitur fallback ke `index.html` agar routing sisi klien (client-side routing) berfungsi dengan benar saat halaman direfresh.
+
+```javascript
+http.host: "dashboard.zeno.dev" {
+    http.static: "./dashboard/dist" {
+        path: "/"
+        spa: true
+    }
+}
+```
+
+---
+
+## 5. Persiapan Deployment di Production
 
 Untuk menggunakan fitur ini secara maksimal di server:
 

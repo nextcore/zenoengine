@@ -568,4 +568,66 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		Description: "Meneruskan request ke backend service lain (Reverse Proxy).",
 		Example:     "http.proxy: \"http://localhost:8080\"\n  path: \"/api\"",
 	})
+
+	// ==========================================
+	// 4. STATIC / SPA HOSTING SLOT
+	// ==========================================
+	eng.Register("http.static", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		root := coerce.ToString(resolveValue(node.Value, scope))
+		path := "/"
+		isSPA := false
+
+		for _, c := range node.Children {
+			if c.Name == "root" || c.Name == "dir" {
+				root = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "path" {
+				path = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "spa" {
+				isSPA = coerce.ToBool(parseNodeValue(c, scope))
+			}
+		}
+
+		if root == "" {
+			return fmt.Errorf("http.static: root directory is required")
+		}
+
+		// Ensure path ends with * for Chi wildcard matching
+		routePath := path
+		if !strings.HasSuffix(routePath, "/") {
+			routePath += "/"
+		}
+
+		fileServer := http.FileServer(http.Dir(root))
+
+		getCurrentRouter(ctx).Handle(routePath+"*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// 1. Clean path and check if file exists
+			cleanPath := filepath.Join(root, strings.TrimPrefix(r.URL.Path, path))
+			_, err := os.Stat(cleanPath)
+
+			// 2. If SPA and file not found, serve index.html
+			if isSPA && os.IsNotExist(err) {
+				http.ServeFile(w, r, filepath.Join(root, "index.html"))
+				return
+			}
+
+			// 3. Regular file serving
+			if path != "/" {
+				http.StripPrefix(strings.TrimSuffix(path, "/"), fileServer).ServeHTTP(w, r)
+			} else {
+				fileServer.ServeHTTP(w, r)
+			}
+		}))
+
+		mode := "Static Site"
+		if isSPA {
+			mode = "SPA (Single Page App)"
+		}
+		fmt.Printf("   📁 [STATIC] Registered %s: %s -> %s\n", mode, path, root)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Hosting aplikasi SPA (React/Vue) atau Static Site.",
+		Example:     "http.static: \"./dist\"\n  path: \"/\"\n  spa: true",
+	})
 }
