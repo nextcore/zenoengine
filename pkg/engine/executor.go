@@ -72,8 +72,14 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 
 			// Convert panic to error for graceful degradation
 			// This allows the HTTP middleware to return a proper 500 error
-			err = fmt.Errorf("[%s:%d:%d] PANIC in '%s': %v\n\nStack Trace:\n%s",
-				node.Filename, node.Line, node.Col, node.Name, r, stack)
+			err = Diagnostic{
+				Type:     "panic",
+				Message:  fmt.Sprintf("PANIC: %v\n\nStack Trace:\n%s", r, stack),
+				Filename: node.Filename,
+				Line:     node.Line,
+				Col:      node.Col,
+				Slot:     node.Name,
+			}
 		}
 	}()
 
@@ -84,8 +90,14 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 	// FASTEST PATH: Try optimized fast paths for common operations (2-3x faster)
 	if used, err := TryFastPath(ctx, node, scope); used {
 		if err != nil {
-			return fmt.Errorf("[%s:%d:%d] execution error in '%s': %v",
-				node.Filename, node.Line, node.Col, node.Name, err)
+			return Diagnostic{
+				Type:     "error",
+				Message:  err.Error(),
+				Filename: node.Filename,
+				Line:     node.Line,
+				Col:      node.Col,
+				Slot:     node.Name,
+			}
 		}
 		return nil
 	}
@@ -94,8 +106,14 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 	if node.cachedHandler != nil {
 		err := node.cachedHandler(ctx, node, scope)
 		if err != nil {
-			return fmt.Errorf("[%s:%d:%d] execution error in '%s': %v",
-				node.Filename, node.Line, node.Col, node.Name, err)
+			return Diagnostic{
+				Type:     "error",
+				Message:  err.Error(),
+				Filename: node.Filename,
+				Line:     node.Line,
+				Col:      node.Col,
+				Slot:     node.Name,
+			}
 		}
 		return nil
 	}
@@ -123,8 +141,14 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 							allowedKeys = append(allowedKeys, k)
 						}
 						sort.Strings(allowedKeys)
-						return fmt.Errorf("[%s:%d:%d] validation error: unknown attribute '%s' for slot '%s'. Allowed attributes: %s",
-							child.Filename, child.Line, child.Col, child.Name, node.Name, strings.Join(allowedKeys, ", "))
+						return Diagnostic{
+							Type:     "error",
+							Message:  fmt.Sprintf("validation error: unknown attribute '%s'. Allowed attributes: %s", child.Name, strings.Join(allowedKeys, ", ")),
+							Filename: child.Filename,
+							Line:     child.Line,
+							Col:      child.Col,
+							Slot:     node.Name,
+						}
 					}
 				}
 			}
@@ -142,8 +166,14 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 						}
 					}
 					if !found {
-						return fmt.Errorf("[%s:%d:%d] validation error: missing required attribute '%s' for slot '%s'",
-							node.Filename, node.Line, node.Col, name, node.Name)
+						return Diagnostic{
+							Type:     "error",
+							Message:  fmt.Sprintf("validation error: missing required attribute '%s'", name),
+							Filename: node.Filename,
+							Line:     node.Line,
+							Col:      node.Col,
+							Slot:     node.Name,
+						}
 					}
 
 					// --- [BARU] VALIDASI TIPE DATA (Strict Mode) ---
@@ -176,16 +206,28 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 					}
 				}
 				if !found {
-					return fmt.Errorf("[%s:%d:%d] validation error: missing required block '%s:' for slot '%s'",
-						node.Filename, node.Line, node.Col, blockName, node.Name)
+					return Diagnostic{
+						Type:     "error",
+						Message:  fmt.Sprintf("validation error: missing required block '%s:'", blockName),
+						Filename: node.Filename,
+						Line:     node.Line,
+						Col:      node.Col,
+						Slot:     node.Name,
+					}
 				}
 			}
 		}
 
 		err := handler(ctx, node, scope)
 		if err != nil {
-			// [FIX] Use %w to allow errors.Is/errors.As
-			return fmt.Errorf("[%s:%d:%d] execution error in '%s': %w", node.Filename, node.Line, node.Col, node.Name, err)
+			return Diagnostic{
+				Type:     "error",
+				Message:  err.Error(),
+				Filename: node.Filename,
+				Line:     node.Line,
+				Col:      node.Col,
+				Slot:     node.Name,
+			}
 		}
 		return nil
 	}
@@ -324,8 +366,14 @@ func (e *Engine) ValidateValueType(val interface{}, expectedType string, node *N
 			attrName = "(main value)"
 		}
 
-		return fmt.Errorf("[%s:%d:%d] validation error: type mismatch for '%s' in slot '%s'. Expected %s, got %T (%v)",
-			node.Filename, node.Line, node.Col, attrName, slotName, expectedType, val, val)
+		return Diagnostic{
+			Type:     "error",
+			Message:  fmt.Sprintf("validation error: type mismatch for '%s'. Expected %s, got %T (%v)", attrName, expectedType, val, val),
+			Filename: node.Filename,
+			Line:     node.Line,
+			Col:      node.Col,
+			Slot:     slotName,
+		}
 	}
 
 	return nil

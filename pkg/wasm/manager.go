@@ -16,14 +16,24 @@ import (
 type PluginManifest struct {
 	Name        string                 `yaml:"name"`
 	Version     string                 `yaml:"version"`
+	Type        string                 `yaml:"type,omitempty"` // wasm (default) or sidecar
 	Author      string                 `yaml:"author,omitempty"`
 	Description string                 `yaml:"description,omitempty"`
 	License     string                 `yaml:"license,omitempty"`
 	Homepage    string                 `yaml:"homepage,omitempty"`
-	Binary      string                 `yaml:"binary"` // WASM file name
+	Binary      string                 `yaml:"binary"` // WASM file name or executable
 	Requires    map[string]string      `yaml:"requires,omitempty"`
 	Permissions Permissions            `yaml:"permissions,omitempty"`
 	Config      map[string]ConfigParam `yaml:"config,omitempty"`
+	Sidecar     *SidecarConfig         `yaml:"sidecar,omitempty"`
+}
+
+// SidecarConfig defines configuration for native sidecar plugins
+type SidecarConfig struct {
+	Protocol   string `yaml:"protocol"` // json-rpc, fastcgi, http
+	AutoStart  bool   `yaml:"auto_start"`
+	KeepAlive  bool   `yaml:"keep_alive"`
+	MaxRetries int    `yaml:"max_retries"`
 }
 
 // Permissions defines what a plugin can access
@@ -53,10 +63,10 @@ type PluginManager struct {
 	mu            sync.RWMutex // Protects plugins map for hot reload
 }
 
-// LoadedPlugin represents a loaded WASM plugin
+// LoadedPlugin represents a loaded plugin (WASM or Sidecar)
 type LoadedPlugin struct {
 	Manifest *PluginManifest
-	Plugin   *WASMPlugin
+	Plugin   Plugin
 	Slots    []SlotDefinition
 	Path     string // Path to plugin directory for reload
 }
@@ -115,17 +125,23 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 		return fmt.Errorf("plugin %s already loaded", manifest.Name)
 	}
 
-	// Load WASM module
-	wasmPath := filepath.Join(pluginPath, manifest.Binary)
-	if err := pm.runtime.LoadModule(manifest.Name, wasmPath); err != nil {
-		return fmt.Errorf("failed to load WASM module: %w", err)
+	// Create plugin based on type
+	var plugin Plugin
+
+	if manifest.Type == "sidecar" {
+		plugin = NewSidecarPlugin(manifest.Name, manifest.Binary, pluginPath, pm)
+	} else {
+		// Default: WASM
+		// Load WASM module
+		wasmPath := filepath.Join(pluginPath, manifest.Binary)
+		if err := pm.runtime.LoadModule(manifest.Name, wasmPath); err != nil {
+			return fmt.Errorf("failed to load WASM module: %w", err)
+		}
+		plugin = NewWASMPlugin(pm.runtime, manifest.Name)
 	}
 
-	// Create plugin wrapper
-	plugin := NewWASMPlugin(pm.runtime, manifest.Name)
-
 	// Get plugin metadata
-	metadata, err := plugin.GetMetadata()
+	metadata, err := plugin.GetMetadata(context.Background())
 	if err != nil {
 		pm.runtime.UnloadModule(manifest.Name)
 		return fmt.Errorf("failed to get plugin metadata: %w", err)
@@ -134,7 +150,7 @@ func (pm *PluginManager) LoadPlugin(pluginPath string) error {
 	slog.Info("Plugin metadata", "name", metadata.Name, "version", metadata.Version)
 
 	// Get plugin slots
-	slots, err := plugin.GetSlots()
+	slots, err := plugin.GetSlots(context.Background())
 	if err != nil {
 		pm.runtime.UnloadModule(manifest.Name)
 		return fmt.Errorf("failed to get plugin slots: %w", err)
@@ -216,7 +232,7 @@ func (pm *PluginManager) GetPlugin(name string) (*LoadedPlugin, error) {
 }
 
 // ExecuteSlot executes a plugin slot
-func (pm *PluginManager) ExecuteSlot(pluginName, slotName string, params map[string]interface{}) (*PluginResponse, error) {
+func (pm *PluginManager) ExecuteSlot(ctx context.Context, pluginName, slotName string, params map[string]interface{}) (*PluginResponse, error) {
 	plugin, err := pm.GetPlugin(pluginName)
 	if err != nil {
 		return nil, err
@@ -240,7 +256,7 @@ func (pm *PluginManager) ExecuteSlot(pluginName, slotName string, params map[str
 		Parameters: params,
 	}
 
-	return plugin.Plugin.Execute(request)
+	return plugin.Plugin.Execute(ctx, request)
 }
 
 // ListPlugins returns all loaded plugins
@@ -263,13 +279,15 @@ func (pm *PluginManager) UnloadPlugin(name string) error {
 	}
 
 	// Cleanup plugin
-	if err := plugin.Plugin.Cleanup(); err != nil {
+	if err := plugin.Plugin.Cleanup(context.Background()); err != nil {
 		slog.Error("Failed to cleanup plugin", "name", name, "error", err)
 	}
 
-	// Unload WASM module
-	if err := pm.runtime.UnloadModule(name); err != nil {
-		return fmt.Errorf("failed to unload module: %w", err)
+	// Unload WASM module if applicable
+	if plugin.Manifest.Type != "sidecar" {
+		if err := pm.runtime.UnloadModule(name); err != nil {
+			return fmt.Errorf("failed to unload module: %w", err)
+		}
 	}
 
 	delete(pm.plugins, name)
@@ -305,49 +323,49 @@ func (pm *PluginManager) Close() error {
 func (pm *PluginManager) SetHostCallback(name string, callback interface{}) error {
 	switch name {
 	case "log":
-		if cb, ok := callback.(func(string, string)); ok {
+		if cb, ok := callback.(func(context.Context, string, string)); ok {
 			pm.hostFunctions.OnLog = cb
 		} else {
 			return fmt.Errorf("invalid callback type for log")
 		}
 	case "db_query":
-		if cb, ok := callback.(func(string, string, map[string]interface{}) ([]map[string]interface{}, error)); ok {
+		if cb, ok := callback.(func(context.Context, string, string, map[string]interface{}) ([]map[string]interface{}, error)); ok {
 			pm.hostFunctions.OnDBQuery = cb
 		} else {
 			return fmt.Errorf("invalid callback type for db_query")
 		}
 	case "http_request":
-		if cb, ok := callback.(func(string, string, map[string]interface{}, map[string]interface{}) (map[string]interface{}, error)); ok {
+		if cb, ok := callback.(func(context.Context, string, string, map[string]interface{}, map[string]interface{}) (map[string]interface{}, error)); ok {
 			pm.hostFunctions.OnHTTPRequest = cb
 		} else {
 			return fmt.Errorf("invalid callback type for http_request")
 		}
 	case "scope_get":
-		if cb, ok := callback.(func(string) (interface{}, error)); ok {
+		if cb, ok := callback.(func(context.Context, string) (interface{}, error)); ok {
 			pm.hostFunctions.OnScopeGet = cb
 		} else {
 			return fmt.Errorf("invalid callback type for scope_get")
 		}
 	case "scope_set":
-		if cb, ok := callback.(func(string, interface{}) error); ok {
+		if cb, ok := callback.(func(context.Context, string, interface{}) error); ok {
 			pm.hostFunctions.OnScopeSet = cb
 		} else {
 			return fmt.Errorf("invalid callback type for scope_set")
 		}
 	case "file_read":
-		if cb, ok := callback.(func(string) (string, error)); ok {
+		if cb, ok := callback.(func(context.Context, string) (string, error)); ok {
 			pm.hostFunctions.OnFileRead = cb
 		} else {
 			return fmt.Errorf("invalid callback type for file_read")
 		}
 	case "file_write":
-		if cb, ok := callback.(func(string, string) error); ok {
+		if cb, ok := callback.(func(context.Context, string, string) error); ok {
 			pm.hostFunctions.OnFileWrite = cb
 		} else {
 			return fmt.Errorf("invalid callback type for file_write")
 		}
 	case "env_get":
-		if cb, ok := callback.(func(string) string); ok {
+		if cb, ok := callback.(func(context.Context, string) string); ok {
 			pm.hostFunctions.OnEnvGet = cb
 		} else {
 			return fmt.Errorf("invalid callback type for env_get")
@@ -435,10 +453,12 @@ func (pm *PluginManager) ReloadPlugin(name string) error {
 	delete(pm.plugins, name)
 	pm.mu.Unlock()
 
-	// Unload from runtime
-	if err := pm.runtime.UnloadModule(name); err != nil {
-		slog.Warn("Failed to unload module during reload", "name", name, "error", err)
-		// Continue anyway to try loading new version
+	// Unload from runtime if applicable
+	if plugin.Manifest.Type != "sidecar" {
+		if err := pm.runtime.UnloadModule(name); err != nil {
+			slog.Warn("Failed to unload module during reload", "name", name, "error", err)
+			// Continue anyway to try loading new version
+		}
 	}
 
 	// 3. Load plugin again

@@ -1,0 +1,16 @@
+name: php-native
+version: 1.0.0
+type: sidecar
+binary: ./php_bridge.exe  # After compiling with: zig build-exe main.zig -O ReleaseSafe
+
+sidecar:
+  protocol: json-rpc
+  auto_start: true
+  keep_alive: true
+
+permissions:
+  filesystem:
+    - ./app
+    - ./vendor
+  network:
+    - "*"

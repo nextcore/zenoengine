@@ -1,6 +1,7 @@
 package wasm
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -60,19 +61,19 @@ type HostResponse struct {
 	Error   string                 `json:"error,omitempty"`
 }
 
-// Plugin interface that all WASM plugins must implement
+// Plugin interface that all plugins (WASM or Sidecar) must implement
 type Plugin interface {
 	// GetMetadata returns plugin metadata
-	GetMetadata() (*PluginMetadata, error)
+	GetMetadata(ctx context.Context) (*PluginMetadata, error)
 
 	// GetSlots returns all slots provided by this plugin
-	GetSlots() ([]SlotDefinition, error)
+	GetSlots(ctx context.Context) ([]SlotDefinition, error)
 
 	// Execute executes a slot with given parameters
-	Execute(request *PluginRequest) (*PluginResponse, error)
+	Execute(ctx context.Context, request *PluginRequest) (*PluginResponse, error)
 
 	// Cleanup performs cleanup when plugin is unloaded
-	Cleanup() error
+	Cleanup(ctx context.Context) error
 }
 
 // WASMPlugin wraps a WASM module to implement Plugin interface
@@ -90,9 +91,9 @@ func NewWASMPlugin(runtime *Runtime, moduleName string) *WASMPlugin {
 }
 
 // GetMetadata calls plugin_init() and returns metadata
-func (p *WASMPlugin) GetMetadata() (*PluginMetadata, error) {
+func (p *WASMPlugin) GetMetadata(ctx context.Context) (*PluginMetadata, error) {
 	// Call plugin_init() which returns JSON pointer
-	results, err := p.runtime.CallFunction(p.moduleName, "plugin_init")
+	results, err := p.runtime.CallFunction(ctx, p.moduleName, "plugin_init")
 	if err != nil {
 		return nil, fmt.Errorf("failed to call plugin_init: %w", err)
 	}
@@ -121,9 +122,9 @@ func (p *WASMPlugin) GetMetadata() (*PluginMetadata, error) {
 }
 
 // GetSlots calls plugin_register_slots() and returns slot definitions
-func (p *WASMPlugin) GetSlots() ([]SlotDefinition, error) {
+func (p *WASMPlugin) GetSlots(ctx context.Context) ([]SlotDefinition, error) {
 	// Call plugin_register_slots() which returns JSON pointer
-	results, err := p.runtime.CallFunction(p.moduleName, "plugin_register_slots")
+	results, err := p.runtime.CallFunction(ctx, p.moduleName, "plugin_register_slots")
 	if err != nil {
 		return nil, fmt.Errorf("failed to call plugin_register_slots: %w", err)
 	}
@@ -149,7 +150,7 @@ func (p *WASMPlugin) GetSlots() ([]SlotDefinition, error) {
 }
 
 // Execute calls plugin_execute() with request parameters
-func (p *WASMPlugin) Execute(request *PluginRequest) (*PluginResponse, error) {
+func (p *WASMPlugin) Execute(ctx context.Context, request *PluginRequest) (*PluginResponse, error) {
 	// Serialize request to JSON
 	requestJSON, err := json.Marshal(request)
 	if err != nil {
@@ -157,18 +158,18 @@ func (p *WASMPlugin) Execute(request *PluginRequest) (*PluginResponse, error) {
 	}
 
 	// Write request JSON to WASM memory
-	slotNamePtr, slotNameLen, err := p.runtime.WriteString(p.moduleName, request.SlotName)
+	slotNamePtr, slotNameLen, err := p.runtime.WriteString(ctx, p.moduleName, request.SlotName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write slot name: %w", err)
 	}
 
-	paramsPtr, paramsLen, err := p.runtime.WriteString(p.moduleName, string(requestJSON))
+	paramsPtr, paramsLen, err := p.runtime.WriteString(ctx, p.moduleName, string(requestJSON))
 	if err != nil {
 		return nil, fmt.Errorf("failed to write parameters: %w", err)
 	}
 
 	// Call plugin_execute(slot_name_ptr, slot_name_len, params_ptr, params_len)
-	results, err := p.runtime.CallFunction(p.moduleName, "plugin_execute",
+	results, err := p.runtime.CallFunction(ctx, p.moduleName, "plugin_execute",
 		uint64(slotNamePtr), uint64(slotNameLen),
 		uint64(paramsPtr), uint64(paramsLen))
 	if err != nil {
@@ -196,8 +197,8 @@ func (p *WASMPlugin) Execute(request *PluginRequest) (*PluginResponse, error) {
 }
 
 // Cleanup calls plugin_cleanup()
-func (p *WASMPlugin) Cleanup() error {
-	_, err := p.runtime.CallFunction(p.moduleName, "plugin_cleanup")
+func (p *WASMPlugin) Cleanup(ctx context.Context) error {
+	_, err := p.runtime.CallFunction(ctx, p.moduleName, "plugin_cleanup")
 	if err != nil {
 		return fmt.Errorf("failed to call plugin_cleanup: %w", err)
 	}

@@ -17,9 +17,27 @@ To compete, we must match Laravel's standard features, but implement them smarte
 | **CLI** | `php artisan make:controller` | `zeno gen:crud` (AI writes the logic, not just the class) |
 | **Auth** | Laravel Breeze / Jetstream | **Zeno Auth** (Standard Slots + JWT Native) |
 | **Performance** | PHP (Interpreted, Heavy Request Cycle) | **Go + WASM** (Compiled, Threaded, Instant) |
-| **Plugins** | Composer Packages | **WASM Plugins** (Polyglot: Rust/Go/C#) |
+| **Plugins** | Composer Packages | **WASM & Sidecar** (Polyglot: Rust/Go/C#/.NET) |
 
-## 3. The "Killer" Advantage: The Zeno Brain 🧠
+## 3. ZenoEngine vs FrankenPHP 🥊
+
+ZenoEngine dengan arsitektur **Sidecar (Zig)** kini menjadi pesaing serius bagi FrankenPHP. Berikut perbandingannya:
+
+| Fitur | FrankenPHP | ZenoEngine (Sidecar) |
+| :--- | :--- | :--- |
+| **Teknologi** | Go + CGO (Tight coupling) | Go + Zig Sidecar (Loose coupling) |
+| **Worker Mode** | Ya (Sangat Cepat) | Ya (Stateful Persistence v2.0) |
+| **Portabilitas** | Tergantung Caddy/LibPHP | **Mandiri** (Single binary Zig-bundled) |
+| **Skalabilitas** | Satu proses Caddy | **Multi-process** (Bisa banyak sidecar) |
+| **Scope Sharing**| Terbatas pada Request | **Deep Scope** (Zeno vars auto-injected) |
+| **Asinkron** | Via RoadRunner/Swoole | **Native Zeno** (Slot `async: true`) |
+
+### Kenapa ZenoEngine Bisa Lebih Baik?
+ZenoEngine bukan sekadar "PHP Runner", melainkan **Super-Orchestrator**.
+- Di FrankenPHP, Anda terbatas pada ekosistem PHP.
+- Di ZenoEngine, Anda bisa menggabungkan **Laravel** (untuk dashboard), **Rust/WASM** (untuk enkripsi), dan **.NET** (untuk legacy service) dalam satu skrip ZenoLang yang harmonis.
+
+## 4. The "Killer" Advantage: The Zeno Brain 🧠
 
 Laravel requires you to learn its syntax manually. Zeno will skip the learning curve.
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"zeno/internal/app"
@@ -10,13 +11,48 @@ import (
 
 func HandleCheck(args []string) {
 	if len(args) < 1 {
-		fmt.Println("Usage: zeno check <path/to/script.zl>")
+		fmt.Println("Usage: zeno check [--json] <path/to/script.zl>")
 		os.Exit(1)
 	}
-	path := args[0]
+
+	isJSON := false
+	path := ""
+
+	for _, arg := range args {
+		if arg == "--json" {
+			isJSON = true
+		} else {
+			path = arg
+		}
+	}
+
+	if path == "" {
+		fmt.Println("Usage: zeno check [--json] <path/to/script.zl>")
+		os.Exit(1)
+	}
+
 	root, err := engine.LoadScript(path)
 	if err != nil {
-		fmt.Printf("❌ Syntax Error: %v\n", err)
+		if isJSON {
+			if diag, ok := err.(engine.Diagnostic); ok {
+				out, _ := json.MarshalIndent(map[string]interface{}{
+					"success": false,
+					"errors":  []engine.Diagnostic{diag},
+				}, "", "  ")
+				fmt.Println(string(out))
+			} else {
+				out, _ := json.MarshalIndent(map[string]interface{}{
+					"success": false,
+					"errors": []engine.Diagnostic{{
+						Type:    "error",
+						Message: err.Error(),
+					}},
+				}, "", "  ")
+				fmt.Println(string(out))
+			}
+		} else {
+			fmt.Printf("❌ Syntax Error: %v\n", err)
+		}
 		os.Exit(1)
 	}
 
@@ -29,16 +65,30 @@ func HandleCheck(args []string) {
 	analyzer := analysis.NewAnalyzer(eng)
 	result := analyzer.Analyze(root)
 
+	if isJSON {
+		success := len(result.Errors) == 0
+		out, _ := json.MarshalIndent(map[string]interface{}{
+			"success":  success,
+			"errors":   result.Errors,
+			"warnings": result.Warnings,
+		}, "", "  ")
+		fmt.Println(string(out))
+		if !success {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if len(result.Errors) > 0 {
 		fmt.Printf("❌ Static Analysis Failed (%d errors):\n", len(result.Errors))
-		for _, errStr := range result.Errors {
-			fmt.Printf("  - %s\n", errStr)
+		for _, diag := range result.Errors {
+			fmt.Printf("  - [%s:%d:%d] %s\n", diag.Filename, diag.Line, diag.Col, diag.Message)
 		}
 		os.Exit(1)
 	}
 
-	for _, warn := range result.Warnings {
-		fmt.Printf("⚠️  Warning: %s\n", warn)
+	for _, diag := range result.Warnings {
+		fmt.Printf("⚠️  Warning: [%s:%d:%d] %s\n", diag.Filename, diag.Line, diag.Col, diag.Message)
 	}
 
 	fmt.Println("✅ Code Valid (Static Analysis Passed)")

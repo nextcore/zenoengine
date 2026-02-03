@@ -1,0 +1,12 @@
+name: vision-ocr
+version: 1.0.0
+author: ZenoEngine
+description: Computer Vision and OCR for License Plate Recognition
+binary: vision_ocr.wasm
+
+permissions:
+  scope:
+    - read
+    - write
+  filesystem:
+    - /tmp/cameras

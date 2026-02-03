@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -177,6 +178,13 @@ func initDB() *dbmanager.DBManager {
 	var primaryDSN string
 	if driver == "sqlite" {
 		primaryDSN = os.Getenv("DB_NAME")
+		// Ensure directory exists for SQLite
+		dir := filepath.Dir(primaryDSN)
+		if dir != "." {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				slog.Error("❌ Failed to create database directory", "dir", dir, "error", err)
+			}
+		}
 	} else if driver == "sqlserver" || driver == "mssql" {
 		// SQL Server DSN format: sqlserver://user:pass@host?database=dbname
 		primaryDSN = fmt.Sprintf("sqlserver://%s:%s@%s?database=%s",
@@ -268,6 +276,13 @@ func initDB() *dbmanager.DBManager {
 
 		if driver == "sqlite" {
 			dsn = name
+			// Ensure directory exists for SQLite
+			dir := filepath.Dir(dsn)
+			if dir != "." {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					slog.Error("❌ Failed to create database directory", "dir", dir, "error", err)
+				}
+			}
 		} else if driver == "sqlserver" || driver == "mssql" {
 			dsn = fmt.Sprintf("sqlserver://%s:%s@%s?database=%s", user, pass, host, name)
 		} else if driver == "postgres" || driver == "postgresql" {
@@ -358,7 +373,7 @@ func startWatcher(appCtx *app.AppContext) {
 
 // validateAllScripts validates all .zl files in src/ and views/ directories
 func validateAllScripts() error {
-	var errors []string
+	var errors []engine.Diagnostic
 	validatedCount := 0
 
 	// 1. Validate src/ directory (logic files)
@@ -369,7 +384,14 @@ func validateAllScripts() error {
 			}
 			if !info.IsDir() && strings.HasSuffix(path, ".zl") {
 				if _, err := engine.LoadScript(path); err != nil {
-					errors = append(errors, fmt.Sprintf("  ❌ %s: %v", path, err))
+					if diag, ok := err.(engine.Diagnostic); ok {
+						errors = append(errors, diag)
+					} else {
+						errors = append(errors, engine.Diagnostic{
+							Type:    "error",
+							Message: err.Error(),
+						})
+					}
 				} else {
 					validatedCount++
 				}
@@ -387,7 +409,10 @@ func validateAllScripts() error {
 			if !info.IsDir() && strings.HasSuffix(path, ".blade.zl") {
 				// Blade files are validated during rendering, but we can check basic syntax
 				if _, err := os.ReadFile(path); err != nil {
-					errors = append(errors, fmt.Sprintf("  ❌ %s: %v", path, err))
+					errors = append(errors, engine.Diagnostic{
+						Type:    "error",
+						Message: err.Error(),
+					})
 				} else {
 					validatedCount++
 				}
@@ -397,9 +422,17 @@ func validateAllScripts() error {
 	}
 
 	if len(errors) > 0 {
-		slog.Error(fmt.Sprintf("Found %d syntax error(s):", len(errors)))
-		for _, errMsg := range errors {
-			fmt.Println(errMsg)
+		if os.Getenv("ZENO_OUTPUT_JSON") == "true" {
+			out, _ := json.Marshal(map[string]interface{}{
+				"success": false,
+				"errors":  errors,
+			})
+			fmt.Println(string(out))
+		} else {
+			slog.Error(fmt.Sprintf("Found %d syntax error(s):", len(errors)))
+			for _, diag := range errors {
+				fmt.Printf("  ❌ [%s:%d:%d] %s\n", diag.Filename, diag.Line, diag.Col, diag.Message)
+			}
 		}
 		return fmt.Errorf("%d file(s) failed validation", len(errors))
 	}

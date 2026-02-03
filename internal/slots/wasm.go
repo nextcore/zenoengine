@@ -67,7 +67,9 @@ func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DB
 			pluginName := plugin.Manifest.Name
 
 			eng.Register(slotName, func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-				return executeWASMSlot(pm, pluginName, slotName, node, scope)
+				// Inject scope into context for host functions
+				ctx = context.WithValue(ctx, "scope", scope)
+				return executeWASMSlot(ctx, pm, pluginName, slotName, node, scope)
 			}, engine.SlotMeta{
 				Description: slot.Description,
 				Example:     slot.Example,
@@ -86,6 +88,10 @@ func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DB
 
 	// Store plugin manager for cleanup
 	globalPluginManager = pm
+
+	if r == nil {
+		return
+	}
 
 	// Register admin API for hot reload
 	r.Post("/api/admin/plugins/reload", func(w http.ResponseWriter, req *http.Request) {
@@ -137,7 +143,7 @@ func CleanupWASMPlugins() {
 // setupHostCallbacks configures host function callbacks
 func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 	// Logging callback
-	pm.SetHostCallback("log", func(level, message string) {
+	pm.SetHostCallback("log", func(ctx context.Context, level, message string) {
 		switch level {
 		case "debug":
 			slog.Debug("[WASM Plugin] " + message)
@@ -154,7 +160,7 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 
 	// Database query callback
 	if dbMgr != nil {
-		pm.SetHostCallback("db_query", func(connection, sql string, params map[string]interface{}) ([]map[string]interface{}, error) {
+		pm.SetHostCallback("db_query", func(ctx context.Context, connection, sql string, params map[string]interface{}) ([]map[string]interface{}, error) {
 			// Get database connection
 			db := dbMgr.GetConnection(connection)
 			if db == nil {
@@ -207,7 +213,7 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 	}
 
 	// HTTP request callback
-	pm.SetHostCallback("http_request", func(method, url string, headers, body map[string]interface{}) (map[string]interface{}, error) {
+	pm.SetHostCallback("http_request", func(ctx context.Context, method, url string, headers, body map[string]interface{}) (map[string]interface{}, error) {
 		// Create HTTP client with timeout
 		client := &http.Client{
 			Timeout: 30 * time.Second,
@@ -281,20 +287,43 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 	})
 
 	// Scope get callback
-	pm.SetHostCallback("scope_get", func(key string) (interface{}, error) {
-		// Note: This needs to be set per-execution with actual scope
-		// For now, return error
-		return nil, fmt.Errorf("scope access not available in this context")
+	pm.SetHostCallback("scope_get", func(ctx context.Context, key string) (interface{}, error) {
+		scope, ok := ctx.Value("scope").(*engine.Scope)
+		if !ok || scope == nil {
+			return nil, fmt.Errorf("scope access not available in this context")
+		}
+
+		// Check plugin permission (via context)
+		pluginName, _ := ctx.Value("pluginName").(string)
+		if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "read") {
+			return nil, fmt.Errorf("plugin %s does not have scope read permission", pluginName)
+		}
+
+		val, found := scope.Get(key)
+		if !found {
+			return nil, fmt.Errorf("variable $%s not found", key)
+		}
+		return val, nil
 	})
 
 	// Scope set callback
-	pm.SetHostCallback("scope_set", func(key string, value interface{}) error {
-		// Note: This needs to be set per-execution with actual scope
-		return fmt.Errorf("scope access not available in this context")
+	pm.SetHostCallback("scope_set", func(ctx context.Context, key string, value interface{}) error {
+		scope, ok := ctx.Value("scope").(*engine.Scope)
+		if !ok || scope == nil {
+			return fmt.Errorf("scope access not available in this context")
+		}
+
+		pluginName, _ := ctx.Value("pluginName").(string)
+		if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "write") {
+			return fmt.Errorf("plugin %s does not have scope write permission", pluginName)
+		}
+
+		scope.Set(key, value)
+		return nil
 	})
 
 	// File read callback
-	pm.SetHostCallback("file_read", func(path string) (string, error) {
+	pm.SetHostCallback("file_read", func(ctx context.Context, path string) (string, error) {
 		// Note: Permission checking happens in executeWASMSlot context
 		// For now, we allow reading from safe directories only
 		// Clean and validate path
@@ -315,7 +344,7 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 	})
 
 	// File write callback
-	pm.SetHostCallback("file_write", func(path, content string) error {
+	pm.SetHostCallback("file_write", func(ctx context.Context, path, content string) error {
 		// Clean and validate path
 		cleanPath := filepath.Clean(path)
 		
@@ -333,15 +362,20 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 	})
 
 	// Environment variable callback
-	pm.SetHostCallback("env_get", func(key string) string {
-		// Only allow specific env vars
-		// Check plugin permissions first
+	pm.SetHostCallback("env_get", func(ctx context.Context, key string) string {
+		pluginName, _ := ctx.Value("pluginName").(string)
+		if pluginName != "" && !pm.CheckPermission(pluginName, "env", key) {
+			return ""
+		}
 		return os.Getenv(key)
 	})
 }
 
 // executeWASMSlot executes a WASM plugin slot
-func executeWASMSlot(pm *wasm.PluginManager, pluginName, slotName string, node *engine.Node, scope *engine.Scope) error {
+func executeWASMSlot(ctx context.Context, pm *wasm.PluginManager, pluginName, slotName string, node *engine.Node, scope *engine.Scope) error {
+	// Inject plugin name into context for permission checking in host functions
+	ctx = context.WithValue(ctx, "pluginName", pluginName)
+
 	// Parse parameters from node
 	params := make(map[string]interface{})
 
@@ -349,6 +383,10 @@ func executeWASMSlot(pm *wasm.PluginManager, pluginName, slotName string, node *
 	if node.Value != nil {
 		params["value"] = node.Value
 	}
+
+	// [NEW] DEEP SCOPE INJECTION
+	// Inject current scope into parameters for better PHP context
+	params["_zeno_scope"] = scope.ToMap()
 
 	// Add children as parameters
 	for _, child := range node.Children {
@@ -378,155 +416,18 @@ func executeWASMSlot(pm *wasm.PluginManager, pluginName, slotName string, node *
 		}
 	}
 
-	// Update scope callbacks for this execution with permission checking
-	pm.SetHostCallback("scope_get", func(key string) (interface{}, error) {
-		// Check if plugin has read permission
-		if !pm.CheckPermission(pluginName, "scope", "read") {
-			return nil, fmt.Errorf("plugin %s does not have scope read permission", pluginName)
-		}
-		
-		val, ok := scope.Get(key)
-		if !ok {
-			return nil, fmt.Errorf("variable $%s not found", key)
-		}
-		return val, nil
-	})
-
-	pm.SetHostCallback("scope_set", func(key string, value interface{}) error {
-		// Check if plugin has write permission
-		if !pm.CheckPermission(pluginName, "scope", "write") {
-			return fmt.Errorf("plugin %s does not have scope write permission", pluginName)
-		}
-		
-		scope.Set(key, value)
+	// [NEW] ASYNC EXECUTION SUPPORT
+	isAsync, _ := params["async"].(bool)
+	if isAsync {
+		go func() {
+			_, _ = pm.ExecuteSlot(ctx, pluginName, slotName, params)
+			// Note: result is ignored for fire-and-forget async
+		}()
 		return nil
-	})
+	}
 
-	// Override HTTP callback with permission checking for this execution
-	pm.SetHostCallback("http_request", func(method, url string, headers, body map[string]interface{}) (map[string]interface{}, error) {
-		// Check if plugin has network permission for this URL
-		if !pm.CheckPermission(pluginName, "network", url) {
-			return nil, fmt.Errorf("plugin %s does not have permission to access %s", pluginName, url)
-		}
-		
-		// Original HTTP logic (from setupHostCallbacks)
-		client := &http.Client{
-			Timeout: 30 * time.Second,
-		}
-
-		var reqBody io.Reader
-		if body != nil && len(body) > 0 {
-			jsonBody, err := json.Marshal(body)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal request body: %w", err)
-			}
-			reqBody = bytes.NewReader(jsonBody)
-		}
-
-		req, err := http.NewRequest(method, url, reqBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		if headers != nil {
-			for k, v := range headers {
-				req.Header.Set(k, fmt.Sprintf("%v", v))
-			}
-		}
-
-		if reqBody != nil {
-			req.Header.Set("Content-Type", "application/json")
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("request failed: %w", err)
-		}
-		defer resp.Body.Close()
-
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response: %w", err)
-		}
-
-		var parsedBody interface{}
-		if err := json.Unmarshal(respBody, &parsedBody); err != nil {
-			parsedBody = string(respBody)
-		}
-
-		respHeaders := make(map[string]interface{})
-		for k, v := range resp.Header {
-			if len(v) == 1 {
-				respHeaders[k] = v[0]
-			} else {
-				respHeaders[k] = v
-			}
-		}
-
-		response := map[string]interface{}{
-			"status":  resp.StatusCode,
-			"body":    parsedBody,
-			"headers": respHeaders,
-		}
-
-		return response, nil
-	})
-
-	// Override file callbacks with permission checking
-	pm.SetHostCallback("file_read", func(path string) (string, error) {
-		cleanPath := filepath.Clean(path)
-		
-		// Check permission
-		if !pm.CheckPermission(pluginName, "filesystem", cleanPath) {
-			return "", fmt.Errorf("plugin %s does not have permission to read %s", pluginName, cleanPath)
-		}
-		
-		// Security: prevent absolute paths and parent directory access
-		if filepath.IsAbs(cleanPath) || strings.Contains(cleanPath, "..") {
-			return "", fmt.Errorf("absolute paths and parent directory access not allowed")
-		}
-		
-		content, err := os.ReadFile(cleanPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read file: %w", err)
-		}
-		
-		return string(content), nil
-	})
-
-	pm.SetHostCallback("file_write", func(path, content string) error {
-		cleanPath := filepath.Clean(path)
-		
-		// Check permission
-		if !pm.CheckPermission(pluginName, "filesystem", cleanPath) {
-			return fmt.Errorf("plugin %s does not have permission to write %s", pluginName, cleanPath)
-		}
-		
-		// Security: prevent absolute paths and parent directory access
-		if filepath.IsAbs(cleanPath) || strings.Contains(cleanPath, "..") {
-			return fmt.Errorf("absolute paths and parent directory access not allowed")
-		}
-		
-		if err := os.WriteFile(cleanPath, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to write file: %w", err)
-		}
-		
-		return nil
-	})
-
-	// Override env callback with permission checking
-	pm.SetHostCallback("env_get", func(key string) string {
-		// Check permission
-		if !pm.CheckPermission(pluginName, "env", key) {
-			slog.Warn("Plugin attempted to access unauthorized env var", "plugin", pluginName, "var", key)
-			return ""
-		}
-		
-		return os.Getenv(key)
-	})
-
-	// Execute plugin slot
-	response, err := pm.ExecuteSlot(pluginName, slotName, params)
+	// Execute plugin slot (Synchronous)
+	response, err := pm.ExecuteSlot(ctx, pluginName, slotName, params)
 	if err != nil {
 		return fmt.Errorf("plugin execution failed: %w", err)
 	}

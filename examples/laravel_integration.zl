@@ -1,0 +1,31 @@
+// ZenoLang + Laravel Native Integration Demo
+// Using the Zig-compiled Sidecar Bridge
+
+log: "🚀 Starting Zeno-Laravel Bridge..."
+
+// 1. Jalankan perintah Artisan melalui PHP Native Sidecar
+php.laravel: "list" {
+    as: $laravel_info
+}
+
+log: "Info Laravel:"
+log: $laravel_info.output
+
+// 2. Eksekusi script PHP kustom untuk memproses data dari ZenoLang
+$user_data: {
+    id: 101
+    name: "Zeno User"
+    role: "Admin"
+}
+
+php.run: "process_user.php" {
+    data: $user_data
+    as: $php_result
+}
+
+strings.concat: "Status dari PHP: " { val: $php_result.status; as: $msg }
+log: $msg
+log: "Data terproses:"
+log: $php_result
+
+log: "✅ ZenoLang successfully orchestrated Laravel operations."

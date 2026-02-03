@@ -126,6 +126,12 @@ func RegisterMathSlots(eng *engine.Engine) {
 		env["Mul"] = func(a, b decimal.Decimal) decimal.Decimal { return a.Mul(b) }
 		env["Div"] = func(a, b decimal.Decimal) decimal.Decimal { return a.Div(b) }
 
+		// [UPGRADE] Inject Decimal Constructor for literals
+		env["decimal"] = func(v interface{}) decimal.Decimal {
+			d, _ := decimal.NewFromString(coerce.ToString(v))
+			return d
+		}
+
 		// 2. Pre-processing
 		cleanExpr := strings.ReplaceAll(expressionStr, "$", "")
 

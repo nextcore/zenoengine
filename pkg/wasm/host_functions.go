@@ -14,14 +14,14 @@ type HostFunctions struct {
 	runtime *Runtime
 
 	// Callbacks for host operations
-	OnLog         func(level string, message string)
-	OnDBQuery     func(connection, sql string, params map[string]interface{}) ([]map[string]interface{}, error)
-	OnHTTPRequest func(method, url string, headers, body map[string]interface{}) (map[string]interface{}, error)
-	OnScopeGet    func(key string) (interface{}, error)
-	OnScopeSet    func(key string, value interface{}) error
-	OnFileRead    func(path string) (string, error)
-	OnFileWrite   func(path, content string) error
-	OnEnvGet      func(key string) string
+	OnLog         func(ctx context.Context, level string, message string)
+	OnDBQuery     func(ctx context.Context, connection, sql string, params map[string]interface{}) ([]map[string]interface{}, error)
+	OnHTTPRequest func(ctx context.Context, method, url string, headers, body map[string]interface{}) (map[string]interface{}, error)
+	OnScopeGet    func(ctx context.Context, key string) (interface{}, error)
+	OnScopeSet    func(ctx context.Context, key string, value interface{}) error
+	OnFileRead    func(ctx context.Context, path string) (string, error)
+	OnFileWrite   func(ctx context.Context, path, content string) error
+	OnEnvGet      func(ctx context.Context, key string) string
 }
 
 // NewHostFunctions creates host functions for WASM plugins
@@ -29,10 +29,10 @@ func NewHostFunctions(runtime *Runtime) *HostFunctions {
 	return &HostFunctions{
 		runtime: runtime,
 		// Default implementations (can be overridden)
-		OnLog: func(level, message string) {
+		OnLog: func(ctx context.Context, level, message string) {
 			slog.Info("[WASM Plugin]", "level", level, "message", message)
 		},
-		OnEnvGet: func(key string) string {
+		OnEnvGet: func(ctx context.Context, key string) string {
 			return "" // Default: no env access
 		},
 	}
@@ -113,7 +113,7 @@ func (hf *HostFunctions) hostLog(ctx context.Context, m api.Module, levelPtr, le
 
 	// Call callback
 	if hf.OnLog != nil {
-		hf.OnLog(level, message)
+		hf.OnLog(ctx, level, message)
 	}
 }
 
@@ -123,7 +123,7 @@ func (hf *HostFunctions) hostDBQuery(ctx context.Context, m api.Module, requestP
 	// Read request JSON
 	requestBytes, ok := m.Memory().Read(requestPtr, requestLen)
 	if !ok {
-		return hf.allocateErrorResponse(m, "failed to read request")
+		return hf.allocateErrorResponse(ctx, m, "failed to read request")
 	}
 
 	// Parse request
@@ -133,17 +133,17 @@ func (hf *HostFunctions) hostDBQuery(ctx context.Context, m api.Module, requestP
 		Params     map[string]interface{} `json:"params"`
 	}
 	if err := json.Unmarshal(requestBytes, &request); err != nil {
-		return hf.allocateErrorResponse(m, fmt.Sprintf("invalid request JSON: %v", err))
+		return hf.allocateErrorResponse(ctx, m, fmt.Sprintf("invalid request JSON: %v", err))
 	}
 
 	// Call callback
 	if hf.OnDBQuery == nil {
-		return hf.allocateErrorResponse(m, "database access not available")
+		return hf.allocateErrorResponse(ctx, m, "database access not available")
 	}
 
-	rows, err := hf.OnDBQuery(request.Connection, request.SQL, request.Params)
+	rows, err := hf.OnDBQuery(ctx, request.Connection, request.SQL, request.Params)
 	if err != nil {
-		return hf.allocateErrorResponse(m, err.Error())
+		return hf.allocateErrorResponse(ctx, m, err.Error())
 	}
 
 	// Serialize response
@@ -154,7 +154,7 @@ func (hf *HostFunctions) hostDBQuery(ctx context.Context, m api.Module, requestP
 		},
 	}
 
-	return hf.allocateJSONResponse(m, response)
+	return hf.allocateJSONResponse(ctx, m, response)
 }
 
 // hostHTTPRequest handles HTTP request calls from WASM
@@ -163,7 +163,7 @@ func (hf *HostFunctions) hostHTTPRequest(ctx context.Context, m api.Module, requ
 	// Read request JSON
 	requestBytes, ok := m.Memory().Read(requestPtr, requestLen)
 	if !ok {
-		return hf.allocateErrorResponse(m, "failed to read request")
+		return hf.allocateErrorResponse(ctx, m, "failed to read request")
 	}
 
 	// Parse request
@@ -174,17 +174,17 @@ func (hf *HostFunctions) hostHTTPRequest(ctx context.Context, m api.Module, requ
 		Body    map[string]interface{} `json:"body"`
 	}
 	if err := json.Unmarshal(requestBytes, &request); err != nil {
-		return hf.allocateErrorResponse(m, fmt.Sprintf("invalid request JSON: %v", err))
+		return hf.allocateErrorResponse(ctx, m, fmt.Sprintf("invalid request JSON: %v", err))
 	}
 
 	// Call callback
 	if hf.OnHTTPRequest == nil {
-		return hf.allocateErrorResponse(m, "HTTP access not available")
+		return hf.allocateErrorResponse(ctx, m, "HTTP access not available")
 	}
 
-	result, err := hf.OnHTTPRequest(request.Method, request.URL, request.Headers, request.Body)
+	result, err := hf.OnHTTPRequest(ctx, request.Method, request.URL, request.Headers, request.Body)
 	if err != nil {
-		return hf.allocateErrorResponse(m, err.Error())
+		return hf.allocateErrorResponse(ctx, m, err.Error())
 	}
 
 	// Serialize response
@@ -193,7 +193,7 @@ func (hf *HostFunctions) hostHTTPRequest(ctx context.Context, m api.Module, requ
 		Data:    result,
 	}
 
-	return hf.allocateJSONResponse(m, response)
+	return hf.allocateJSONResponse(ctx, m, response)
 }
 
 // hostScopeGet handles scope variable get calls from WASM
@@ -202,18 +202,18 @@ func (hf *HostFunctions) hostScopeGet(ctx context.Context, m api.Module, keyPtr,
 	// Read key
 	keyBytes, ok := m.Memory().Read(keyPtr, keyLen)
 	if !ok {
-		return hf.allocateErrorResponse(m, "failed to read key")
+		return hf.allocateErrorResponse(ctx, m, "failed to read key")
 	}
 	key := string(keyBytes)
 
 	// Call callback
 	if hf.OnScopeGet == nil {
-		return hf.allocateErrorResponse(m, "scope access not available")
+		return hf.allocateErrorResponse(ctx, m, "scope access not available")
 	}
 
-	value, err := hf.OnScopeGet(key)
+	value, err := hf.OnScopeGet(ctx, key)
 	if err != nil {
-		return hf.allocateErrorResponse(m, err.Error())
+		return hf.allocateErrorResponse(ctx, m, err.Error())
 	}
 
 	// Serialize response
@@ -224,7 +224,7 @@ func (hf *HostFunctions) hostScopeGet(ctx context.Context, m api.Module, keyPtr,
 		},
 	}
 
-	return hf.allocateJSONResponse(m, response)
+	return hf.allocateJSONResponse(ctx, m, response)
 }
 
 // hostScopeSet handles scope variable set calls from WASM
@@ -250,7 +250,7 @@ func (hf *HostFunctions) hostScopeSet(ctx context.Context, m api.Module, request
 		return 0 // failure
 	}
 
-	if err := hf.OnScopeSet(request.Key, request.Value); err != nil {
+	if err := hf.OnScopeSet(ctx, request.Key, request.Value); err != nil {
 		return 0 // failure
 	}
 
@@ -263,18 +263,18 @@ func (hf *HostFunctions) hostFileRead(ctx context.Context, m api.Module, pathPtr
 	// Read path
 	pathBytes, ok := m.Memory().Read(pathPtr, pathLen)
 	if !ok {
-		return hf.allocateErrorResponse(m, "failed to read path")
+		return hf.allocateErrorResponse(ctx, m, "failed to read path")
 	}
 	path := string(pathBytes)
 
 	// Call callback
 	if hf.OnFileRead == nil {
-		return hf.allocateErrorResponse(m, "file access not available")
+		return hf.allocateErrorResponse(ctx, m, "file access not available")
 	}
 
-	content, err := hf.OnFileRead(path)
+	content, err := hf.OnFileRead(ctx, path)
 	if err != nil {
-		return hf.allocateErrorResponse(m, err.Error())
+		return hf.allocateErrorResponse(ctx, m, err.Error())
 	}
 
 	// Serialize response
@@ -285,7 +285,7 @@ func (hf *HostFunctions) hostFileRead(ctx context.Context, m api.Module, pathPtr
 		},
 	}
 
-	return hf.allocateJSONResponse(m, response)
+	return hf.allocateJSONResponse(ctx, m, response)
 }
 
 // hostFileWrite handles file write calls from WASM
@@ -311,7 +311,7 @@ func (hf *HostFunctions) hostFileWrite(ctx context.Context, m api.Module, reques
 		return 0 // failure
 	}
 
-	if err := hf.OnFileWrite(request.Path, request.Content); err != nil {
+	if err := hf.OnFileWrite(ctx, request.Path, request.Content); err != nil {
 		return 0 // failure
 	}
 
@@ -324,41 +324,41 @@ func (hf *HostFunctions) hostEnvGet(ctx context.Context, m api.Module, keyPtr, k
 	// Read key
 	keyBytes, ok := m.Memory().Read(keyPtr, keyLen)
 	if !ok {
-		return hf.allocateString(m, "")
+		return hf.allocateString(ctx, m, "")
 	}
 	key := string(keyBytes)
 
 	// Call callback
 	value := ""
 	if hf.OnEnvGet != nil {
-		value = hf.OnEnvGet(key)
+		value = hf.OnEnvGet(ctx, key)
 	}
 
-	return hf.allocateString(m, value)
+	return hf.allocateString(ctx, m, value)
 }
 
 // Helper: allocate error response in WASM memory
-func (hf *HostFunctions) allocateErrorResponse(m api.Module, errorMsg string) uint32 {
+func (hf *HostFunctions) allocateErrorResponse(ctx context.Context, m api.Module, errorMsg string) uint32 {
 	response := HostResponse{
 		Success: false,
 		Error:   errorMsg,
 	}
-	return hf.allocateJSONResponse(m, response)
+	return hf.allocateJSONResponse(ctx, m, response)
 }
 
 // Helper: allocate JSON response in WASM memory
-func (hf *HostFunctions) allocateJSONResponse(m api.Module, response interface{}) uint32 {
+func (hf *HostFunctions) allocateJSONResponse(ctx context.Context, m api.Module, response interface{}) uint32 {
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {
 		slog.Error("Failed to marshal response", "error", err)
 		return 0
 	}
 
-	return hf.allocateString(m, string(jsonBytes))
+	return hf.allocateString(ctx, m, string(jsonBytes))
 }
 
 // Helper: allocate string in WASM memory
-func (hf *HostFunctions) allocateString(m api.Module, str string) uint32 {
+func (hf *HostFunctions) allocateString(ctx context.Context, m api.Module, str string) uint32 {
 	bytes := []byte(str)
 	length := uint32(len(bytes))
 
@@ -369,7 +369,7 @@ func (hf *HostFunctions) allocateString(m api.Module, str string) uint32 {
 		return 0
 	}
 
-	results, err := allocFn.Call(context.Background(), uint64(length))
+	results, err := allocFn.Call(ctx, uint64(length))
 	if err != nil {
 		slog.Error("Failed to allocate memory in WASM", "error", err)
 		return 0

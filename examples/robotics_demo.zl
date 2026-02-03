@@ -1,0 +1,67 @@
+// ZenoLang Robotics Mission Demo
+// Pattern: Sense -> Think -> Act
+// NOTE: This demo requires the 'robotics' WASM plugin to be installed.
+// See 'examples/wasm-plugins/robotics/' for the plugin source code.
+
+log: "🚀 Initializing Robot Brain..."
+
+var: $running { val: true }
+var: $iteration { val: 1 }
+
+while: "$iteration <= 5" {
+  do: {
+    strings.concat: "--- Mission Step " {
+      val: $iteration
+      val: " ---"
+      as: $step_msg
+    }
+    log: $step_msg
+
+    // 1. SENSE: Baca sensor jarak
+    robot.sense: "distance" { as: $dist }
+
+    // 2. THINK: Logika penghindar rintangan
+    if: $dist < 50 {
+      then: {
+        strings.concat: "⚠️ Obstacle detected at " {
+          val: $dist
+          val: "cm! Planning evasive maneuver."
+          as: $warn_msg
+        }
+        log: $warn_msg
+        robot.act: "stop"
+        robot.act: "turn_left" { power: 50 }
+      }
+      else: {
+        strings.concat: "✅ Path clear (Distance: " {
+          val: $dist
+          val: "cm). Full speed ahead!"
+          as: $ok_msg
+        }
+        log: $ok_msg
+        robot.act: "forward" { power: 100 }
+      }
+    }
+
+    // 3. MONITOR: Cek Baterai
+    robot.sense: "battery" { as: $battery }
+    if: $battery < 20 {
+      then: {
+        strings.concat: "🪫 Battery low (" {
+          val: $battery
+          val: "%). Returning to dock."
+          as: $batt_msg
+        }
+        log: $batt_msg
+        robot.act: "return_to_base"
+      }
+    }
+
+    // Tunggu simulasi step berikutnya
+    sleep: 500
+    math.calc: $iteration + 1 { as: $iteration }
+    cast.to_int: $iteration { as: $iteration }
+  }
+}
+
+log: "🏁 Mission Accomplished."

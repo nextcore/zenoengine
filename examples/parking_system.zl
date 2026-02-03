@@ -1,0 +1,45 @@
+// ZenoLang Parking System Demo
+// Architecture: Mission Controller (ZenoLang) -> Specialized Workers (WASM)
+
+log: "🅿️  Initializing Parking System Controller..."
+
+// 1. INPUT: Trigger dari sensor loop (mobil datang)
+var: $event { val: "vehicle_arrived" }
+
+if: $event == "vehicle_arrived" {
+  then: {
+    log: "🚗 Vehicle detected at Entry Gate."
+
+    // 2. VISION: Ambil foto & OCR (WASM Plugin)
+    vision.ocr: "/dev/video0" { as: $ocr_result }
+
+    strings.concat: "🔍 Plate Recognized: " { val: $ocr_result.plate_number; as: $msg }
+    log: $msg
+
+    // 3. LOGIC: Cek keanggotaan/Simpan di DB
+    db.table: parking_entries
+    db.insert: {
+        plate: $ocr_result.plate_number
+        entry_time: date.now
+        status: "active"
+    }
+
+    // 4. ACT: Buka Gate & Cetak Tiket (WASM Plugin)
+    log: "🔓 Granting Access..."
+
+    hw.barrier: "open" { speed: 100 }
+
+    hw.printer: "print_ticket" {
+        data: {
+            title: "WELCOME TO ZENO PARKING"
+            plate: $ocr_result.plate_number
+            time: date.now
+            id: $db_last_id
+        }
+    }
+
+    log: "✅ Barrier opened, ticket printed. Drive safely!"
+  }
+}
+
+log: "🏁 System Standby."

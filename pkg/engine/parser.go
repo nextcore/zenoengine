@@ -170,7 +170,13 @@ func ParseString(content string, filename string) (*Node, error) {
 			}
 
 		case TokenError:
-			return nil, fmt.Errorf("lexical error at line %d, col %d in %s: %s", tok.Line, tok.Column, filename, tok.Literal)
+			return nil, Diagnostic{
+				Type:     "error",
+				Message:  fmt.Sprintf("lexical error: unexpected character '%s'", tok.Literal),
+				Filename: filename,
+				Line:     tok.Line,
+				Col:      tok.Column,
+			}
 		}
 	}
 
