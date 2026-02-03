@@ -229,9 +229,20 @@ func (p *SidecarPlugin) call(ctx context.Context, method string, params interfac
 		return nil, err
 	}
 
+	// Default timeout for sidecar calls if not specified in context
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
 	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-callCtx.Done():
+		p.mu.Lock()
+		delete(p.pendingCalls, id)
+		p.mu.Unlock()
+		return nil, fmt.Errorf("sidecar call timeout: %w", callCtx.Err())
 	case resp := <-ch:
 		return resp, nil
 	}
@@ -315,6 +326,22 @@ func (p *SidecarPlugin) handleHostCall(ctx context.Context, id string, fn string
 		key, _ := pMap["key"].(string)
 		val := pMap["value"]
 		err = hf.OnScopeSet(ctx, key, val)
+	case "http_request":
+		method, _ := pMap["method"].(string)
+		url, _ := pMap["url"].(string)
+		headers, _ := pMap["headers"].(map[string]interface{})
+		body, _ := pMap["body"].(map[string]interface{})
+		result, err = hf.OnHTTPRequest(ctx, method, url, headers, body)
+	case "file_read":
+		path, _ := pMap["path"].(string)
+		result, err = hf.OnFileRead(ctx, path)
+	case "file_write":
+		path, _ := pMap["path"].(string)
+		content, _ := pMap["content"].(string)
+		err = hf.OnFileWrite(ctx, path, content)
+	case "env_get":
+		key, _ := pMap["key"].(string)
+		result = hf.OnEnvGet(ctx, key)
 	default:
 		err = fmt.Errorf("unknown host function: %s", fn)
 	}
