@@ -86,7 +86,6 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 	// Inject engine into context for slots use
 	ctx = context.WithValue(ctx, "engine", e)
 
-
 	// FASTEST PATH: Try optimized fast paths for common operations (2-3x faster)
 	if used, err := TryFastPath(ctx, node, scope); used {
 		if err != nil {
@@ -132,7 +131,7 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 			// 1. Cek Atribut Tak Dikenal (Hanya jika Inputs didefinisikan)
 			if node.cachedMeta.Inputs != nil {
 				for _, child := range node.Children {
-					if child.Name == "do" || child.Name == "then" || child.Name == "else" || child.Name == "catch" || child.Name == "" {
+					if child.Name == "do" || child.Name == "then" || child.Name == "else" || child.Name == "catch" || child.Name == "" || child.Name == "__native_write" || child.Name == "__native_write_safe" {
 						continue // Blok spesial diabaikan dari validasi atribut
 					}
 					if _, allowed := node.cachedMeta.Inputs[child.Name]; !allowed {
