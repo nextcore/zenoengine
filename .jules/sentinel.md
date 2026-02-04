@@ -12,3 +12,8 @@
 **Vulnerability:** The `io.file.write` slot allowed writing to any file extension, including `.zl` (ZenoLang source) and `.go` files. This could allow an attacker with filesystem write access (e.g., via an upload feature utilizing this slot) to modify the application's source code, leading to Remote Code Execution (RCE).
 **Learning:** General-purpose filesystem APIs in an interpreted language engine must have strict boundaries. Allowing self-modification of source code is almost always a critical vulnerability.
 **Prevention:** Implement a blocklist (or allowlist) of file extensions for filesystem write operations. Explicitly forbid writing to source code extensions (`.zl`, `.go`), configuration files (`.env`), and version control directories (`.git`) in production environments. Exception made for `APP_ENV=development` to support tooling like source generators.
+
+## 2026-02-03 - Missing Anti-Bot Mechanism
+**Vulnerability:** The application lacked proactive defenses against automated bots, scraping, and brute-force attacks beyond basic rate limiting.
+**Learning:** Defense in depth requires distinguishing between human users and automated scripts. IP-based blocking is often insufficient as bots rotate IPs.
+**Prevention:** Implemented a "JS Challenge Interstitial" (inspired by SafeLine/Cloudflare). This middleware serves a lightweight HTML page requiring JavaScript execution to solve a challenge before accessing the site. This filters out dumb bots (curl, python requests, simple scrapers) while remaining transparent to legitimate browsers. The feature is toggleable via `BOT_DEFENSE_ENABLED`.

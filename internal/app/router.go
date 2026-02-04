@@ -32,6 +32,7 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 	r.Use(metrics.Middleware) // PROMETHEUS METRICS (Place early)
 	r.Use(middleware.WAF)     // [WAF] Shield up early
 	r.Use(middleware.HostDispatcher) // [VHOST] O(1) Scalable Host Routing
+	r.Use(middleware.BotDefense)     // [BOT] JS Challenge Interstitial
 	r.Use(chiMiddleware.Compress(5))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.SecurityHeaders) // New Security Middleware
@@ -117,6 +118,9 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	// Bot Challenge Verification Endpoint
+	r.Post("/_zeno/challenge", middleware.BotChallengeHandler)
 
 	// Prometheus Metrics Endpoint
 	r.Handle("/metrics", promhttp.Handler())
