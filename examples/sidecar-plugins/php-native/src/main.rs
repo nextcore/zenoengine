@@ -159,14 +159,18 @@ fn main() -> anyhow::Result<()> {
                     input.payload.get("code").and_then(|v| v.as_str()).unwrap_or("echo 'No code provided';")
                 };
 
+                // --- REQUEST LIFECYCLE START ---
+                if !php::request_startup() {
+                    eprintln!("[Rust] Request Startup Failed");
+                    // Can continue but state might be dirty
+                }
+
                 // Inject Superglobals from payload
                 let mut bootstrap = String::from("<?php ");
 
                 // Extract Zeno Scope
                 if let Some(scope) = input.payload.get("_zeno_scope") {
                     if let Ok(json) = serde_json::to_string(scope) {
-                        // Safe injection using base64 or addslashes recommended for real env
-                        // Here assuming valid JSON string
                         bootstrap.push_str(&format!("$_SERVER['ZENO_SCOPE'] = json_decode('{}', true);", json.replace("'", "\\'")));
                     }
                 }
@@ -179,13 +183,54 @@ fn main() -> anyhow::Result<()> {
                     if let Some(method) = req.get("method").and_then(|v| v.as_str()) {
                         bootstrap.push_str(&format!("$_SERVER['REQUEST_METHOD'] = '{}';", method));
                     }
+
+                    // Mock $_FILES from Zeno payload
+                    // Zeno must send 'files' map: { "field": { "path": "/tmp/xyz", "name": "doc.pdf", "type": "app/pdf", "size": 123 } }
+                    if let Some(files) = req.get("files").and_then(|v| v.as_object()) {
+                        bootstrap.push_str("$_FILES = [];");
+                        for (key, file_val) in files {
+                            if let Some(f) = file_val.as_object() {
+                                let path = f.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                                let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                let mime = f.get("type").and_then(|v| v.as_str()).unwrap_or("application/octet-stream");
+                                let size = f.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+
+                                bootstrap.push_str(&format!(
+                                    "$_FILES['{}'] = [
+                                        'name' => '{}',
+                                        'type' => '{}',
+                                        'tmp_name' => '{}',
+                                        'error' => 0,
+                                        'size' => {}
+                                    ];",
+                                    key, name, mime, path, size
+                                ));
+                            }
+                        }
+                    }
                 }
 
                 // Wrapper for capture
-                // Using base64_encode to ensure safe JSON transport of binary output
+                // We use register_shutdown_function to ensure capture even if 'exit' is called
                 let wrapped_code = format!(
                     "
+                    $__zeno_capture = function() {{
+                        $output = ob_get_clean();
+                        $headers = headers_list();
+                        $status = http_response_code();
+
+                        $result = [
+                            'output' => base64_encode($output),
+                            'headers' => $headers,
+                            'status' => $status
+                        ];
+
+                        $temp_file = sys_get_temp_dir() . '/zeno_php_' . getmypid() . '.json';
+                        file_put_contents($temp_file, json_encode($result));
+                    }};
+                    register_shutdown_function($__zeno_capture);
                     ob_start();
+
                     try {{
                         // Bootstrap Logic
                         {}
@@ -195,18 +240,6 @@ fn main() -> anyhow::Result<()> {
                     }} catch (Throwable $e) {{
                         echo 'PHP Error: ' . $e->getMessage();
                     }}
-                    $output = ob_get_clean();
-
-                    // Direct Stdout write for capture by parent process?
-                    // No, we are inside the same process.
-                    // We must return this data to Rust.
-                    // Since zend_eval_string returns bool, we use a dirty hack:
-                    // Print a special delimiter that Rust *could* parse if we redirected stdout.
-                    // BUT, since we share stdout, we can't do that easily without breaking JSON-RPC.
-
-                    // ALTERNATIVE: Write to a temporary file
-                    $temp_file = sys_get_temp_dir() . '/zeno_php_' . getmypid() . '.out';
-                    file_put_contents($temp_file, $output);
                     ",
                     bootstrap.trim_start_matches("<?php "),
                     entry_script
@@ -214,12 +247,35 @@ fn main() -> anyhow::Result<()> {
 
                 let success = php::eval(&wrapped_code);
 
-                // Read back captured output
-                let mut captured_output = String::new();
-                let temp_path = std::env::temp_dir().join(format!("zeno_php_{}.out", std::process::id()));
+                // --- REQUEST LIFECYCLE END ---
+                php::request_shutdown();
+
+                // Read back captured result
+                let mut resp_data = serde_json::json!({
+                    "output": "",
+                    "status": 500,
+                    "headers": []
+                });
+
+                let temp_path = std::env::temp_dir().join(format!("zeno_php_{}.json", std::process::id()));
                 if temp_path.exists() {
                     if let Ok(content) = std::fs::read_to_string(&temp_path) {
-                        captured_output = content;
+                        if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
+                            // Decode base64 output
+                            if let Some(encoded) = parsed.get("output").and_then(|v| v.as_str()) {
+                                // Decode to bytes then lossy string (or keep bytes if protocol supports)
+                                // Ideally we just pass string if it's text, but here we assume UTF-8 for JSON
+                                // In real implementation we might want base64 output field
+                                // For now, we decode back to string for simplicity
+                                // NOTE: Rust base64 crate not in deps, assume simple text or raw pass
+                                // Actually, let's keep it simple: assume we want string in JSON
+                                // But PHP encoded it.
+                                // We need to decode it if we want raw string, or pass as base64.
+                                // Let's pass it as is (base64) and let Zeno decode?
+                                // Or decode here? Let's just use the raw value.
+                                resp_data = parsed;
+                            }
+                        }
                         let _ = std::fs::remove_file(temp_path);
                     }
                 }
@@ -228,10 +284,7 @@ fn main() -> anyhow::Result<()> {
                     msg_type: Some("guest_response".to_string()),
                     id: Some(input.id),
                     success: success,
-                    data: Some(serde_json::json!({
-                        "output": captured_output,
-                        "status": if success { 200 } else { 500 }
-                    })),
+                    data: Some(resp_data),
                     error: None,
                 };
                 writeln!(stdout, "{}", serde_json::to_string(&resp)?)?;

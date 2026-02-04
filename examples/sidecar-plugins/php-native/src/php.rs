@@ -28,6 +28,10 @@ extern "C" {
         retval_ptr: *mut c_void, // zval pointer
         string_name: *const c_char,
     ) -> c_int;
+
+    // Request lifecycle
+    pub fn php_request_startup() -> c_int;
+    pub fn php_request_shutdown(dummy: *mut c_void);
 }
 
 // Helpers for Rust interaction
@@ -35,7 +39,20 @@ pub fn init() -> bool {
     unsafe {
         // argc=0, argv=null
         let res = php_embed_init(0, std::ptr::null_mut());
-        res == 0 // SUCCESS = 0 in some APIs, but PHP SUCCESS is usually 0
+        res == 0 // SUCCESS
+    }
+}
+
+pub fn request_startup() -> bool {
+    unsafe {
+        let res = php_request_startup();
+        res == 0 // SUCCESS
+    }
+}
+
+pub fn request_shutdown() {
+    unsafe {
+        php_request_shutdown(std::ptr::null_mut());
     }
 }
 

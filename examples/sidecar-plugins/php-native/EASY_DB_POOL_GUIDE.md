@@ -14,7 +14,7 @@ Zeno\Laravel\BridgeServiceProvider::class,
 ```
 
 ### Apa yang dilakukan baris ini?
-1.  Mendeteksi jika Laravel dijalankan di dalam **Zeno Sidecar**.
+1.  Mendeteksi jika Laravel dijalankan di dalam **Zeno Sidecar** (via env vars).
 2.  Secara otomatis mengganti driver database default (PDO) dengan **Zeno Proxy Driver**.
 3.  Memetakan query Eloquent langsung ke Go Connection Pool.
 
@@ -36,12 +36,9 @@ Script ini akan dijalankan **sebelum** Laravel atau script PHP apapun dimulai.
 ```php
 <?php
 // Mengambil konfigurasi DB dari ZenoEngine secara otomatis
-if (env('ZENO_PROXY_ENABLED')) {
-    config(['database.default' => 'zeno']);
-    config(['database.connections.zeno' => [
-        'driver' => 'zeno_proxy', // Terdaftar otomatis oleh bridge
-        'database' => env('DB_DATABASE'),
-    ]]);
+if (getenv('ZENO_PROXY_ENABLED')) {
+    // Inject config dynamically
+    // ...
 }
 ```
 

@@ -1,111 +1,71 @@
-# 🐘 Panduan Upgrade PHP & Laravel (ZenoEngine Sidecar)
+# 🐘 Panduan Upgrade PHP & Laravel (Rust Bridge)
 
-Panduan ini menjelaskan cara memperbarui versi PHP pada **Zig Bridge** dan mengintegrasikan versi **Laravel** terbaru ke dalam ekosistem ZenoLang.
+Panduan ini menjelaskan cara memperbarui versi PHP pada **Rust Bridge** dan mengintegrasikan versi **Laravel** terbaru ke dalam ekosistem ZenoLang.
 
 ---
 
-## 1. Upgrade Versi PHP pada Zig Bridge
+## 1. Upgrade Versi PHP pada Rust Bridge
 
-ZenoEngine PHP-Native Bridge bekerja dengan cara melakukan *binding* terhadap `libphp` (PHP Embedded SAPI).
+ZenoEngine PHP-Native Bridge bekerja dengan cara melakukan *static linking* terhadap `libphp` (PHP Embedded SAPI) menggunakan crate `cc` di Rust.
 
 ### A. Persiapan Library PHP (Headers & Binaries)
-Untuk menggunakan PHP 8.3 atau 8.4+, Anda membutuhkan file header (`.h`) dan library (`.lib` atau `.so`).
+Untuk menggunakan PHP 8.3 atau 8.4+, Anda membutuhkan file header (`.h`) dan library (`.lib` atau `.a`).
 
 1.  **Windows**:
-    - Download **PHP SDK** atau binary "Thread Safe" dari [windows.php.net](https://windows.php.net/download/).
+    - Download **PHP SDK** atau binary "Thread Safe" (TS) dari [windows.php.net](https://windows.php.net/download/).
     - Pastikan Anda mengambil paket `devel` yang berisi `php8ts.lib` dan folder `include`.
 2.  **Linux**:
     - Install paket development: `sudo apt install php8.3-dev` (atau versi terbaru).
-    - Lokasi headers biasanya ada di `/usr/include/php/`.
+    - Pastikan `php-config` tersedia di PATH.
 
-### B. Konfigurasi `main.zig`
-Perbarui `main.zig` untuk merujuk pada header PHP yang baru. Gunakan `@cInclude` untuk menghubungkan fungsi C dari PHP ke Zig.
+### B. Konfigurasi `build.rs`
+Edit file `build.rs` di root project plugin untuk mengarahkan linker ke library PHP baru.
 
-```zig
-const php = @cImport({
-    @cDefine("ZEND_WIN32", "1"); // Jika di Windows
-    @cDefine("PHP_WIN32", "1");  // Jika di Windows
-    @cInclude("sapi/embed/php_embed.h");
-});
+**Contoh Konfigurasi Windows:**
+```rust
+#[cfg(target_os = "windows")]
+{
+    // Arahkan ke folder SDK PHP yang baru didownload
+    println!("cargo:rustc-link-search=native=C:/php-sdk-8.3/lib");
+    println!("cargo:rustc-link-lib=static=php8");
+}
 ```
 
-### C. Build dengan Linker Flags
-Saat melakukan build menggunakan Zig, Anda harus memberitahu compiler di mana lokasi library PHP terbaru tersebut.
+### C. Build Ulang
+Lakukan kompilasi ulang dengan Cargo. Rust akan otomatis me-link library baru.
 
-**Build Command (Contoh PHP 8.3):**
 ```bash
-zig build-exe main.zig \
-  -I./include/php \
-  -L./lib \
-  -lphp8 \
-  -O ReleaseSafe \
-  -target x86_64-windows
+cargo clean
+cargo build --release
 ```
 
 ---
 
-## 2. Integrasi Laravel Terbaru ke ZenoLang
+## 2. Integrasi Laravel Terbaru
 
-Setelah Bridge siap, Anda bisa menginstal Laravel terbaru di dalam direktori project Zeno Anda.
+Setelah Bridge di-update, Anda bisa menginstal Laravel versi terbaru.
 
-### A. Instalasi Laravel
-Jalankan composer di dalam root atau subfolder plugins:
-```bash
-composer create-project laravel/laravel:^11.0 my-laravel-app
-```
+### A. Konfigurasi Database Proxy
+Agar Laravel menggunakan **Connection Pool** milik ZenoEngine:
 
-### B. Konfigurasi Database Proxy
-Agar Laravel menggunakan **Connection Pool** milik ZenoEngine (bukan koneksi database langsung), Anda harus mengkonfigurasi Laravel untuk berkomunikasi via Bridge.
-
-1.  **Install Zeno-Laravel Provider** (Opsional/Custom):
-    Buat driver database kustom di Laravel yang mengirim query via `php.db_proxy` ke Zeno.
+1.  **Install Zeno-Laravel Provider**: Gunakan driver database khusus yang berkomunikasi via JSON-RPC.
 2.  **Edit `.env` Laravel**:
     ```env
     DB_CONNECTION=zeno_proxy
     ZENO_BRIDGE_ENABLED=true
     ```
 
-### C. Mendaftarkan Slot Laravel Baru
-Anda bisa menambah slot khusus untuk fitur Laravel tertentu di ZenoLang. Edit file `manifest.yaml` di plugin PHP Anda:
-
-```yaml
-slots:
-  - name: "php.laravel"
-    description: "Jalankan perintah Artisan"
-  - name: "laravel.route"
-    description: "Panggil route Laravel secara internal"
-```
-
-Lalu di ZenoLang (`main.zl`), Anda bisa memanggilnya:
-
-```javascript
-// Memanggil Controller Laravel 11 langsung
-php.laravel: "call:controller" {
-    class: "App\\Http\\Controllers\\UserController"
-    method: "index"
-    as: $users
-}
-
-log.info: "Total users dari Laravel: " + $users.count
-```
+### B. Request Lifecycle
+Rust Bridge v1.3+ menggunakan siklus `php_request_startup` dan `php_request_shutdown`. Ini menjamin kompatibilitas 100% dengan Laravel Service Container. Tidak ada konfigurasi khusus yang dibutuhkan di sisi Laravel; bridge akan mereset state otomatis setiap request.
 
 ---
 
-## 3. Strategi "Zero-Installation" (Bundling)
+## 3. Strategi Bundling
 
-Untuk membuat aplikasi Anda benar-benar portable (user tidak perlu install PHP/Laravel sendiri):
+Untuk membuat aplikasi portable (User tidak perlu install PHP):
 
-1.  **Static Linking**: Gunakan Zig untuk menautkan `libphp.a` secara statis ke dalam `php_bridge.exe`.
-2.  **Asset Embedding**: Gunakan fitur `@embedFile` di Zig untuk memasukkan file-file *core* Laravel yang kritikal ke dalam satu binary bridge (atau bundling via Zip).
-3.  **Zeno-Bundler**: Gunakan perintah masa depan `zeno build` untuk mengemas seluruh folder `vendor/` dan `public/` Laravel menjadi satu file eksekusi Zeno.
-
----
-
-## 4. Tips Performa Enterprise
-
-*   **OPcache**: Pastikan OPcache diaktifkan di dalam inisialisasi PHP di `main.zig` agar script PHP tidak di-parse berulang kali.
-*   **Worker Mode**: Gunakan pola *loop* di Zig agar proses PHP tidak mati setelah satu request (mirip RoadRunner atau FrankenPHP).
-*   **Shared Memory**: Gunakan slot `scope.set` untuk membagi state antara Go (Zeno) dan PHP secara *real-time* tanpa overhead JSON yang besar.
+1.  **Static Linking**: Pastikan Anda me-link `libphp` secara statis di `build.rs` (default).
+2.  **Runtime DLL (Windows)**: Di Windows, meskipun static linking, terkadang file `php8.dll` tetap dibutuhkan di folder yang sama dengan binary `.exe` kecuali Anda melakukan kompilasi PHP custom static build. Sertakan DLL ini dalam paket distribusi Anda.
 
 ---
-*Dokumentasi ini dibuat untuk mendukung ekosistem ZenoEngine v1.5+*
+*Dokumentasi ini diperbarui untuk ZenoEngine Rust Bridge.*
