@@ -1,32 +1,32 @@
 # 🤖 Fitur Enterprise Otomatis (Auto-Cure PHP)
 
-ZenoEngine v1.3+ hadir dengan filosofi **"Zero-Config Enterprise"**, di mana limitasi tradisional PHP diatasi secara otomatis oleh engine tanpa perlu konfigurasi tambahan.
+ZenoEngine v1.3+ hadir dengan filosofi **"Zero-Config Enterprise"**, di mana limitasi tradisional PHP diatasi secara otomatis oleh arsitektur **Native Bridge**.
 
 ---
 
 ## 1. Auto-Healing (Self-Recovery)
-PHP seringkali berhenti mendadak karena *memory exhaustion* atau *fatal error*. ZenoEngine kini memantau kesehatan proses Sidecar secara *real-time*.
+PHP seringkali berhenti mendadak karena *memory exhaustion* atau *fatal error*. ZenoEngine memantau kesehatan proses Sidecar secara *real-time*.
 
 *   **Cara Kerja**: Jika bridge PHP crash, ZenoEngine akan mendeteksinya dan melakukan restart otomatis dengan strategi *exponential backoff*.
 *   **Keuntungan**: Aplikasi Anda tetap online meskipun ada script PHP yang tidak stabil.
 
 ## 2. Automatic State Persistence (v1.3 Default)
-Secara default, Sidecar kini berjalan dalam mode **Managed Stateful**.
+Secara default, Sidecar berjalan dalam mode **Managed Stateful**.
 
-*   **Otomatisasi**: Variabel statis dan inisialisasi framework (seperti Service Container Laravel) tetap terjaga di memori antar panggilan slot.
-*   **Performa**: Menghilangkan overhead bootstrapping PHP (~50-100ms) pada setiap request.
+*   **Otomatisasi**: Interpreter PHP tetap hidup di memori. Namun, berkat implementasi `Request Lifecycle` di bridge Rust, state request (Global Variables) di-reset otomatis setiap kali request selesai.
+*   **Performa**: Menghilangkan overhead inisialisasi awal engine PHP, namun tetap menjamin kebersihan memori antar request (seperti PHP-FPM).
 
 ## 3. Global Session & Scope Sync
 ZenoEngine secara otomatis menyinkronkan data antara scope ZenoLang dan PHP.
 
-*   **Deep Injection**: Variabel `$user`, `$cart`, atau `$session` di ZenoLang otomatis tersedia di dalam superglobal PHP (`$_SESSION` atau `$_ZENO`) melalui filter bridge otomatis.
-*   **Bi-directional**: Perubahan data di PHP dapat dikirim balik ke ZenoLang secara instan.
+*   **Deep Injection**: Variabel `$user`, `$cart`, atau `$session` di ZenoLang otomatis tersedia di PHP melalui `$_SERVER['ZENO_SCOPE']`.
+*   **Bi-directional**: Data dikirim dalam format JSON yang aman dan efisien.
 
 ## 4. Unified Error Stream (AI-Native)
 Kesalahan yang terjadi di PHP kini diproses oleh Zeno Diagnostic System.
 
-*   **Structured Logs**: `Fatal Error` atau `Warning` dari PHP ditangkap dari StdErr sidecar, diparsing, dan ditampilkan sebagai **Structured Diagnostic JSON** di ZenoEngine.
-*   **AI Debugging**: Karena formatnya JSON, AI Agent dapat langsung menganalisa error PHP tersebut dan menyarankan perbaikan kode.
+*   **Structured Logs**: Output dari `stderr` sidecar ditangkap oleh ZenoEngine.
+*   **Panic Protection**: Bridge Rust membungkus eksekusi PHP dalam blok `try-catch` (dan output buffering) untuk mencegah output error liar merusak protokol komunikasi.
 
 ---
 
@@ -35,10 +35,10 @@ Kesalahan yang terjadi di PHP kini diproses oleh Zeno Diagnostic System.
 | Limitasi PHP | Status di ZenoEngine | Mekanisme Otomatis |
 | :--- | :--- | :--- |
 | **Crashes** | ✅ **Auto-Healed** | Process Watchdog & Restart |
-| **Stateless** | ✅ **Persistent** | Managed Stateful Worker |
+| **Stateless** | ✅ **Persistent** | Embedded SAPI |
 | **Slow DB** | ✅ **Pooled** | Go DB Proxy (Default) |
 | **Sync Data** | ✅ **Synced** | Automatic Scope Injection |
-| **Async** | ✅ **Supported** | Zeno `async:` slot handling |
+| **Request Isolation** | ✅ **Safe** | `php_request_shutdown` Loop |
 
 ---
 *Dengan fitur-fitur ini, ZenoEngine mengubah PHP menjadi runtime enterprise yang tangguh dan modern.*

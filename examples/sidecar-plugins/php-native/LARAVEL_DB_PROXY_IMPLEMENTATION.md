@@ -1,14 +1,14 @@
 # ⚡ Detail Implementasi Laravel Connection Pool via Zeno Proxy
 
-Panduan ini menjelaskan secara teknis bagaimana Laravel dapat menggunakan **Go Connection Pool** milik ZenoEngine alih-alih membuka koneksi database sendiri. Ini sangat berguna untuk skalabilitas tinggi karena Go menangani ribuan koneksi dengan sangat efisien.
+Panduan ini menjelaskan secara teknis bagaimana Laravel dapat menggunakan **Go Connection Pool** milik ZenoEngine alih-alih membuka koneksi database sendiri.
 
 ---
 
 ## 1. Konsep Arsitektur
 1.  **Laravel** memanggil Query Builder / Eloquent.
 2.  **Custom Driver** di Laravel mencegat query tersebut.
-3.  Query dikirim ke **Zig Bridge** (Sidecar) via JSON-RPC internal.
-4.  **Zig Bridge** mengirim pesan `host_call` dengan fungsi `db_query` ke **ZenoEngine (Go)**.
+3.  Query dikirim ke **Native Bridge** (Rust) via JSON-RPC.
+4.  **Native Bridge** mengirim pesan `host_call` dengan fungsi `db_query` ke **ZenoEngine (Go)**.
 5.  **ZenoEngine** mengeksekusi query menggunakan connection pool-nya dan mengembalikan hasilnya ke Laravel.
 
 ---
@@ -33,29 +33,22 @@ class ZenoProxyConnection extends Connection
 {
     protected function run($query, $bindings, \Closure $callback)
     {
-        // Panggil fungsi global yang disediakan oleh Zig Bridge
-        // Biasanya bridge akan menyuntikkan fungsi rpc() ke runtime PHP
+        // Panggil fungsi global yang disediakan oleh Bridge
         return $this->proxyToZeno($query, $bindings);
     }
 
     protected function proxyToZeno($query, $bindings)
     {
-        // Contoh pemanggilan RPC ke ZenoEngine via Zig Sidecar
-        // Pesan JSON dikirim ke StdOut yang ditangkap oleh Go
-        $response = \Zeno::call('db_query', [
-            'connection' => $this->getName(),
-            'sql' => $query,
-            'params' => $bindings
-        ]);
+        // Contoh pemanggilan RPC ke ZenoEngine
+        // Implementasi ini bergantung pada bagaimana Anda mengekspos fungsi host ke PHP context
+        // Di Rust bridge v1.3+, Anda bisa menggunakan $_SERVER['ZENO_RPC'] atau helper khusus jika ada.
 
-        if (!$response['success']) {
-            throw new \Exception("Zeno DB Proxy Error: " . $response['error']);
-        }
+        // Untuk saat ini, konsepnya adalah mengirim pesan khusus yang akan ditangkap oleh bridge.
+        // (Detail implementasi client PHP dapat bervariasi)
 
-        return $response['data']['rows'];
+        return []; // Mock return
     }
 
-    // Implementasi method abstract lainnya...
     public function getDefaultQueryGrammar() { return new Grammar; }
     public function getDefaultPostProcessor() { return new Processor; }
 }
@@ -111,22 +104,20 @@ DB_CONNECTION=zeno
 | :--- | :--- | :--- |
 | **Koneksi** | 1 Request = 1 Koneksi Baru | 1000 Request = Reusable Go Pool |
 | **Memory** | Tinggi (overhead PDO) | Sangat Rendah (Lightweight JSON) |
-| **Handshake** | Tiap request ada TCP handshake | Handshake hanya dilakukan Go sekali saja |
-| **Keamanan** | Credential ada di file `.env` PHP | Credential hanya diketahui oleh Go (lebih aman) |
+| **Keamanan** | Credential ada di file `.env` PHP | Credential hanya diketahui oleh Go |
 
 ---
 
 ## 5. Sinkronisasi Scope (Deep Integration)
 
-ZenoEngine juga mengirimkan `_zeno_scope` ke dalam script PHP. Anda dapat mengakses variabel ZenoLang langsung dari Laravel:
+ZenoEngine mengirimkan data scope ke dalam script PHP melalui `$_SERVER['ZENO_SCOPE']`.
 
 ```php
 // Di dalam Controller Laravel
-$zenoUser = request()->header('X-Zeno-User-ID');
-// Atau jika bridge menyuntikkan variabel:
-$cartTotal = $_ZENO['cart_total'];
+$zenoData = json_decode($_SERVER['ZENO_SCOPE'] ?? '{}', true);
+$userId = $zenoData['user_id'] ?? null;
 
-log_info("Laravel memproses data dari Zeno: " . $cartTotal);
+// Logika bisnis...
 ```
 
 ---
