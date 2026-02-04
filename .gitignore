@@ -31,4 +31,6 @@ wwwroot/dist/
 
 # Logs
 *.log
-target/
+
+# Rust builds
+/examples/wasm-plugins/hello-rust/target
