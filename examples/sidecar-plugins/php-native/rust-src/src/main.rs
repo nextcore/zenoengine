@@ -159,14 +159,18 @@ fn main() -> anyhow::Result<()> {
                     input.payload.get("code").and_then(|v| v.as_str()).unwrap_or("echo 'No code provided';")
                 };
 
+                // --- REQUEST LIFECYCLE START ---
+                if !php::request_startup() {
+                    eprintln!("[Rust] Request Startup Failed");
+                    // Can continue but state might be dirty
+                }
+
                 // Inject Superglobals from payload
                 let mut bootstrap = String::from("<?php ");
 
                 // Extract Zeno Scope
                 if let Some(scope) = input.payload.get("_zeno_scope") {
                     if let Ok(json) = serde_json::to_string(scope) {
-                        // Safe injection using base64 or addslashes recommended for real env
-                        // Here assuming valid JSON string
                         bootstrap.push_str(&format!("$_SERVER['ZENO_SCOPE'] = json_decode('{}', true);", json.replace("'", "\\'")));
                     }
                 }
@@ -182,7 +186,6 @@ fn main() -> anyhow::Result<()> {
                 }
 
                 // Wrapper for capture
-                // Using base64_encode to ensure safe JSON transport of binary output
                 let wrapped_code = format!(
                     "
                     ob_start();
@@ -197,13 +200,6 @@ fn main() -> anyhow::Result<()> {
                     }}
                     $output = ob_get_clean();
 
-                    // Direct Stdout write for capture by parent process?
-                    // No, we are inside the same process.
-                    // We must return this data to Rust.
-                    // Since zend_eval_string returns bool, we use a dirty hack:
-                    // Print a special delimiter that Rust *could* parse if we redirected stdout.
-                    // BUT, since we share stdout, we can't do that easily without breaking JSON-RPC.
-
                     // ALTERNATIVE: Write to a temporary file
                     $temp_file = sys_get_temp_dir() . '/zeno_php_' . getmypid() . '.out';
                     file_put_contents($temp_file, $output);
@@ -213,6 +209,9 @@ fn main() -> anyhow::Result<()> {
                 );
 
                 let success = php::eval(&wrapped_code);
+
+                // --- REQUEST LIFECYCLE END ---
+                php::request_shutdown();
 
                 // Read back captured output
                 let mut captured_output = String::new();
