@@ -12,7 +12,8 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
-func getSheetsService(ctx context.Context, creds interface{}) (*sheets.Service, error) {
+// Exported for testing
+var GetSheetsServiceFunc = func(ctx context.Context, creds interface{}) (*sheets.Service, error) {
 	credsStr := coerce.ToString(creds)
 	if credsStr == "" {
 		return nil, fmt.Errorf("google sheets: credentials required (JSON string or path to file)")
@@ -57,7 +58,7 @@ func RegisterGSheetSlots(eng *engine.Engine) {
 			return fmt.Errorf("gsheet.get: id, range, and credentials are required")
 		}
 
-		srv, err := getSheetsService(ctx, creds)
+		srv, err := GetSheetsServiceFunc(ctx, creds)
 		if err != nil {
 			return err
 		}
@@ -111,7 +112,7 @@ func RegisterGSheetSlots(eng *engine.Engine) {
 			return fmt.Errorf("gsheet.append: id, range, values, and credentials are required")
 		}
 
-		srv, err := getSheetsService(ctx, creds)
+		srv, err := GetSheetsServiceFunc(ctx, creds)
 		if err != nil {
 			return err
 		}
@@ -184,7 +185,7 @@ func RegisterGSheetSlots(eng *engine.Engine) {
 			return fmt.Errorf("gsheet.update: id, range, values, and credentials are required")
 		}
 
-		srv, err := getSheetsService(ctx, creds)
+		srv, err := GetSheetsServiceFunc(ctx, creds)
 		if err != nil {
 			return err
 		}
@@ -259,7 +260,7 @@ func RegisterGSheetSlots(eng *engine.Engine) {
 			return fmt.Errorf("gsheet.find: id, range, credentials, and where are required")
 		}
 
-		srv, err := getSheetsService(ctx, creds)
+		srv, err := GetSheetsServiceFunc(ctx, creds)
 		if err != nil {
 			return err
 		}
@@ -364,7 +365,7 @@ func RegisterGSheetSlots(eng *engine.Engine) {
 			return fmt.Errorf("gsheet.clear: id, range, and credentials are required")
 		}
 
-		srv, err := getSheetsService(ctx, creds)
+		srv, err := GetSheetsServiceFunc(ctx, creds)
 		if err != nil {
 			return err
 		}

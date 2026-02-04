@@ -31,3 +31,4 @@ wwwroot/dist/
 
 # Logs
 *.log
+target/

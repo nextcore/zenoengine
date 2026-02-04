@@ -9,6 +9,9 @@ import (
 	"zeno/pkg/utils/coerce"
 )
 
+// Exported for testing
+var SendMailFunc = smtp.SendMail
+
 func RegisterMailSlots(eng *engine.Engine) {
 
 	// MAIL.SEND (SMTP)
@@ -70,7 +73,7 @@ func RegisterMailSlots(eng *engine.Engine) {
 		addr := fmt.Sprintf("%s:%d", host, port)
 
 		// Send Email
-		err := smtp.SendMail(addr, auth, user, []string{to}, msg)
+		err := SendMailFunc(addr, auth, user, []string{to}, msg)
 		if err != nil {
 			scope.Set(target, false)
 			// Coba tangani error common
