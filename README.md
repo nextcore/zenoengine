@@ -1,6 +1,6 @@
 # ZenoEngine
 
-**ZenoEngine** is a powerful, high-performance execution engine for the **ZenoLang** programming language. Designed for speed, flexibility, and developer experience.
+**ZenoEngine** is a stable, production-ready execution engine for the **ZenoLang** programming language. Built for high performance, it provides a robust ecosystem for building scalable web applications with a focus on developer experience and security.
 
 ## ✨ Key Features
 - **ZenoLang Logic**: Clean, brace-based syntax for building complex logic easily.
