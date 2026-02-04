@@ -17,3 +17,7 @@
 **Vulnerability:** The application lacked proactive defenses against automated bots, scraping, and brute-force attacks beyond basic rate limiting.
 **Learning:** Defense in depth requires distinguishing between human users and automated scripts. IP-based blocking is often insufficient as bots rotate IPs.
 **Prevention:** Implemented a "JS Challenge Interstitial" (inspired by SafeLine/Cloudflare). This middleware serves a lightweight HTML page requiring JavaScript execution to solve a challenge before accessing the site. This filters out dumb bots (curl, python requests, simple scrapers) while remaining transparent to legitimate browsers. The feature is toggleable via `BOT_DEFENSE_ENABLED`.
+
+## 2026-02-04 - Missing IP Reputation System
+**Gap:** While rate limiting helps, there was no mechanism to permanently or dynamically block specific malicious IPs (e.g., confirmed attackers, botnets) at the application edge.
+**Prevention:** Implemented `IPBlocker` middleware and corresponding ZenoLang slots (`sec.block_ip`, `sec.unblock_ip`). This allows both configuration-based blocking (via Env/File) and dynamic runtime blocking (e.g., a login controller banning an IP after N failed attempts).

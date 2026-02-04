@@ -81,6 +81,29 @@ func TestBotDefense(t *testing.T) {
 		assert.True(t, found, "Cookie zeno_bot_token should be set")
 	})
 
+	t.Run("Challenge_Verification_OpenRedirect_Prevention", func(t *testing.T) {
+		// Attempt Protocol Relative URL
+		form := strings.NewReader("solution=zeno-shield-active&original_url=//malicious.com")
+		req := httptest.NewRequest("POST", "/_zeno/challenge", form)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+
+		BotChallengeHandler(rec, req)
+
+		// Should default to root "/"
+		assert.Equal(t, http.StatusFound, rec.Code)
+		assert.Equal(t, "/", rec.Header().Get("Location"))
+
+		// Attempt Absolute URL
+		form2 := strings.NewReader("solution=zeno-shield-active&original_url=http://malicious.com")
+		req2 := httptest.NewRequest("POST", "/_zeno/challenge", form2)
+		req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec2 := httptest.NewRecorder()
+
+		BotChallengeHandler(rec2, req2)
+		assert.Equal(t, "/", rec2.Header().Get("Location"))
+	})
+
 	t.Run("Challenge_Verification_Fail", func(t *testing.T) {
 		form := strings.NewReader("solution=WRONG&original_url=/")
 		req := httptest.NewRequest("POST", "/_zeno/challenge", form)

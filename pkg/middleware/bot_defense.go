@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -68,7 +69,8 @@ func BotChallengeHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 		// Redirect back
-		if originalURL == "" {
+		// [SECURITY] Prevent Open Redirect: Ensure URL is relative
+		if originalURL == "" || !strings.HasPrefix(originalURL, "/") || strings.HasPrefix(originalURL, "//") {
 			originalURL = "/"
 		}
 		http.Redirect(w, r, originalURL, http.StatusFound)
@@ -130,9 +132,15 @@ func isStaticAsset(path string) bool {
 
 func generateToken() string {
 	// In production, sign this with a secret key + timestamp
-	// For MVP, a simple hash of the day is enough to simulate "valid token"
 	day := time.Now().Format("2006-01-02")
-	hash := sha256.Sum256([]byte("zeno-secret-" + day))
+
+	secret := os.Getenv("BOT_TOKEN_SECRET")
+	if secret == "" {
+		// Fallback for dev/demo, but predictable
+		secret = "zeno-default-secret"
+	}
+
+	hash := sha256.Sum256([]byte(secret + "-" + day))
 	return fmt.Sprintf("%x", hash)
 }
 

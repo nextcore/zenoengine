@@ -30,6 +30,7 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 	r := chi.NewRouter()
 	r.Use(logger.Middleware)
 	r.Use(metrics.Middleware) // PROMETHEUS METRICS (Place early)
+	r.Use(middleware.IPBlocker) // [IP] Block known bad IPs first
 	r.Use(middleware.WAF)     // [WAF] Shield up early
 	r.Use(middleware.HostDispatcher) // [VHOST] O(1) Scalable Host Routing
 	r.Use(middleware.BotDefense)     // [BOT] JS Challenge Interstitial
