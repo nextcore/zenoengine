@@ -11,23 +11,6 @@
 - **Metaprogramming**: Capabilities for code generation, dynamic execution (`meta.eval`), and runtime introspection (`meta.scope`).
 - **Rich Integrated Features**: Integrated auth, mailing, workers, and API documentation.
 
-## 🚀 Quick Start
-Ready to jump in? Check our **[Getting Started Guide](GETTING_STARTED.md)** for installation steps.
-
-```bash
-# The fastest way to start
-cp .env.example .env
-go run cmd/zeno/zeno.go key:generate
-go run cmd/zeno/zeno.go
-```
-
-## 📂 Documentation
-- **Getting Started**: [GETTING_STARTED.md](GETTING_STARTED.md)
-- **Comprehensive Guide**: [DOCUMENTATION.md](DOCUMENTATION.md) (Recommended)
-- **Language Spec**: [LANGUAGE_SPECIFICATION.md](LANGUAGE_SPECIFICATION.md)
-- **Style Guide**: [ZENOLANG_STYLE_GUIDE.md](ZENOLANG_STYLE_GUIDE.md)
-- **AI Context**: [ZENOLANG_AI_CONTEXT.md](ZENOLANG_AI_CONTEXT.md)
-
 ## 🤝 Contributing
 Contributions are welcome! Please read our [ZENOLANG_STYLE_GUIDE.md](ZENOLANG_STYLE_GUIDE.md) before submitting pull requests.
 
