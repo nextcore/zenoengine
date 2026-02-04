@@ -412,12 +412,20 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		Description: "Iterate (loop) over a list or array.",
 		Example:     "for: $list\n  as: $item\n  do: ...",
 		Inputs: map[string]engine.InputMeta{
-			"as": {Description: "Variable name for current element (Default: 'item')", Required: false},
-			"do": {Description: "Code block to repeat", Required: false},
+			"as":             {Description: "Variable name for current element (Default: 'item')", Required: false},
+			"do":             {Description: "Code block to repeat", Required: false},
+			"__native_write": {Description: "Internal Blade attribute", Required: false},
 		},
 		RequiredBlocks: []string{"do"},
 	})
-	eng.Register("foreach", handlerFor, engine.SlotMeta{Example: "foreach: $list { as: $item ... }"}) // Alias
+	eng.Register("foreach", handlerFor, engine.SlotMeta{
+		Example: "foreach: $list { as: $item ... }",
+		Inputs: map[string]engine.InputMeta{
+			"as":             {Description: "Variable name for current element (Default: 'item')", Required: false},
+			"do":             {Description: "Code block to repeat", Required: false},
+			"__native_write": {Description: "Internal Blade attribute", Required: false},
+		},
+	}) // Alias
 
 	// ==========================================
 	// SLOT: CTX TIMEOUT
@@ -934,9 +942,10 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{
 		Description: "Perulangan list dengan blok cadangan jika list kosong.",
 		Inputs: map[string]engine.InputMeta{
-			"as":    {Description: "Alias variabel item"},
-			"do":    {Description: "Blok yang diulang"},
-			"empty": {Description: "Blok jika data kosong"},
+			"as":             {Description: "Alias variabel item"},
+			"do":             {Description: "Blok yang diulang"},
+			"empty":          {Description: "Blok jika data kosong"},
+			"__native_write": {Description: "Internal Blade attribute", Required: false},
 		},
 	})
 
