@@ -37,6 +37,19 @@ func RegisterFileSystemSlots(eng *engine.Engine) {
 		}
 
 		cleanPath := filepath.Clean(filepath.FromSlash(path))
+
+		// [SECURITY] Block writing to critical source/config files
+		// Allow unrestricted access ONLY in development mode
+		if os.Getenv("APP_ENV") != "development" {
+			ext := strings.ToLower(filepath.Ext(cleanPath))
+			if ext == ".zl" || ext == ".go" || ext == ".env" || strings.Contains(cleanPath, ".git") {
+				return fmt.Errorf("security violation: modifying '%s' files is restricted in production", ext)
+			}
+		} else {
+			// Optional: Log warning in dev mode
+			fmt.Printf("⚠️  [DEV MODE] Writing to sensitive file: %s\n", cleanPath)
+		}
+
 		if err := os.MkdirAll(filepath.Dir(cleanPath), 0755); err != nil {
 			return err
 		}
