@@ -4,83 +4,138 @@ import (
 	"context"
 	"testing"
 	"zeno/pkg/engine"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidatorSlots(t *testing.T) {
 	eng := engine.NewEngine()
 	RegisterValidatorSlots(eng)
 
-	t.Run("validate_success", func(t *testing.T) {
+	t.Run("validate required field success", func(t *testing.T) {
 		scope := engine.NewScope(nil)
-		form := map[string]interface{}{
-			"email": "test@example.com",
-			"age":   "25",
+		data := map[string]interface{}{
+			"username": "john_doe",
 		}
-		scope.Set("form", form)
+		scope.Set("input", data)
 
 		node := &engine.Node{
-			Name: "validate",
+			Name: "validator.validate",
+			Value: "$input",
 			Children: []*engine.Node{
-				{Name: "data", Value: "$form"},
 				{
 					Name: "rules",
-					Children: []*engine.Node{
-						{Name: "email", Value: "required|email"},
-						{Name: "age", Value: "numeric|min:18"},
+					Value: map[string]interface{}{
+						"username": "required",
 					},
 				},
-				{Name: "as", Value: "$v_errors"},
+				{Name: "as", Value: "$errors"},
 			},
 		}
-		if err := eng.Execute(context.Background(), node, scope); err != nil {
-			t.Fatalf("validate failed: %v", err)
-		}
 
-		any, _ := scope.Get("v_errors_any")
-		if any != false {
-			errs, _ := scope.Get("v_errors")
-			t.Errorf("Expected no errors, got %v", errs)
-		}
+		err := eng.Execute(context.Background(), node, scope)
+		require.NoError(t, err)
+
+		errs, _ := scope.Get("errors")
+		assert.Nil(t, errs, "Errors should be nil on success")
 	})
 
-	t.Run("validate_failure", func(t *testing.T) {
+	t.Run("validate required field failure", func(t *testing.T) {
 		scope := engine.NewScope(nil)
-		form := map[string]interface{}{
-			"email": "invalid-email",
-			"age":   "15",
+		data := map[string]interface{}{
+			"username": "",
 		}
-		scope.Set("form", form)
+		scope.Set("input", data)
 
 		node := &engine.Node{
-			Name: "validate",
+			Name: "validator.validate",
+			Value: "$input",
 			Children: []*engine.Node{
-				{Name: "data", Value: "$form"},
 				{
 					Name: "rules",
-					Children: []*engine.Node{
-						{Name: "email", Value: "required|email"},
-						{Name: "age", Value: "numeric|min:18"},
+					Value: map[string]interface{}{
+						"username": "required",
 					},
 				},
-				{Name: "as", Value: "$v_errors"},
+				{Name: "as", Value: "$errors"},
 			},
 		}
-		if err := eng.Execute(context.Background(), node, scope); err != nil {
-			t.Fatalf("validate failed: %v", err)
+
+		err := eng.Execute(context.Background(), node, scope)
+		require.NoError(t, err)
+
+		errsVal, _ := scope.Get("errors")
+		errs := errsVal.(map[string]string)
+		assert.Contains(t, errs, "username")
+		assert.Equal(t, "username is required", errs["username"])
+	})
+
+	t.Run("validate email format", func(t *testing.T) {
+		scope := engine.NewScope(nil)
+		data := map[string]interface{}{
+			"email_ok": "test@example.com",
+			"email_bad": "not-an-email",
+		}
+		scope.Set("input", data)
+
+		node := &engine.Node{
+			Name: "validator.validate",
+			Value: "$input",
+			Children: []*engine.Node{
+				{
+					Name: "rules",
+					Value: map[string]interface{}{
+						"email_ok": "email",
+						"email_bad": "email",
+					},
+				},
+				{Name: "as", Value: "$errors"},
+			},
 		}
 
-		any, _ := scope.Get("v_errors_any")
-		if any != true {
-			t.Errorf("Expected validation errors, but none found")
+		eng.Execute(context.Background(), node, scope)
+		errsVal, _ := scope.Get("errors")
+		errs := errsVal.(map[string]string)
+
+		assert.NotContains(t, errs, "email_ok")
+		assert.Contains(t, errs, "email_bad")
+	})
+
+	t.Run("validate min max rules", func(t *testing.T) {
+		scope := engine.NewScope(nil)
+		data := map[string]interface{}{
+			"age_low": "10",
+			"age_high": "100",
+			"txt_short": "hi",
+			"txt_long": "hello world",
+		}
+		scope.Set("input", data)
+
+		node := &engine.Node{
+			Name: "validator.validate",
+			Value: "$input",
+			Children: []*engine.Node{
+				{
+					Name: "rules",
+					Value: map[string]interface{}{
+						"age_low": "numeric|min:18",
+						"age_high": "numeric|max:50",
+						"txt_short": "min:5",
+						"txt_long": "max:5",
+					},
+				},
+				{Name: "as", Value: "$errors"},
+			},
 		}
 
-		errs, _ := scope.Get("v_errors")
-		errMap := errs.(map[string]string)
-		if _, ok := errMap["email"]; !ok {
-			t.Errorf("Expected email error")
-		}
-		if _, ok := errMap["age"]; !ok {
-			t.Errorf("Expected age error")
-		}
+		eng.Execute(context.Background(), node, scope)
+		errsVal, _ := scope.Get("errors")
+		errs := errsVal.(map[string]string)
+
+		assert.Contains(t, errs, "age_low")
+		assert.Contains(t, errs, "age_high")
+		assert.Contains(t, errs, "txt_short")
+		assert.Contains(t, errs, "txt_long")
 	})
 }
