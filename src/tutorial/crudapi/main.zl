@@ -5,6 +5,7 @@
 log: "🚀 Starting Todo API Server..."
 
 // 1. Database Initialization
+// Ensure the table exists. Using SQLite for simplicity.
 db.execute: "CREATE TABLE IF NOT EXISTS todos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -22,6 +23,7 @@ http.get: "/api/todos" {
     db.order_by: "created_at DESC"
     db.get: { as: $todos }
 
+    // Ensure we return empty list if nil
     if: $todos == nil {
         then: {
             json.parse: "[]" { as: $todos }
@@ -106,5 +108,13 @@ http.delete: "/api/todos/{id}" {
 }
 
 // 3. Start Server
-http.listen: ":8080"
-log: "🌍 Server running on http://localhost:8080"
+// Using port 3000 as per Zeno default conventions
+http.listen: ":3000"
+log: "🌍 Server running on http://localhost:3000"
+
+// Keep process alive when running via 'zeno run'
+for: "true" {
+    do: {
+        sleep: 1000
+    }
+}
