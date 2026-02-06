@@ -1,0 +1,146 @@
+
+// ZenoEngine REST API Tutorial - Todo App
+// Location: src/tutorial/crudapi/main.zl
+
+log: "🚀 Starting Todo API Server..."
+
+// 1. Database Initialization
+// Ensure the table exists. Using SQLite for simplicity.
+db.execute: "CREATE TABLE IF NOT EXISTS todos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    completed BOOLEAN DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)"
+
+log: "✅ Database initialized."
+
+// 2. Define Routes
+
+// GET /api/todos - List all todos
+http.route: "GET /api/todos" {
+    handler: {
+        db.table: "todos"
+        db.order_by: "created_at DESC"
+        db.get: { as: $todos }
+
+        // Ensure we return empty list if nil
+        if: $todos == nil {
+            then: {
+                // Initialize empty array using JSON parse workaround
+                // until array literal [] is fully supported
+                json.parse: "[]" { as: $todos }
+            }
+        }
+        http.json: $todos
+    }
+}
+
+// POST /api/todos - Create a new todo
+http.route: "POST /api/todos" {
+    handler: {
+        // Parse JSON body
+        http.body { as: $raw_body }
+
+        if: len($raw_body) == 0 {
+             then: {
+                 http.response: { status: 400, body: { error: "Empty body" } }
+                 return
+             }
+        }
+
+        json.parse: $raw_body { as: $input }
+
+        // Validation
+        if: $input.title == "" || $input.title == nil {
+            then: {
+                http.response: { status: 400, body: { error: "Title is required" } }
+                return
+            }
+        }
+
+        db.table: "todos"
+        db.insert: { title: $input.title }
+
+        http.response: {
+            status: 201
+            body: { message: "Todo created", title: $input.title }
+        }
+    }
+}
+
+// GET /api/todos/{id} - Get single todo
+http.route: "GET /api/todos/{id}" {
+    handler: {
+        http.param: "id" { as: $id }
+
+        db.table: "todos"
+        db.where: { col: "id", val: $id }
+        db.first: { as: $todo }
+
+        if: $todo == nil {
+            then: {
+                http.response: { status: 404, body: { error: "Todo not found" } }
+            }
+            else: {
+                http.json: $todo
+            }
+        }
+    }
+}
+
+// PUT /api/todos/{id} - Update todo
+http.route: "PUT /api/todos/{id}" {
+    handler: {
+        http.param: "id" { as: $id }
+        http.body { as: $raw_body }
+
+        // Parse body if present
+        $input = nil
+        if: len($raw_body) > 0 {
+             then: {
+                 json.parse: $raw_body { as: $input }
+             }
+        }
+
+        // Check if exists
+        db.table: "todos"
+        db.where: { col: "id", val: $id }
+        db.first: { as: $existing }
+
+        if: $existing == nil {
+            then: {
+                http.response: { status: 404, body: { error: "Todo not found" } }
+                return
+            }
+        }
+
+        // Update
+        if: $input != nil {
+            then: {
+                db.table: "todos"
+                db.where: { col: "id", val: $id }
+                db.update: $input
+            }
+        }
+
+        http.json: { message: "Todo updated", id: $id }
+    }
+}
+
+// DELETE /api/todos/{id} - Delete todo
+http.route: "DELETE /api/todos/{id}" {
+    handler: {
+        http.param: "id" { as: $id }
+
+        db.table: "todos"
+        db.where: { col: "id", val: $id }
+        db.delete: {}
+
+        http.response: { status: 204 }
+    }
+}
+
+// 3. Start Server
+http.listen: ":8080"
+log: "🌍 Server running on http://localhost:8080"
