@@ -1,19 +1,35 @@
-print("--- ZenoLang Math & Variables Test ---");
+print("--- ZenoLang Control Flow Test ---");
 
 let x = 10;
 let y = 20;
 
-print("Value of x is:");
-print(x);
+print("Testing If/Else:");
+if (x < y) {
+    print("Correct: x is less than y");
+} else {
+    print("Incorrect: x should be less than y");
+}
 
-print("Value of y is:");
-print(y);
+if (x > y) {
+    print("Incorrect: x is not greater than y");
+} else {
+    print("Correct: x is NOT greater than y");
+}
 
-print("Calculation (x + y * 2):");
-print(x + y * 2);
+print("Testing Scoping:");
+let z = 50;
+if (true) {
+    let z = 99;
+    print("Inside block, z should be 99:");
+    print(z);
+}
+print("Outside block, z should be 50:");
+print(z);
 
-print("String concatenation:");
-print("Hello " + "World");
-
-print("Mixed concatenation:");
-print("Result: " + (x + y));
+print("Testing Boolean Logic:");
+if (10 == 10) {
+    print("10 equals 10");
+}
+if (10 != 20) {
+    print("10 not equals 20");
+}

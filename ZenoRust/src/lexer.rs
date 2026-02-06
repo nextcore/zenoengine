@@ -9,14 +9,44 @@ pub enum Token {
     #[token("let")]
     Let,
 
+    #[token("if")]
+    If,
+
+    #[token("else")]
+    Else,
+
+    #[token("true")]
+    True,
+
+    #[token("false")]
+    False,
+
     #[token("(")]
     LParen,
 
     #[token(")")]
     RParen,
 
+    #[token("{")]
+    LBrace,
+
+    #[token("}")]
+    RBrace,
+
     #[token(";")]
     Semicolon,
+
+    #[token("==")]
+    DoubleEquals,
+
+    #[token("!=")]
+    NotEquals,
+
+    #[token("<")]
+    LessThan,
+
+    #[token(">")]
+    GreaterThan,
 
     #[token("=")]
     Equals,
