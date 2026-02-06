@@ -5,7 +5,6 @@ pub mod evaluator;
 use std::fs;
 use std::env;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use axum::{
     routing::post,
     Router,
@@ -15,23 +14,37 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use parser::Parser;
 use evaluator::Evaluator;
-use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
+use sqlx::{AnyPool, any::AnyPoolOptions};
 
 #[derive(Clone)]
 struct AppState {
-    db_pool: Option<SqlitePool>,
+    db_pool: Option<AnyPool>,
 }
 
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
 
-    // Initialize DB Pool (In-memory for demo/testing)
-    // In production, read from DATABASE_URL env var
-    let db_pool = SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
+    // Initialize DB Pool
+    // Priority: DATABASE_URL env > sqlite://zeno.db
+    // We must install default drivers for AnyPool to work
+    sqlx::any::install_default_drivers();
+
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://zeno.db?mode=rwc".to_string());
+    // However, AnyPool expects protocol prefix.
+    // "sqlite::memory:" works if sqlite is the protocol.
+    // If user provides "mysql://...", it works.
+
+    let db_pool = AnyPoolOptions::new()
+        .connect(&db_url)
         .await
-        .ok(); // Ignore error for now, or panic if strict
+        .ok();
+
+    if db_pool.is_none() {
+        println!("Warning: Failed to connect to database at '{}'. Running without DB support.", db_url);
+    } else {
+        println!("Connected to database: {}", db_url);
+    }
 
     if args.len() > 1 && args[1] == "server" {
         start_server(db_pool).await;
@@ -40,7 +53,7 @@ async fn main() {
     }
 }
 
-async fn run_cli_mode(pool: Option<SqlitePool>) {
+async fn run_cli_mode(pool: Option<AnyPool>) {
     println!("ZenoEngine Rust Edition (2024) - CLI Mode (Async)");
 
     let file_path = "source/test.zl";
@@ -56,7 +69,7 @@ async fn run_cli_mode(pool: Option<SqlitePool>) {
     evaluator.eval(statements).await;
 }
 
-async fn start_server(pool: Option<SqlitePool>) {
+async fn start_server(pool: Option<AnyPool>) {
     println!("ZenoEngine Rust Edition (2024) - Server Mode (Async)");
     println!("Listening on http://localhost:3000");
 

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use async_recursion::async_recursion;
 use std::future::Future;
 use std::pin::Pin;
-use sqlx::{SqlitePool, Row, Column, TypeInfo};
+use sqlx::{AnyPool, Row, Column, TypeInfo, ValueRef};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -14,7 +14,7 @@ pub enum Value {
     Null,
     Function(Vec<String>, Statement, Env),
     // Builtin now holds a function pointer that returns a BoxFuture
-    Builtin(String, fn(Vec<Value>, Option<SqlitePool>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
+    Builtin(String, fn(Vec<Value>, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
     ReturnValue(Box<Value>),
     Array(Arc<Mutex<Vec<Value>>>),
     Map(Arc<Mutex<HashMap<String, Value>>>),
@@ -127,11 +127,11 @@ impl Env {
 pub struct Evaluator {
     env: Env,
     output: String,
-    db_pool: Option<SqlitePool>,
+    db_pool: Option<AnyPool>,
 }
 
 impl Evaluator {
-    pub fn new(db_pool: Option<SqlitePool>) -> Self {
+    pub fn new(db_pool: Option<AnyPool>) -> Self {
         let mut evaluator = Self {
             env: Env::new(),
             output: String::new(),
@@ -262,7 +262,7 @@ impl Evaluator {
                                 Value::String(s) => query = query.bind(s.clone()),
                                 Value::Boolean(b) => query = query.bind(*b),
                                 Value::Null => query = query.bind(None::<String>),
-                                _ => query = query.bind(format!("{}", param)), // Fallback stringify
+                                _ => query = query.bind(format!("{}", param)),
                             }
                         }
                     }
@@ -316,30 +316,21 @@ impl Evaluator {
                             let mut map = HashMap::new();
                             for col in row.columns() {
                                 let name = col.name();
+                                // AnyRow type checking is dynamic via type_info()
+                                // or try_get checks
                                 let type_info = col.type_info();
                                 let type_name = type_info.name();
 
-                                // Simple mapping for SQLite types
-                                let val = if type_name == "TEXT" || type_name == "VARCHAR" {
-                                    let s: Option<String> = row.try_get(name).ok();
-                                    match s { Some(v) => Value::String(v), None => Value::Null }
-                                } else if type_name == "INTEGER" || type_name == "INT8" {
-                                    let i: Option<i64> = row.try_get(name).ok();
-                                    match i { Some(v) => Value::Integer(v), None => Value::Null }
-                                } else if type_name == "BOOLEAN" {
-                                    let b: Option<bool> = row.try_get(name).ok();
-                                    match b { Some(v) => Value::Boolean(v), None => Value::Null }
+                                let val = if let Ok(v) = row.try_get::<i64, _>(name) {
+                                    Value::Integer(v)
+                                } else if let Ok(v) = row.try_get::<String, _>(name) {
+                                    Value::String(v)
+                                } else if let Ok(v) = row.try_get::<bool, _>(name) {
+                                    Value::Boolean(v)
                                 } else {
-                                    // Fallback to string for unknown types or blobs
-                                    // Or try int/string generic
-                                    if let Ok(i) = row.try_get::<i64, _>(name) {
-                                        Value::Integer(i)
-                                    } else if let Ok(s) = row.try_get::<String, _>(name) {
-                                        Value::String(s)
-                                    } else {
-                                        Value::Null
-                                    }
+                                    Value::Null
                                 };
+
                                 map.insert(name.to_string(), val);
                             }
                             result_rows.push(Value::Map(Arc::new(Mutex::new(map))));
