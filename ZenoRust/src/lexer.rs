@@ -33,6 +33,12 @@ pub enum Token {
     #[token(")")]
     RParen,
 
+    #[token("[")]
+    LBracket,
+
+    #[token("]")]
+    RBracket,
+
     #[token(",")]
     Comma,
 

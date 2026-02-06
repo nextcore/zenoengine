@@ -1,20 +1,26 @@
-print("--- ZenoLang Built-in Functions Test ---");
+print("--- ZenoLang Arrays Test ---");
 
-let text = "hello zeno";
-print("Original text: " + text);
+let numbers = [10, 20, 30];
+print("Array created: " + str(numbers));
 
-let u = upper(text);
-print("Uppercase: " + u);
+let first = numbers[0];
+print("First element: " + str(first));
 
-let l = len(text);
-print("Length: " + str(l));
+let last = numbers[2];
+print("Last element: " + str(last));
 
-print("Type conversion (str):");
-print(str(100) + " is a number");
+print("Adding element 40...");
+push(numbers, 40);
+print("New array: " + str(numbers));
 
-fn greet(name) {
-    return "Hello " + upper(name);
+let size = len(numbers);
+print("Array length: " + str(size));
+
+print("Looping through array (simulated with recursion):");
+fn printArray(arr, idx) {
+    if (idx < len(arr)) {
+        print("Element " + str(idx) + ": " + str(arr[idx]));
+        printArray(arr, idx + 1);
+    }
 }
-
-print("Combined with function:");
-print(greet("world"));
+printArray(numbers, 0);

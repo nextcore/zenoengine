@@ -8,6 +8,8 @@ pub enum Expression {
     Integer(i64),
     Boolean(bool),
     Identifier(String),
+    Array(Vec<Expression>),
+    Index(Box<Expression>, Box<Expression>), // Target, Index
     BinaryOp(Box<Expression>, Op, Box<Expression>),
     Call(Box<Expression>, Vec<Expression>), // FuncName, Args
 }
@@ -189,6 +191,22 @@ impl<'a> Parser<'a> {
             Some(Ok(Token::False)) => Expression::Boolean(false),
             Some(Ok(Token::StringLiteral(s))) => Expression::StringLiteral(s),
             Some(Ok(Token::Identifier(s))) => Expression::Identifier(s),
+            Some(Ok(Token::LBracket)) => { // Array Literal [1, 2]
+                let mut elements = Vec::new();
+                if let Some(Ok(Token::RBracket)) = self.lexer.peek() {
+                    self.lexer.next(); // Empty array
+                } else {
+                    loop {
+                        elements.push(self.parse_expression(0)?);
+                        match self.lexer.peek() {
+                            Some(Ok(Token::Comma)) => { self.lexer.next(); },
+                            Some(Ok(Token::RBracket)) => { self.lexer.next(); break; },
+                            _ => return None
+                        }
+                    }
+                }
+                Expression::Array(elements)
+            },
             Some(Ok(Token::LParen)) => {
                 let expr = self.parse_expression(0)?;
                 match self.lexer.next() { Some(Ok(Token::RParen)) => expr, _ => return None }
@@ -197,6 +215,20 @@ impl<'a> Parser<'a> {
         };
 
         loop {
+            // Handle Indexing: `arr[index]`
+            // Binding power should be same as call (high)
+            if let Some(Ok(Token::LBracket)) = self.lexer.peek() {
+                 let index_bp = 10;
+                 if index_bp < min_bp { break; }
+
+                 self.lexer.next(); // Consume '['
+                 let index_expr = self.parse_expression(0)?;
+                 match self.lexer.next() { Some(Ok(Token::RBracket)) => {}, _ => return None }
+
+                 lhs = Expression::Index(Box::new(lhs), Box::new(index_expr));
+                 continue;
+            }
+
             // Handle Call expression (suffix: '(')
             if let Some(Ok(Token::LParen)) = self.lexer.peek() {
                 // If binding power of call (usually highest, e.g. 8) is < min_bp, break?

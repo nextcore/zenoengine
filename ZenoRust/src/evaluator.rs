@@ -14,9 +14,11 @@ pub enum Value {
     // Builtin Function: Name, Function Pointer
     Builtin(String, fn(Vec<Value>) -> Value),
     ReturnValue(Box<Value>), // Wrapper to signal return
+    // Array: Mutable shared list
+    Array(Rc<RefCell<Vec<Value>>>),
 }
 
-// Manual PartialEq to ignore function pointer comparison
+// Manual PartialEq to ignore function pointer comparison and handle Arrays
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -26,10 +28,17 @@ impl PartialEq for Value {
             (Value::Null, Value::Null) => true,
             (Value::Function(params_a, body_a, _), Value::Function(params_b, body_b, _)) => {
                 params_a == params_b && body_a == body_b
-                // We ignore Env comparison for simplicity/cycles
             },
             (Value::Builtin(name_a, _), Value::Builtin(name_b, _)) => name_a == name_b,
             (Value::ReturnValue(a), Value::ReturnValue(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => {
+                // Deep comparison of array contents
+                // Note: This could be expensive or infinite if recursive
+                let vec_a = a.borrow();
+                let vec_b = b.borrow();
+                // Compare slice content
+                vec_a.iter().zip(vec_b.iter()).all(|(x, y)| x == y) && vec_a.len() == vec_b.len()
+            }
             _ => false,
         }
     }
@@ -45,12 +54,15 @@ impl std::fmt::Display for Value {
             Value::Function(params, _, _) => write!(f, "fn({})", params.join(", ")),
             Value::Builtin(name, _) => write!(f, "builtin({})", name),
             Value::ReturnValue(val) => write!(f, "return {}", val),
+            Value::Array(arr) => {
+                let vec = arr.borrow();
+                let elements: Vec<String> = vec.iter().map(|v| format!("{}", v)).collect();
+                write!(f, "[{}]", elements.join(", "))
+            }
         }
     }
 }
 
-// Environment needs to be shared and mutable for closures/recursion
-// We use Rc<RefCell<...>> for the chain
 #[derive(Debug, Clone, PartialEq)]
 pub struct Env {
     store: Rc<RefCell<HashMap<String, Value>>>,
@@ -102,11 +114,10 @@ impl Evaluator {
 
     fn register_builtins(&mut self) {
         self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args| {
-            if args.len() != 1 {
-                return Value::Null; // Should be error, but keeping simple
-            }
+            if args.len() != 1 { return Value::Null; }
             match &args[0] {
                 Value::String(s) => Value::Integer(s.len() as i64),
+                Value::Array(arr) => Value::Integer(arr.borrow().len() as i64),
                 _ => Value::Integer(0),
             }
         }));
@@ -123,14 +134,22 @@ impl Evaluator {
             if args.len() != 1 { return Value::Null; }
             Value::String(format!("{}", args[0]))
         }));
+
+        self.env.set("push".to_string(), Value::Builtin("push".to_string(), |args| {
+            if args.len() != 2 { return Value::Null; }
+            if let Value::Array(arr) = &args[0] {
+                arr.borrow_mut().push(args[1].clone());
+                return Value::Array(arr.clone()); // Return the array itself
+            }
+            Value::Null
+        }));
     }
 
     pub fn eval(&mut self, statements: Vec<Statement>) {
         for stmt in statements {
             let result = self.eval_statement(stmt);
             if let Some(Value::ReturnValue(_)) = result {
-                 // Top level return? Usually not allowed or just ignored/printed
-                 // For now, we assume scripts don't return from top level
+                 // Top level return?
             }
         }
     }
@@ -148,7 +167,6 @@ impl Evaluator {
                 None
             }
             Statement::Function(name, params, body) => {
-                // Capture current env for closure
                 let func = Value::Function(params, *body, self.env.clone());
                 self.env.set(name, func);
                 None
@@ -177,10 +195,6 @@ impl Evaluator {
     }
 
     fn eval_block(&mut self, stmts: Vec<Statement>) -> Option<Value> {
-        // Blocks share the SAME env in our simplified previous implementation,
-        // OR create a new one. To support `let` shadowing properly within blocks:
-        // We should create a new inner env.
-
         let previous_env = self.env.clone();
         self.env = Env::new_with_outer(previous_env.clone());
 
@@ -191,10 +205,10 @@ impl Evaluator {
                 result = val;
                 break;
             }
-            result = val; // keep last expression result if we support that
+            result = val;
         }
 
-        self.env = previous_env; // restore
+        self.env = previous_env;
         result
     }
 
@@ -210,6 +224,33 @@ impl Evaluator {
                     eprintln!("Runtime Error: Variable '{}' not found", name);
                     None
                 }
+            },
+            Expression::Array(elements) => {
+                let mut vals = Vec::new();
+                for e in elements {
+                    vals.push(self.eval_expression(e)?);
+                }
+                Some(Value::Array(Rc::new(RefCell::new(vals))))
+            },
+            Expression::Index(left, index) => {
+                 let left_val = self.eval_expression(left)?;
+                 let index_val = self.eval_expression(index)?;
+
+                 match (left_val, index_val) {
+                     (Value::Array(arr), Value::Integer(i)) => {
+                         let vec = arr.borrow();
+                         if i >= 0 && (i as usize) < vec.len() {
+                             Some(vec[i as usize].clone())
+                         } else {
+                             eprintln!("Runtime Error: Index out of bounds");
+                             Some(Value::Null)
+                         }
+                     },
+                     _ => {
+                         eprintln!("Runtime Error: Index operation not supported on this type");
+                         None
+                     }
+                 }
             },
             Expression::BinaryOp(lhs, op, rhs) => {
                 let l_val = self.eval_expression(lhs)?;
@@ -234,32 +275,19 @@ impl Evaluator {
                     eprintln!("Runtime Error: Function expected {} args, got {}", params.len(), args.len());
                     return None;
                 }
-
-                // Create environment for execution: Closure Env + Args
                 let mut extended_env = Env::new_with_outer(closure_env);
                 for (param_name, arg_val) in params.iter().zip(args) {
                     extended_env.set(param_name.clone(), arg_val);
                 }
-
-                // Swap current env with extended env
                 let previous_env = self.env.clone();
                 self.env = extended_env;
-
-                // Execute body (it's a Statement, usually Block, but could be others)
-                // Note: body is stored as *Statement inside Value::Function?
-                // We need to execute it.
-                // Wait, Value::Function(..., Statement, ...) -> Statement is NOT Copy/Clone cheaply if complex.
-                // We derived Clone on Statement, so we can clone it.
                 let result = self.eval_statement(body);
-
-                // Restore env
                 self.env = previous_env;
 
-                // Unwrap ReturnValue if present
                 if let Some(Value::ReturnValue(val)) = result {
                     Some(*val)
                 } else {
-                    Some(Value::Null) // Function returns null if no return statement
+                    Some(Value::Null)
                 }
             },
             Value::Builtin(_, func_ptr) => {
@@ -315,6 +343,8 @@ impl Evaluator {
 mod tests {
     use crate::parser::Parser;
     use crate::evaluator::{Evaluator, Value};
+    use std::rc::Rc;
+    use std::cell::RefCell;
 
     #[test]
     fn test_functions() {
@@ -374,5 +404,31 @@ mod tests {
         assert_eq!(evaluator.env.get("l"), Some(Value::Integer(5)));
         assert_eq!(evaluator.env.get("u"), Some(Value::String("HELLO".to_string())));
         assert_eq!(evaluator.env.get("s"), Some(Value::String("123".to_string())));
+    }
+
+    #[test]
+    fn test_arrays() {
+        let input = r#"
+            let arr = [1, 2, 3];
+            let first = arr[0];
+            push(arr, 4);
+            let length = len(arr);
+        "#;
+        let mut parser = Parser::new(input);
+        let statements = parser.parse();
+        let mut evaluator = Evaluator::new();
+        evaluator.eval(statements);
+
+        assert_eq!(evaluator.env.get("first"), Some(Value::Integer(1)));
+        assert_eq!(evaluator.env.get("length"), Some(Value::Integer(4)));
+
+        // Check array content manually
+        if let Some(Value::Array(arr)) = evaluator.env.get("arr") {
+             let vec = arr.borrow();
+             assert_eq!(vec.len(), 4);
+             assert_eq!(vec[3], Value::Integer(4));
+        } else {
+            panic!("arr not found or not array");
+        }
     }
 }
