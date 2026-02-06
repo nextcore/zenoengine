@@ -174,6 +174,54 @@ impl Evaluator {
             }
             Value::Null
         }));
+
+        // HTTP Client Built-ins
+        self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args| {
+            if args.len() != 1 { return Value::Null; }
+            let url = match &args[0] {
+                Value::String(s) => s,
+                _ => return Value::Null,
+            };
+
+            match reqwest::blocking::get(url) {
+                Ok(resp) => {
+                     match resp.text() {
+                         Ok(text) => Value::String(text),
+                         Err(_) => Value::Null
+                     }
+                },
+                Err(e) => {
+                    eprintln!("HTTP Error: {}", e);
+                    Value::Null
+                }
+            }
+        }));
+
+        self.env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args| {
+            if args.len() != 2 { return Value::Null; }
+            let url = match &args[0] {
+                Value::String(s) => s,
+                _ => return Value::Null,
+            };
+            let body = match &args[1] {
+                Value::String(s) => s.clone(),
+                _ => return Value::Null,
+            };
+
+            let client = reqwest::blocking::Client::new();
+            match client.post(url).body(body).send() {
+                Ok(resp) => {
+                     match resp.text() {
+                         Ok(text) => Value::String(text),
+                         Err(_) => Value::Null
+                     }
+                },
+                Err(e) => {
+                    eprintln!("HTTP Error: {}", e);
+                    Value::Null
+                }
+            }
+        }));
     }
 
     pub fn eval(&mut self, statements: Vec<Statement>) {
@@ -204,8 +252,6 @@ impl Evaluator {
                 match lhs {
                     Expression::Identifier(name) => {
                         if !self.env.update(&name, val.clone()) {
-                             // If variable doesn't exist, we could error or auto-create (like global).
-                             // ZenoLang usually strict? Let's error if not found (must use `let`).
                              eprintln!("Runtime Error: Variable '{}' not declared before assignment", name);
                              return None;
                         }

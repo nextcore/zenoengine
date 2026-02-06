@@ -14,12 +14,15 @@ use serde::{Deserialize, Serialize};
 use parser::Parser;
 use evaluator::Evaluator;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 && args[1] == "server" {
-        start_server().await;
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(start_server());
     } else {
         run_cli_mode();
     }
@@ -64,13 +67,18 @@ struct ScriptResponse {
 }
 
 async fn execute_script(Json(payload): Json<ScriptRequest>) -> Json<ScriptResponse> {
-    let mut parser = Parser::new(&payload.script);
-    let statements = parser.parse();
+    let output = tokio::task::spawn_blocking(move || {
+        let mut parser = Parser::new(&payload.script);
+        let statements = parser.parse();
 
-    let mut evaluator = Evaluator::new();
-    evaluator.eval(statements);
+        let mut evaluator = Evaluator::new();
+        evaluator.eval(statements);
+        evaluator.get_output()
+    })
+    .await
+    .unwrap();
 
     Json(ScriptResponse {
-        output: evaluator.get_output(),
+        output,
     })
 }

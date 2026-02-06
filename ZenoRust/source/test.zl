@@ -1,27 +1,22 @@
-print("--- ZenoLang Maps (Objects) Test ---");
+print("--- ZenoLang HTTP Client Test ---");
 
-let user = {"name": "Zeno", "role": "Engine", "ver": 1};
-print("Object created: " + str(user));
+print("Fetching external data...");
+// Using httpbin.org to test GET
+let response = http_get("https://httpbin.org/get");
+print("GET Response length: " + str(len(response)));
 
-let name = user["name"];
-print("User Name: " + name);
+if (len(response) > 0) {
+    print("GET request successful!");
+} else {
+    print("GET request failed (might be network issue)");
+}
 
-print("Updating version...");
-user["ver"] = 2; // Assignment to map key
-print("New Version: " + str(user["ver"]));
+print("Posting data...");
+// Using httpbin.org to test POST
+let payload = "{\"name\": \"Zeno\", \"lang\": \"Rust\"}";
+let post_resp = http_post("https://httpbin.org/post", payload);
+print("POST Response length: " + str(len(post_resp)));
 
-print("Adding new key 'status'...");
-user["status"] = "Active"; // Assignment to new key
-print("User Status: " + user["status"]);
-
-print("Object structure: " + str(user));
-
-print("--- Assignment Test ---");
-let x = 10;
-print("x is " + str(x));
-x = 20; // Re-assignment to variable
-print("x is now " + str(x));
-
-let nums = [1, 2, 3];
-nums[1] = 99; // Assignment to array index
-print("Array updated: " + str(nums));
+if (len(post_resp) > 0) {
+    print("POST request successful!");
+}
