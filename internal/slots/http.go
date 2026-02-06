@@ -1,8 +1,11 @@
 package slots
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"zeno/pkg/engine"
@@ -211,6 +214,82 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 		scope.Set(target, r.Host)
 		return nil
 	}, engine.SlotMeta{Example: "http.host: { as: $host }"})
+
+	// 8. HTTP.BODY (Raw Body)
+	eng.Register("http.body", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		reqVal := ctx.Value("httpRequest")
+		if reqVal == nil {
+			return nil
+		}
+		r := reqVal.(*http.Request)
+
+		target := "body"
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		if r.Body == nil {
+			scope.Set(target, "")
+			return nil
+		}
+
+		// Read body
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			return fmt.Errorf("http.body: failed to read: %v", err)
+		}
+
+		// Restore body so it can be read again
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		scope.Set(target, string(bodyBytes))
+		return nil
+	}, engine.SlotMeta{Example: "http.body { as: $raw }"})
+
+	// 9. HTTP.JSON_BODY (Auto Parse)
+	eng.Register("http.json_body", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		reqVal := ctx.Value("httpRequest")
+		if reqVal == nil {
+			return nil
+		}
+		r := reqVal.(*http.Request)
+
+		target := "input"
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		if r.Body == nil {
+			scope.Set(target, map[string]interface{}{})
+			return nil
+		}
+
+		// Read body
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			return fmt.Errorf("http.json_body: failed to read: %v", err)
+		}
+
+		// Restore body
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		if len(bodyBytes) == 0 {
+			scope.Set(target, map[string]interface{}{})
+			return nil
+		}
+
+		var result interface{}
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return fmt.Errorf("http.json_body: invalid json: %v", err)
+		}
+
+		scope.Set(target, result)
+		return nil
+	}, engine.SlotMeta{Example: "http.json_body { as: $data }"})
 
 	// ==========================================
 	// HTTP RESPONSE HELPERS (Syntax Sugar)

@@ -5,7 +5,6 @@
 log: "🚀 Starting Todo API Server..."
 
 // 1. Database Initialization
-// Ensure the table exists. Using SQLite for simplicity.
 db.execute: "CREATE TABLE IF NOT EXISTS todos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -24,37 +23,28 @@ http.route: "GET /api/todos" {
         db.order_by: "created_at DESC"
         db.get: { as: $todos }
 
-        // Ensure we return empty list if nil
         if: $todos == nil {
             then: {
-                // Initialize empty array using JSON parse workaround
-                // until array literal [] is fully supported
                 json.parse: "[]" { as: $todos }
             }
         }
-        http.json: $todos
+
+        // Use http.ok which sends JSON
+        http.ok: { data: $todos }
     }
 }
 
 // POST /api/todos - Create a new todo
 http.route: "POST /api/todos" {
     handler: {
-        // Parse JSON body
-        http.body { as: $raw_body }
+        http.json_body { as: $input }
 
-        if: len($raw_body) == 0 {
-             then: {
-                 http.response: { status: 400, body: { error: "Empty body" } }
-                 return
-             }
-        }
+        // Debug
+        // log: "Input Title: " + $input.title
 
-        json.parse: $raw_body { as: $input }
-
-        // Validation
         if: $input.title == "" || $input.title == nil {
             then: {
-                http.response: { status: 400, body: { error: "Title is required" } }
+                http.bad_request: { error: "Title is required" }
                 return
             }
         }
@@ -62,10 +52,7 @@ http.route: "POST /api/todos" {
         db.table: "todos"
         db.insert: { title: $input.title }
 
-        http.response: {
-            status: 201
-            body: { message: "Todo created", title: $input.title }
-        }
+        http.created: { message: "Todo created", title: $input.title }
     }
 }
 
@@ -80,10 +67,10 @@ http.route: "GET /api/todos/{id}" {
 
         if: $todo == nil {
             then: {
-                http.response: { status: 404, body: { error: "Todo not found" } }
+                http.not_found: { error: "Todo not found" }
             }
             else: {
-                http.json: $todo
+                http.ok: { data: $todo }
             }
         }
     }
@@ -93,15 +80,7 @@ http.route: "GET /api/todos/{id}" {
 http.route: "PUT /api/todos/{id}" {
     handler: {
         http.param: "id" { as: $id }
-        http.body { as: $raw_body }
-
-        // Parse body if present
-        $input = nil
-        if: len($raw_body) > 0 {
-             then: {
-                 json.parse: $raw_body { as: $input }
-             }
-        }
+        http.json_body { as: $input }
 
         // Check if exists
         db.table: "todos"
@@ -110,7 +89,7 @@ http.route: "PUT /api/todos/{id}" {
 
         if: $existing == nil {
             then: {
-                http.response: { status: 404, body: { error: "Todo not found" } }
+                http.not_found: { error: "Todo not found" }
                 return
             }
         }
@@ -124,7 +103,7 @@ http.route: "PUT /api/todos/{id}" {
             }
         }
 
-        http.json: { message: "Todo updated", id: $id }
+        http.ok: { message: "Todo updated", id: $id }
     }
 }
 
@@ -137,7 +116,7 @@ http.route: "DELETE /api/todos/{id}" {
         db.where: { col: "id", val: $id }
         db.delete: {}
 
-        http.response: { status: 204 }
+        http.no_content: {}
     }
 }
 
