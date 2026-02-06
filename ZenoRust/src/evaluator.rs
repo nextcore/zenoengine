@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use async_recursion::async_recursion;
 use std::future::Future;
 use std::pin::Pin;
+use sqlx::{SqlitePool, Row, Column, TypeInfo};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -13,7 +14,7 @@ pub enum Value {
     Null,
     Function(Vec<String>, Statement, Env),
     // Builtin now holds a function pointer that returns a BoxFuture
-    Builtin(String, fn(Vec<Value>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
+    Builtin(String, fn(Vec<Value>, Option<SqlitePool>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
     ReturnValue(Box<Value>),
     Array(Arc<Mutex<Vec<Value>>>),
     Map(Arc<Mutex<HashMap<String, Value>>>),
@@ -126,13 +127,15 @@ impl Env {
 pub struct Evaluator {
     env: Env,
     output: String,
+    db_pool: Option<SqlitePool>,
 }
 
 impl Evaluator {
-    pub fn new() -> Self {
+    pub fn new(db_pool: Option<SqlitePool>) -> Self {
         let mut evaluator = Self {
             env: Env::new(),
             output: String::new(),
+            db_pool,
         };
         evaluator.register_builtins();
         evaluator
@@ -143,7 +146,7 @@ impl Evaluator {
     }
 
     fn register_builtins(&mut self) {
-        self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args| {
+        self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
                 match &args[0] {
@@ -155,7 +158,7 @@ impl Evaluator {
             })
         }));
 
-        self.env.set("upper".to_string(), Value::Builtin("upper".to_string(), |args| {
+        self.env.set("upper".to_string(), Value::Builtin("upper".to_string(), |args, _| {
              Box::pin(async move {
                  if args.len() != 1 { return Value::Null; }
                  match &args[0] {
@@ -165,14 +168,14 @@ impl Evaluator {
              })
         }));
 
-        self.env.set("str".to_string(), Value::Builtin("str".to_string(), |args| {
+        self.env.set("str".to_string(), Value::Builtin("str".to_string(), |args, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
                 Value::String(format!("{}", args[0]))
             })
         }));
 
-        self.env.set("push".to_string(), Value::Builtin("push".to_string(), |args| {
+        self.env.set("push".to_string(), Value::Builtin("push".to_string(), |args, _| {
             Box::pin(async move {
                 if args.len() != 2 { return Value::Null; }
                 if let Value::Array(arr) = &args[0] {
@@ -183,7 +186,7 @@ impl Evaluator {
             })
         }));
 
-        self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args| {
+        self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
                 let url = match &args[0] {
@@ -206,7 +209,7 @@ impl Evaluator {
             })
         }));
 
-        self.env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args| {
+        self.env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args, _| {
             Box::pin(async move {
                 if args.len() != 2 { return Value::Null; }
                 let url = match &args[0] {
@@ -228,6 +231,123 @@ impl Evaluator {
                     },
                     Err(e) => {
                         eprintln!("HTTP Error: {}", e);
+                        Value::Null
+                    }
+                }
+            })
+        }));
+
+        // DB Execute: db_execute("INSERT...", [params])
+        self.env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, pool| {
+            Box::pin(async move {
+                if pool.is_none() {
+                    eprintln!("DB Error: No database pool configured");
+                    return Value::Null;
+                }
+                let pool = pool.unwrap();
+
+                if args.len() < 1 { return Value::Null; }
+                let sql = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    _ => return Value::Null,
+                };
+
+                let mut query = sqlx::query(&sql);
+
+                if args.len() > 1 {
+                    if let Value::Array(params) = &args[1] {
+                        for param in params.lock().unwrap().iter() {
+                            match param {
+                                Value::Integer(i) => query = query.bind(*i),
+                                Value::String(s) => query = query.bind(s.clone()),
+                                Value::Boolean(b) => query = query.bind(*b),
+                                Value::Null => query = query.bind(None::<String>),
+                                _ => query = query.bind(format!("{}", param)), // Fallback stringify
+                            }
+                        }
+                    }
+                }
+
+                match query.execute(&pool).await {
+                    Ok(result) => Value::Integer(result.rows_affected() as i64),
+                    Err(e) => {
+                        eprintln!("DB Execute Error: {}", e);
+                        Value::Null
+                    }
+                }
+            })
+        }));
+
+        // DB Query: db_query("SELECT...", [params])
+        self.env.set("db_query".to_string(), Value::Builtin("db_query".to_string(), |args, pool| {
+            Box::pin(async move {
+                if pool.is_none() {
+                    eprintln!("DB Error: No database pool configured");
+                    return Value::Null;
+                }
+                let pool = pool.unwrap();
+
+                if args.len() < 1 { return Value::Null; }
+                let sql = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    _ => return Value::Null,
+                };
+
+                let mut query = sqlx::query(&sql);
+
+                if args.len() > 1 {
+                    if let Value::Array(params) = &args[1] {
+                        for param in params.lock().unwrap().iter() {
+                            match param {
+                                Value::Integer(i) => query = query.bind(*i),
+                                Value::String(s) => query = query.bind(s.clone()),
+                                Value::Boolean(b) => query = query.bind(*b),
+                                Value::Null => query = query.bind(None::<String>),
+                                _ => query = query.bind(format!("{}", param)),
+                            }
+                        }
+                    }
+                }
+
+                match query.fetch_all(&pool).await {
+                    Ok(rows) => {
+                        let mut result_rows = Vec::new();
+                        for row in rows {
+                            let mut map = HashMap::new();
+                            for col in row.columns() {
+                                let name = col.name();
+                                let type_info = col.type_info();
+                                let type_name = type_info.name();
+
+                                // Simple mapping for SQLite types
+                                let val = if type_name == "TEXT" || type_name == "VARCHAR" {
+                                    let s: Option<String> = row.try_get(name).ok();
+                                    match s { Some(v) => Value::String(v), None => Value::Null }
+                                } else if type_name == "INTEGER" || type_name == "INT8" {
+                                    let i: Option<i64> = row.try_get(name).ok();
+                                    match i { Some(v) => Value::Integer(v), None => Value::Null }
+                                } else if type_name == "BOOLEAN" {
+                                    let b: Option<bool> = row.try_get(name).ok();
+                                    match b { Some(v) => Value::Boolean(v), None => Value::Null }
+                                } else {
+                                    // Fallback to string for unknown types or blobs
+                                    // Or try int/string generic
+                                    if let Ok(i) = row.try_get::<i64, _>(name) {
+                                        Value::Integer(i)
+                                    } else if let Ok(s) = row.try_get::<String, _>(name) {
+                                        Value::String(s)
+                                    } else {
+                                        Value::Null
+                                    }
+                                };
+                                map.insert(name.to_string(), val);
+                            }
+                            result_rows.push(Value::Map(Arc::new(Mutex::new(map))));
+                        }
+                        Value::Array(Arc::new(Mutex::new(result_rows)))
+                    },
+                    Err(e) => {
+                        eprintln!("DB Query Error: {}", e);
                         Value::Null
                     }
                 }
@@ -432,7 +552,7 @@ impl Evaluator {
                 }
             },
             Value::Builtin(_, func_ptr) => {
-                Some(func_ptr(args).await)
+                Some(func_ptr(args, self.db_pool.clone()).await)
             },
             _ => {
                 eprintln!("Runtime Error: Not a function");
@@ -495,7 +615,7 @@ mod tests {
         "#;
         let mut parser = Parser::new(input);
         let statements = parser.parse();
-        let mut evaluator = Evaluator::new();
+        let mut evaluator = Evaluator::new(None);
         evaluator.eval(statements).await;
 
         let val = evaluator.env.get("res");
@@ -517,7 +637,7 @@ mod tests {
         "#;
         let mut parser = Parser::new(input);
         let statements = parser.parse();
-        let mut evaluator = Evaluator::new();
+        let mut evaluator = Evaluator::new(None);
         evaluator.eval(statements).await;
 
         let val = evaluator.env.get("res");
@@ -537,7 +657,7 @@ mod tests {
         "#;
         let mut parser = Parser::new(input);
         let statements = parser.parse();
-        let mut evaluator = Evaluator::new();
+        let mut evaluator = Evaluator::new(None);
         evaluator.eval(statements).await;
 
         assert_eq!(evaluator.env.get("l"), Some(Value::Integer(5)));
@@ -555,7 +675,7 @@ mod tests {
         "#;
         let mut parser = Parser::new(input);
         let statements = parser.parse();
-        let mut evaluator = Evaluator::new();
+        let mut evaluator = Evaluator::new(None);
         evaluator.eval(statements).await;
 
         assert_eq!(evaluator.env.get("first"), Some(Value::Integer(1)));
@@ -581,7 +701,7 @@ mod tests {
         "#;
         let mut parser = Parser::new(input);
         let statements = parser.parse();
-        let mut evaluator = Evaluator::new();
+        let mut evaluator = Evaluator::new(None);
         evaluator.eval(statements).await;
 
         assert_eq!(evaluator.env.get("n"), Some(Value::String("Zeno".to_string())));

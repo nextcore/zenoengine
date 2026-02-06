@@ -1,22 +1,25 @@
-print("--- ZenoLang HTTP Client Test ---");
+print("--- ZenoLang Database Test ---");
 
-print("Fetching external data...");
-// Using httpbin.org to test GET
-let response = http_get("https://httpbin.org/get");
-print("GET Response length: " + str(len(response)));
+print("Creating table users...");
+let create_sql = "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)";
+let res = db_execute(create_sql);
+print("Table created (result): " + str(res));
 
-if (len(response) > 0) {
-    print("GET request successful!");
-} else {
-    print("GET request failed (might be network issue)");
+print("Inserting users...");
+db_execute("INSERT INTO users (name) VALUES (?)", ["Zeno"]);
+db_execute("INSERT INTO users (name) VALUES (?)", ["Rust"]);
+
+print("Querying users...");
+let users = db_query("SELECT * FROM users");
+print("Users found: " + str(len(users)));
+
+// Print details
+// users is an array of maps: [{"id": 1, "name": "Zeno"}, ...]
+fn printUsers(list, idx) {
+    if (idx < len(list)) {
+        let u = list[idx];
+        print("User " + str(u["id"]) + ": " + u["name"]);
+        printUsers(list, idx + 1);
+    }
 }
-
-print("Posting data...");
-// Using httpbin.org to test POST
-let payload = "{\"name\": \"Zeno\", \"lang\": \"Rust\"}";
-let post_resp = http_post("https://httpbin.org/post", payload);
-print("POST Response length: " + str(len(post_resp)));
-
-if (len(post_resp) > 0) {
-    print("POST request successful!");
-}
+printUsers(users, 0);
