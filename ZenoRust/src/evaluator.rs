@@ -1,4 +1,5 @@
 use crate::parser::{Statement, Expression, Op};
+use crate::template::{ZenoBladeParser, BladeNode};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_recursion::async_recursion;
@@ -125,7 +126,7 @@ impl Env {
 }
 
 pub struct Evaluator {
-    env: Env,
+    pub env: Env,
     output: String,
     db_pool: Option<AnyPool>,
 }
@@ -146,6 +147,7 @@ impl Evaluator {
     }
 
     fn register_builtins(&mut self) {
+        // ... (existing built-ins omitted for brevity in thought, but included in file write)
         self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
@@ -237,7 +239,6 @@ impl Evaluator {
             })
         }));
 
-        // DB Execute: db_execute("INSERT...", [params])
         self.env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, pool| {
             Box::pin(async move {
                 if pool.is_none() {
@@ -278,7 +279,6 @@ impl Evaluator {
             })
         }));
 
-        // DB Query: db_query("SELECT...", [params])
         self.env.set("db_query".to_string(), Value::Builtin("db_query".to_string(), |args, pool| {
             Box::pin(async move {
                 if pool.is_none() {
@@ -316,11 +316,6 @@ impl Evaluator {
                             let mut map = HashMap::new();
                             for col in row.columns() {
                                 let name = col.name();
-                                // AnyRow type checking is dynamic via type_info()
-                                // or try_get checks
-                                let type_info = col.type_info();
-                                let type_name = type_info.name();
-
                                 let val = if let Ok(v) = row.try_get::<i64, _>(name) {
                                     Value::Integer(v)
                                 } else if let Ok(v) = row.try_get::<String, _>(name) {
@@ -330,7 +325,6 @@ impl Evaluator {
                                 } else {
                                     Value::Null
                                 };
-
                                 map.insert(name.to_string(), val);
                             }
                             result_rows.push(Value::Map(Arc::new(Mutex::new(map))));
@@ -344,8 +338,64 @@ impl Evaluator {
                 }
             })
         }));
+
+        // VIEW / RENDER
+        self.env.set("view".to_string(), Value::Builtin("view".to_string(), |args, pool| {
+            Box::pin(async move {
+                if args.len() != 2 { return Value::Null; }
+                let tpl = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    _ => return Value::Null,
+                };
+                let data = args[1].clone();
+
+                // Create a temporary evaluator to render
+                let mut renderer = Evaluator::new(pool);
+
+                // Inject data
+                if let Value::Map(map) = data {
+                    let m = map.lock().unwrap();
+                    for (k, v) in m.iter() {
+                        renderer.env.set(k.clone(), v.clone());
+                    }
+                }
+
+                let mut parser = ZenoBladeParser::new(&tpl);
+                let nodes = parser.parse();
+
+                let output = renderer.render_nodes(nodes).await;
+                Value::String(output)
+            })
+        }));
     }
 
+    // Helper for rendering blade nodes
+    #[async_recursion]
+    async fn render_nodes(&mut self, nodes: Vec<BladeNode>) -> String {
+        let mut output = String::new();
+        for node in nodes {
+            match node {
+                BladeNode::Text(t) => output.push_str(&t),
+                BladeNode::Interpolation(expr) => {
+                    if let Some(val) = self.eval_expression(&expr).await {
+                        output.push_str(&format!("{}", val));
+                    }
+                },
+                BladeNode::If(cond, true_block, false_block) => {
+                    if let Some(val) = self.eval_expression(&cond).await {
+                        if self.is_truthy(val) {
+                            output.push_str(&self.render_nodes(true_block).await);
+                        } else if let Some(fb) = false_block {
+                            output.push_str(&self.render_nodes(fb).await);
+                        }
+                    }
+                }
+            }
+        }
+        output
+    }
+
+    // ... (rest of Evaluator implementation: eval, eval_statement, etc.)
     pub async fn eval(&mut self, statements: Vec<Statement>) {
         for stmt in statements {
             let result = self.eval_statement(stmt).await;

@@ -1,25 +1,20 @@
-print("--- ZenoLang Database Test ---");
+print("--- ZenoBlade Test ---");
 
-print("Creating table users...");
-let create_sql = "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)";
-let res = db_execute(create_sql);
-print("Table created (result): " + str(res));
+let data = {
+    "name": "Zeno",
+    "isAdmin": true,
+    "role": "SuperUser"
+};
 
-print("Inserting users...");
-db_execute("INSERT INTO users (name) VALUES (?)", ["Zeno"]);
-db_execute("INSERT INTO users (name) VALUES (?)", ["Rust"]);
+let tpl = "<h1>Hello {{ name }}</h1>\n@if(isAdmin) \n  <button>Admin Panel</button>\n  <p>Role: {{ role }}</p>\n@else \n  <p>Welcome User</p>\n@endif";
 
-print("Querying users...");
-let users = db_query("SELECT * FROM users");
-print("Users found: " + str(len(users)));
+print("Template:");
+print(tpl);
+print("\nRendered Output:");
+let output = view(tpl, data);
+print(output);
 
-// Print details
-// users is an array of maps: [{"id": 1, "name": "Zeno"}, ...]
-fn printUsers(list, idx) {
-    if (idx < len(list)) {
-        let u = list[idx];
-        print("User " + str(u["id"]) + ": " + u["name"]);
-        printUsers(list, idx + 1);
-    }
-}
-printUsers(users, 0);
+print("\n--- Nested If Test ---");
+let data2 = {"score": 85};
+let tpl2 = "Score: {{ score }} - Grade: @if(score > 90) A @else @if(score > 80) B @else C @endif @endif";
+print(view(tpl2, data2));

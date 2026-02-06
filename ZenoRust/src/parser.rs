@@ -205,6 +205,10 @@ impl<'a> Parser<'a> {
         Some(Statement::Let(name, expr))
     }
 
+    pub fn parse_expression_entry(&mut self) -> Option<Expression> {
+        self.parse_expression(0)
+    }
+
     fn parse_expression(&mut self, min_bp: u8) -> Option<Expression> {
         let mut lhs = match self.lexer.next() {
             Some(Ok(Token::Integer(Some(i)))) => Expression::Integer(i),

@@ -1,6 +1,7 @@
 pub mod lexer;
 pub mod parser;
 pub mod evaluator;
+pub mod template;
 
 use std::fs;
 use std::env;
