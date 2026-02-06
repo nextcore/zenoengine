@@ -3,11 +3,30 @@ pub mod parser;
 pub mod evaluator;
 
 use std::fs;
+use std::env;
+use std::net::SocketAddr;
+use axum::{
+    routing::post,
+    Router,
+    Json,
+};
+use serde::{Deserialize, Serialize};
 use parser::Parser;
 use evaluator::Evaluator;
 
-fn main() {
-    println!("ZenoEngine Rust Edition (2024) Initialized!");
+#[tokio::main]
+async fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 && args[1] == "server" {
+        start_server().await;
+    } else {
+        run_cli_mode();
+    }
+}
+
+fn run_cli_mode() {
+    println!("ZenoEngine Rust Edition (2024) - CLI Mode");
 
     let file_path = "source/test.zl";
     println!("Executing ZenoLang script: {}", file_path);
@@ -20,4 +39,38 @@ fn main() {
 
     let mut evaluator = Evaluator::new();
     evaluator.eval(statements);
+}
+
+async fn start_server() {
+    println!("ZenoEngine Rust Edition (2024) - Server Mode");
+    println!("Listening on http://localhost:3000");
+
+    let app = Router::new()
+        .route("/execute", post(execute_script));
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+#[derive(Deserialize)]
+struct ScriptRequest {
+    script: String,
+}
+
+#[derive(Serialize)]
+struct ScriptResponse {
+    output: String,
+}
+
+async fn execute_script(Json(payload): Json<ScriptRequest>) -> Json<ScriptResponse> {
+    let mut parser = Parser::new(&payload.script);
+    let statements = parser.parse();
+
+    let mut evaluator = Evaluator::new();
+    evaluator.eval(statements);
+
+    Json(ScriptResponse {
+        output: evaluator.get_output(),
+    })
 }

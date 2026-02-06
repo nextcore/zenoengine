@@ -125,15 +125,21 @@ impl Env {
 
 pub struct Evaluator {
     env: Env,
+    output: String,
 }
 
 impl Evaluator {
     pub fn new() -> Self {
         let mut evaluator = Self {
             env: Env::new(),
+            output: String::new(),
         };
         evaluator.register_builtins();
         evaluator
+    }
+
+    pub fn get_output(&self) -> String {
+        self.output.clone()
     }
 
     fn register_builtins(&mut self) {
@@ -183,7 +189,9 @@ impl Evaluator {
         match stmt {
             Statement::Print(expr) => {
                 let val = self.eval_expression(&expr)?;
-                println!("{}", val);
+                let out = format!("{}\n", val);
+                self.output.push_str(&out);
+                print!("{}", out); // Still print to stdout for CLI feedback
                 None
             }
             Statement::Let(name, expr) => {
