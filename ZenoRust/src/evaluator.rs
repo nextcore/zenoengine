@@ -16,9 +16,10 @@ pub enum Value {
     ReturnValue(Box<Value>), // Wrapper to signal return
     // Array: Mutable shared list
     Array(Rc<RefCell<Vec<Value>>>),
+    // Map: Mutable shared key-value store
+    Map(Rc<RefCell<HashMap<String, Value>>>),
 }
 
-// Manual PartialEq to ignore function pointer comparison and handle Arrays
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -32,12 +33,14 @@ impl PartialEq for Value {
             (Value::Builtin(name_a, _), Value::Builtin(name_b, _)) => name_a == name_b,
             (Value::ReturnValue(a), Value::ReturnValue(b)) => a == b,
             (Value::Array(a), Value::Array(b)) => {
-                // Deep comparison of array contents
-                // Note: This could be expensive or infinite if recursive
                 let vec_a = a.borrow();
                 let vec_b = b.borrow();
-                // Compare slice content
                 vec_a.iter().zip(vec_b.iter()).all(|(x, y)| x == y) && vec_a.len() == vec_b.len()
+            },
+            (Value::Map(a), Value::Map(b)) => {
+                let map_a = a.borrow();
+                let map_b = b.borrow();
+                map_a.len() == map_b.len() && map_a.iter().all(|(k, v)| map_b.get(k) == Some(v))
             }
             _ => false,
         }
@@ -58,6 +61,12 @@ impl std::fmt::Display for Value {
                 let vec = arr.borrow();
                 let elements: Vec<String> = vec.iter().map(|v| format!("{}", v)).collect();
                 write!(f, "[{}]", elements.join(", "))
+            },
+            Value::Map(map) => {
+                let m = map.borrow();
+                let mut entries: Vec<String> = m.iter().map(|(k, v)| format!("\"{}\": {}", k, v)).collect();
+                entries.sort(); // Sort for deterministic output
+                write!(f, "{{{}}}", entries.join(", "))
             }
         }
     }
@@ -95,7 +104,22 @@ impl Env {
     }
 
     pub fn set(&mut self, name: String, val: Value) {
+        // Simple set logic: always set in current scope (like `let`)?
+        // Or update if exists?
+        // Our `Let` statement uses `set` on current scope.
+        // Assignment logic needs to check existence.
         self.store.borrow_mut().insert(name, val);
+    }
+
+    pub fn update(&mut self, name: &str, val: Value) -> bool {
+         if self.store.borrow().contains_key(name) {
+             self.store.borrow_mut().insert(name.to_string(), val);
+             return true;
+         }
+         if let Some(ref mut outer) = self.outer {
+             return outer.update(name, val);
+         }
+         false
     }
 }
 
@@ -118,6 +142,7 @@ impl Evaluator {
             match &args[0] {
                 Value::String(s) => Value::Integer(s.len() as i64),
                 Value::Array(arr) => Value::Integer(arr.borrow().len() as i64),
+                Value::Map(map) => Value::Integer(map.borrow().len() as i64),
                 _ => Value::Integer(0),
             }
         }));
@@ -139,7 +164,7 @@ impl Evaluator {
             if args.len() != 2 { return Value::Null; }
             if let Value::Array(arr) = &args[0] {
                 arr.borrow_mut().push(args[1].clone());
-                return Value::Array(arr.clone()); // Return the array itself
+                return Value::Array(arr.clone());
             }
             Value::Null
         }));
@@ -149,7 +174,7 @@ impl Evaluator {
         for stmt in statements {
             let result = self.eval_statement(stmt);
             if let Some(Value::ReturnValue(_)) = result {
-                 // Top level return?
+                 // Top level return
             }
         }
     }
@@ -164,6 +189,45 @@ impl Evaluator {
             Statement::Let(name, expr) => {
                 let val = self.eval_expression(&expr)?;
                 self.env.set(name, val);
+                None
+            }
+             Statement::Assign(lhs, rhs) => {
+                let val = self.eval_expression(&rhs)?;
+                match lhs {
+                    Expression::Identifier(name) => {
+                        if !self.env.update(&name, val.clone()) {
+                             // If variable doesn't exist, we could error or auto-create (like global).
+                             // ZenoLang usually strict? Let's error if not found (must use `let`).
+                             eprintln!("Runtime Error: Variable '{}' not declared before assignment", name);
+                             return None;
+                        }
+                    },
+                    Expression::Index(target_expr, index_expr) => {
+                         let target = self.eval_expression(&target_expr)?;
+                         let index = self.eval_expression(&index_expr)?;
+
+                         match (target, index) {
+                             (Value::Array(arr), Value::Integer(i)) => {
+                                 let mut vec = arr.borrow_mut();
+                                 if i >= 0 && (i as usize) < vec.len() {
+                                     vec[i as usize] = val;
+                                 } else {
+                                     eprintln!("Runtime Error: Index out of bounds");
+                                 }
+                             },
+                             (Value::Map(map), Value::String(key)) => {
+                                 let mut m = map.borrow_mut();
+                                 m.insert(key, val);
+                             },
+                             _ => {
+                                 eprintln!("Runtime Error: Invalid assignment target");
+                             }
+                         }
+                    },
+                    _ => {
+                        eprintln!("Runtime Error: Invalid assignment target");
+                    }
+                }
                 None
             }
             Statement::Function(name, params, body) => {
@@ -232,6 +296,13 @@ impl Evaluator {
                 }
                 Some(Value::Array(Rc::new(RefCell::new(vals))))
             },
+             Expression::Map(pairs) => {
+                let mut map = HashMap::new();
+                for (k, v_expr) in pairs {
+                    map.insert(k.clone(), self.eval_expression(v_expr)?);
+                }
+                Some(Value::Map(Rc::new(RefCell::new(map))))
+            },
             Expression::Index(left, index) => {
                  let left_val = self.eval_expression(left)?;
                  let index_val = self.eval_expression(index)?;
@@ -245,6 +316,10 @@ impl Evaluator {
                              eprintln!("Runtime Error: Index out of bounds");
                              Some(Value::Null)
                          }
+                     },
+                     (Value::Map(map), Value::String(key)) => {
+                         let m = map.borrow();
+                         m.get(&key).cloned().or(Some(Value::Null))
                      },
                      _ => {
                          eprintln!("Runtime Error: Index operation not supported on this type");
@@ -430,5 +505,22 @@ mod tests {
         } else {
             panic!("arr not found or not array");
         }
+    }
+
+    #[test]
+    fn test_maps() {
+        let input = r#"
+            let user = {"name": "Zeno", "id": 1};
+            let n = user["name"];
+            user["id"] = 99;
+            let i = user["id"];
+        "#;
+        let mut parser = Parser::new(input);
+        let statements = parser.parse();
+        let mut evaluator = Evaluator::new();
+        evaluator.eval(statements);
+
+        assert_eq!(evaluator.env.get("n"), Some(Value::String("Zeno".to_string())));
+        assert_eq!(evaluator.env.get("i"), Some(Value::Integer(99)));
     }
 }

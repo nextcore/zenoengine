@@ -3,6 +3,17 @@ use logos::Logos;
 #[derive(Logos, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f]+")]
 pub enum Token {
+    #[token("//", |lex| {
+        let remainder = lex.remainder();
+        if let Some(pos) = remainder.find('\n') {
+            lex.bump(pos);
+        } else {
+            lex.bump(remainder.len());
+        }
+        logos::Skip
+    })]
+    Comment,
+
     #[token("print")]
     Print,
 
@@ -38,6 +49,9 @@ pub enum Token {
 
     #[token("]")]
     RBracket,
+
+    #[token(":")]
+    Colon,
 
     #[token(",")]
     Comma,

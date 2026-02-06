@@ -9,6 +9,7 @@ pub enum Expression {
     Boolean(bool),
     Identifier(String),
     Array(Vec<Expression>),
+    Map(Vec<(String, Expression)>), // Key (String), Value
     Index(Box<Expression>, Box<Expression>), // Target, Index
     BinaryOp(Box<Expression>, Op, Box<Expression>),
     Call(Box<Expression>, Vec<Expression>), // FuncName, Args
@@ -30,11 +31,12 @@ pub enum Op {
 pub enum Statement {
     Print(Expression),
     Let(String, Expression),
+    Assign(Expression, Expression), // Target (LHS), Value (RHS)
     Block(Vec<Statement>),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
     Function(String, Vec<String>, Box<Statement>), // Name, Params, Body
     Return(Expression),
-    Expression(Expression), // Allow calling functions as statements: `doSomething();`
+    Expression(Expression),
 }
 
 pub struct Parser<'a> {
@@ -74,16 +76,27 @@ impl<'a> Parser<'a> {
                         if let Some(stmt) = self.parse_if() { statements.push(stmt); }
                     }
                     Token::LBrace => {
+                        // Ambiguity: Block or Map?
+                        // At top level (Statement), `{` starts a Block.
+                        // Maps are Expressions.
+                        // So here it's definitely a Block.
                         if let Some(stmt) = self.parse_block() { statements.push(stmt); }
                     }
                     Token::RBrace => { break; }
                     _ => {
-                        // Attempt to parse as an expression statement (e.g., function call)
+                        // Statement that starts with expression (Assignment or Call)
                         if let Some(expr) = self.parse_expression(0) {
-                            if let Some(Ok(Token::Semicolon)) = self.lexer.peek() {
-                                self.lexer.next();
-                            }
-                            statements.push(Statement::Expression(expr));
+                            // Check for Assignment (=)
+                             if let Some(Ok(Token::Equals)) = self.lexer.peek() {
+                                 self.lexer.next(); // consume '='
+                                 let rhs = match self.parse_expression(0) { Some(e) => e, None => break }; // Error handling simplified
+                                 if let Some(Ok(Token::Semicolon)) = self.lexer.peek() { self.lexer.next(); }
+                                 statements.push(Statement::Assign(expr, rhs));
+                             } else {
+                                 // Expression statement
+                                 if let Some(Ok(Token::Semicolon)) = self.lexer.peek() { self.lexer.next(); }
+                                 statements.push(Statement::Expression(expr));
+                             }
                         } else {
                             self.lexer.next(); // Skip unknown
                         }
@@ -140,9 +153,17 @@ impl<'a> Parser<'a> {
                     Token::If => { self.lexer.next(); if let Some(stmt) = self.parse_if() { statements.push(stmt); } },
                     Token::LBrace => { if let Some(stmt) = self.parse_block() { statements.push(stmt); } },
                     _ => {
+                         // Expression or Assignment
                          if let Some(expr) = self.parse_expression(0) {
-                            if let Some(Ok(Token::Semicolon)) = self.lexer.peek() { self.lexer.next(); }
-                            statements.push(Statement::Expression(expr));
+                             if let Some(Ok(Token::Equals)) = self.lexer.peek() {
+                                 self.lexer.next();
+                                 let rhs = match self.parse_expression(0) { Some(e) => e, None => break };
+                                 if let Some(Ok(Token::Semicolon)) = self.lexer.peek() { self.lexer.next(); }
+                                 statements.push(Statement::Assign(expr, rhs));
+                             } else {
+                                if let Some(Ok(Token::Semicolon)) = self.lexer.peek() { self.lexer.next(); }
+                                statements.push(Statement::Expression(expr));
+                             }
                          } else { self.lexer.next(); }
                     }
                 }
@@ -191,10 +212,10 @@ impl<'a> Parser<'a> {
             Some(Ok(Token::False)) => Expression::Boolean(false),
             Some(Ok(Token::StringLiteral(s))) => Expression::StringLiteral(s),
             Some(Ok(Token::Identifier(s))) => Expression::Identifier(s),
-            Some(Ok(Token::LBracket)) => { // Array Literal [1, 2]
+            Some(Ok(Token::LBracket)) => {
                 let mut elements = Vec::new();
                 if let Some(Ok(Token::RBracket)) = self.lexer.peek() {
-                    self.lexer.next(); // Empty array
+                    self.lexer.next();
                 } else {
                     loop {
                         elements.push(self.parse_expression(0)?);
@@ -207,6 +228,30 @@ impl<'a> Parser<'a> {
                 }
                 Expression::Array(elements)
             },
+            Some(Ok(Token::LBrace)) => { // Map Literal {"key": val}
+                let mut pairs = Vec::new();
+                if let Some(Ok(Token::RBrace)) = self.lexer.peek() {
+                    self.lexer.next();
+                } else {
+                    loop {
+                        // Key must be string literal (for now)
+                        let key = match self.lexer.next() {
+                            Some(Ok(Token::StringLiteral(s))) => s,
+                            _ => return None
+                        };
+                        match self.lexer.next() { Some(Ok(Token::Colon)) => {}, _ => return None }
+                        let value = self.parse_expression(0)?;
+                        pairs.push((key, value));
+
+                        match self.lexer.peek() {
+                            Some(Ok(Token::Comma)) => { self.lexer.next(); },
+                            Some(Ok(Token::RBrace)) => { self.lexer.next(); break; },
+                            _ => return None
+                        }
+                    }
+                }
+                Expression::Map(pairs)
+            },
             Some(Ok(Token::LParen)) => {
                 let expr = self.parse_expression(0)?;
                 match self.lexer.next() { Some(Ok(Token::RParen)) => expr, _ => return None }
@@ -216,12 +261,11 @@ impl<'a> Parser<'a> {
 
         loop {
             // Handle Indexing: `arr[index]`
-            // Binding power should be same as call (high)
             if let Some(Ok(Token::LBracket)) = self.lexer.peek() {
                  let index_bp = 10;
                  if index_bp < min_bp { break; }
 
-                 self.lexer.next(); // Consume '['
+                 self.lexer.next();
                  let index_expr = self.parse_expression(0)?;
                  match self.lexer.next() { Some(Ok(Token::RBracket)) => {}, _ => return None }
 
@@ -229,14 +273,12 @@ impl<'a> Parser<'a> {
                  continue;
             }
 
-            // Handle Call expression (suffix: '(')
+            // Handle Call
             if let Some(Ok(Token::LParen)) = self.lexer.peek() {
-                // If binding power of call (usually highest, e.g. 8) is < min_bp, break?
-                // Call binding power is extremely high.
                 let call_bp = 10;
                 if call_bp < min_bp { break; }
 
-                self.lexer.next(); // Consume '('
+                self.lexer.next();
                 let mut args = Vec::new();
                 if let Some(Ok(Token::RParen)) = self.lexer.peek() {
                     self.lexer.next();

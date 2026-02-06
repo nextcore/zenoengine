@@ -1,26 +1,27 @@
-print("--- ZenoLang Arrays Test ---");
+print("--- ZenoLang Maps (Objects) Test ---");
 
-let numbers = [10, 20, 30];
-print("Array created: " + str(numbers));
+let user = {"name": "Zeno", "role": "Engine", "ver": 1};
+print("Object created: " + str(user));
 
-let first = numbers[0];
-print("First element: " + str(first));
+let name = user["name"];
+print("User Name: " + name);
 
-let last = numbers[2];
-print("Last element: " + str(last));
+print("Updating version...");
+user["ver"] = 2; // Assignment to map key
+print("New Version: " + str(user["ver"]));
 
-print("Adding element 40...");
-push(numbers, 40);
-print("New array: " + str(numbers));
+print("Adding new key 'status'...");
+user["status"] = "Active"; // Assignment to new key
+print("User Status: " + user["status"]);
 
-let size = len(numbers);
-print("Array length: " + str(size));
+print("Object structure: " + str(user));
 
-print("Looping through array (simulated with recursion):");
-fn printArray(arr, idx) {
-    if (idx < len(arr)) {
-        print("Element " + str(idx) + ": " + str(arr[idx]));
-        printArray(arr, idx + 1);
-    }
-}
-printArray(numbers, 0);
+print("--- Assignment Test ---");
+let x = 10;
+print("x is " + str(x));
+x = 20; // Re-assignment to variable
+print("x is now " + str(x));
+
+let nums = [1, 2, 3];
+nums[1] = 99; // Assignment to array index
+print("Array updated: " + str(nums));
