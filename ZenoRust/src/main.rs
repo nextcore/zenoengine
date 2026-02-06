@@ -18,6 +18,6 @@ fn main() {
     let mut parser = Parser::new(&contents);
     let statements = parser.parse();
 
-    let evaluator = Evaluator::new();
+    let mut evaluator = Evaluator::new();
     evaluator.eval(statements);
 }

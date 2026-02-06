@@ -1,1 +1,19 @@
-print("Hello from ZenoLang source");
+print("--- ZenoLang Math & Variables Test ---");
+
+let x = 10;
+let y = 20;
+
+print("Value of x is:");
+print(x);
+
+print("Value of y is:");
+print(y);
+
+print("Calculation (x + y * 2):");
+print(x + y * 2);
+
+print("String concatenation:");
+print("Hello " + "World");
+
+print("Mixed concatenation:");
+print("Result: " + (x + y));
