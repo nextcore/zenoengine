@@ -14,22 +14,19 @@ use serde::{Deserialize, Serialize};
 use parser::Parser;
 use evaluator::Evaluator;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 && args[1] == "server" {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(start_server());
+        start_server().await;
     } else {
-        run_cli_mode();
+        run_cli_mode().await;
     }
 }
 
-fn run_cli_mode() {
-    println!("ZenoEngine Rust Edition (2024) - CLI Mode");
+async fn run_cli_mode() {
+    println!("ZenoEngine Rust Edition (2024) - CLI Mode (Async)");
 
     let file_path = "source/test.zl";
     println!("Executing ZenoLang script: {}", file_path);
@@ -41,11 +38,11 @@ fn run_cli_mode() {
     let statements = parser.parse();
 
     let mut evaluator = Evaluator::new();
-    evaluator.eval(statements);
+    evaluator.eval(statements).await;
 }
 
 async fn start_server() {
-    println!("ZenoEngine Rust Edition (2024) - Server Mode");
+    println!("ZenoEngine Rust Edition (2024) - Server Mode (Async)");
     println!("Listening on http://localhost:3000");
 
     let app = Router::new()
@@ -67,18 +64,13 @@ struct ScriptResponse {
 }
 
 async fn execute_script(Json(payload): Json<ScriptRequest>) -> Json<ScriptResponse> {
-    let output = tokio::task::spawn_blocking(move || {
-        let mut parser = Parser::new(&payload.script);
-        let statements = parser.parse();
+    let mut parser = Parser::new(&payload.script);
+    let statements = parser.parse();
 
-        let mut evaluator = Evaluator::new();
-        evaluator.eval(statements);
-        evaluator.get_output()
-    })
-    .await
-    .unwrap();
+    let mut evaluator = Evaluator::new();
+    evaluator.eval(statements).await;
 
     Json(ScriptResponse {
-        output,
+        output: evaluator.get_output(),
     })
 }

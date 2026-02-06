@@ -1,7 +1,9 @@
 use crate::parser::{Statement, Expression, Op};
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
+use async_recursion::async_recursion;
+use std::future::Future;
+use std::pin::Pin;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -9,17 +11,15 @@ pub enum Value {
     String(String),
     Boolean(bool),
     Null,
-    // Parameters, Body, Closure Environment (captured)
     Function(Vec<String>, Statement, Env),
-    // Builtin Function: Name, Function Pointer
-    Builtin(String, fn(Vec<Value>) -> Value),
-    ReturnValue(Box<Value>), // Wrapper to signal return
-    // Array: Mutable shared list
-    Array(Rc<RefCell<Vec<Value>>>),
-    // Map: Mutable shared key-value store
-    Map(Rc<RefCell<HashMap<String, Value>>>),
+    // Builtin now holds a function pointer that returns a BoxFuture
+    Builtin(String, fn(Vec<Value>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
+    ReturnValue(Box<Value>),
+    Array(Arc<Mutex<Vec<Value>>>),
+    Map(Arc<Mutex<HashMap<String, Value>>>),
 }
 
+// Manual PartialEq
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -33,13 +33,13 @@ impl PartialEq for Value {
             (Value::Builtin(name_a, _), Value::Builtin(name_b, _)) => name_a == name_b,
             (Value::ReturnValue(a), Value::ReturnValue(b)) => a == b,
             (Value::Array(a), Value::Array(b)) => {
-                let vec_a = a.borrow();
-                let vec_b = b.borrow();
+                let vec_a = a.lock().unwrap();
+                let vec_b = b.lock().unwrap();
                 vec_a.iter().zip(vec_b.iter()).all(|(x, y)| x == y) && vec_a.len() == vec_b.len()
             },
             (Value::Map(a), Value::Map(b)) => {
-                let map_a = a.borrow();
-                let map_b = b.borrow();
+                let map_a = a.lock().unwrap();
+                let map_b = b.lock().unwrap();
                 map_a.len() == map_b.len() && map_a.iter().all(|(k, v)| map_b.get(k) == Some(v))
             }
             _ => false,
@@ -58,43 +58,43 @@ impl std::fmt::Display for Value {
             Value::Builtin(name, _) => write!(f, "builtin({})", name),
             Value::ReturnValue(val) => write!(f, "return {}", val),
             Value::Array(arr) => {
-                let vec = arr.borrow();
+                let vec = arr.lock().unwrap();
                 let elements: Vec<String> = vec.iter().map(|v| format!("{}", v)).collect();
                 write!(f, "[{}]", elements.join(", "))
             },
             Value::Map(map) => {
-                let m = map.borrow();
+                let m = map.lock().unwrap();
                 let mut entries: Vec<String> = m.iter().map(|(k, v)| format!("\"{}\": {}", k, v)).collect();
-                entries.sort(); // Sort for deterministic output
+                entries.sort();
                 write!(f, "{{{}}}", entries.join(", "))
             }
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Env {
-    store: Rc<RefCell<HashMap<String, Value>>>,
+    store: Arc<Mutex<HashMap<String, Value>>>,
     outer: Option<Box<Env>>,
 }
 
 impl Env {
     pub fn new() -> Self {
         Self {
-            store: Rc::new(RefCell::new(HashMap::new())),
+            store: Arc::new(Mutex::new(HashMap::new())),
             outer: None,
         }
     }
 
     pub fn new_with_outer(outer: Env) -> Self {
         Self {
-            store: Rc::new(RefCell::new(HashMap::new())),
+            store: Arc::new(Mutex::new(HashMap::new())),
             outer: Some(Box::new(outer)),
         }
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
-        if let Some(val) = self.store.borrow().get(name) {
+        if let Some(val) = self.store.lock().unwrap().get(name) {
             return Some(val.clone());
         }
         if let Some(ref outer) = self.outer {
@@ -104,18 +104,18 @@ impl Env {
     }
 
     pub fn set(&mut self, name: String, val: Value) {
-        // Simple set logic: always set in current scope (like `let`)?
-        // Or update if exists?
-        // Our `Let` statement uses `set` on current scope.
-        // Assignment logic needs to check existence.
-        self.store.borrow_mut().insert(name, val);
+        self.store.lock().unwrap().insert(name, val);
     }
 
     pub fn update(&mut self, name: &str, val: Value) -> bool {
-         if self.store.borrow().contains_key(name) {
-             self.store.borrow_mut().insert(name.to_string(), val);
-             return true;
-         }
+         {
+             let mut store = self.store.lock().unwrap();
+             if store.contains_key(name) {
+                 store.insert(name.to_string(), val);
+                 return true;
+             }
+         } // Drop lock before checking outer
+
          if let Some(ref mut outer) = self.outer {
              return outer.update(name, val);
          }
@@ -144,111 +144,122 @@ impl Evaluator {
 
     fn register_builtins(&mut self) {
         self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args| {
-            if args.len() != 1 { return Value::Null; }
-            match &args[0] {
-                Value::String(s) => Value::Integer(s.len() as i64),
-                Value::Array(arr) => Value::Integer(arr.borrow().len() as i64),
-                Value::Map(map) => Value::Integer(map.borrow().len() as i64),
-                _ => Value::Integer(0),
-            }
+            Box::pin(async move {
+                if args.len() != 1 { return Value::Null; }
+                match &args[0] {
+                    Value::String(s) => Value::Integer(s.len() as i64),
+                    Value::Array(arr) => Value::Integer(arr.lock().unwrap().len() as i64),
+                    Value::Map(map) => Value::Integer(map.lock().unwrap().len() as i64),
+                    _ => Value::Integer(0),
+                }
+            })
         }));
 
         self.env.set("upper".to_string(), Value::Builtin("upper".to_string(), |args| {
-             if args.len() != 1 { return Value::Null; }
-             match &args[0] {
-                 Value::String(s) => Value::String(s.to_uppercase()),
-                 _ => Value::Null,
-             }
+             Box::pin(async move {
+                 if args.len() != 1 { return Value::Null; }
+                 match &args[0] {
+                     Value::String(s) => Value::String(s.to_uppercase()),
+                     _ => Value::Null,
+                 }
+             })
         }));
 
         self.env.set("str".to_string(), Value::Builtin("str".to_string(), |args| {
-            if args.len() != 1 { return Value::Null; }
-            Value::String(format!("{}", args[0]))
+            Box::pin(async move {
+                if args.len() != 1 { return Value::Null; }
+                Value::String(format!("{}", args[0]))
+            })
         }));
 
         self.env.set("push".to_string(), Value::Builtin("push".to_string(), |args| {
-            if args.len() != 2 { return Value::Null; }
-            if let Value::Array(arr) = &args[0] {
-                arr.borrow_mut().push(args[1].clone());
-                return Value::Array(arr.clone());
-            }
-            Value::Null
+            Box::pin(async move {
+                if args.len() != 2 { return Value::Null; }
+                if let Value::Array(arr) = &args[0] {
+                    arr.lock().unwrap().push(args[1].clone());
+                    return Value::Array(arr.clone());
+                }
+                Value::Null
+            })
         }));
 
-        // HTTP Client Built-ins
         self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args| {
-            if args.len() != 1 { return Value::Null; }
-            let url = match &args[0] {
-                Value::String(s) => s,
-                _ => return Value::Null,
-            };
+            Box::pin(async move {
+                if args.len() != 1 { return Value::Null; }
+                let url = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    _ => return Value::Null,
+                };
 
-            match reqwest::blocking::get(url) {
-                Ok(resp) => {
-                     match resp.text() {
-                         Ok(text) => Value::String(text),
-                         Err(_) => Value::Null
-                     }
-                },
-                Err(e) => {
-                    eprintln!("HTTP Error: {}", e);
-                    Value::Null
+                match reqwest::get(&url).await {
+                    Ok(resp) => {
+                         match resp.text().await {
+                             Ok(text) => Value::String(text),
+                             Err(_) => Value::Null
+                         }
+                    },
+                    Err(e) => {
+                        eprintln!("HTTP Error: {}", e);
+                        Value::Null
+                    }
                 }
-            }
+            })
         }));
 
         self.env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args| {
-            if args.len() != 2 { return Value::Null; }
-            let url = match &args[0] {
-                Value::String(s) => s,
-                _ => return Value::Null,
-            };
-            let body = match &args[1] {
-                Value::String(s) => s.clone(),
-                _ => return Value::Null,
-            };
+            Box::pin(async move {
+                if args.len() != 2 { return Value::Null; }
+                let url = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    _ => return Value::Null,
+                };
+                let body = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    _ => return Value::Null,
+                };
 
-            let client = reqwest::blocking::Client::new();
-            match client.post(url).body(body).send() {
-                Ok(resp) => {
-                     match resp.text() {
-                         Ok(text) => Value::String(text),
-                         Err(_) => Value::Null
-                     }
-                },
-                Err(e) => {
-                    eprintln!("HTTP Error: {}", e);
-                    Value::Null
+                let client = reqwest::Client::new();
+                match client.post(&url).body(body).send().await {
+                    Ok(resp) => {
+                         match resp.text().await {
+                             Ok(text) => Value::String(text),
+                             Err(_) => Value::Null
+                         }
+                    },
+                    Err(e) => {
+                        eprintln!("HTTP Error: {}", e);
+                        Value::Null
+                    }
                 }
-            }
+            })
         }));
     }
 
-    pub fn eval(&mut self, statements: Vec<Statement>) {
+    pub async fn eval(&mut self, statements: Vec<Statement>) {
         for stmt in statements {
-            let result = self.eval_statement(stmt);
+            let result = self.eval_statement(stmt).await;
             if let Some(Value::ReturnValue(_)) = result {
-                 // Top level return
             }
         }
     }
 
-    fn eval_statement(&mut self, stmt: Statement) -> Option<Value> {
+    #[async_recursion]
+    async fn eval_statement(&mut self, stmt: Statement) -> Option<Value> {
         match stmt {
             Statement::Print(expr) => {
-                let val = self.eval_expression(&expr)?;
+                let val = self.eval_expression(&expr).await?;
                 let out = format!("{}\n", val);
                 self.output.push_str(&out);
-                print!("{}", out); // Still print to stdout for CLI feedback
+                print!("{}", out);
                 None
             }
             Statement::Let(name, expr) => {
-                let val = self.eval_expression(&expr)?;
+                let val = self.eval_expression(&expr).await?;
                 self.env.set(name, val);
                 None
             }
              Statement::Assign(lhs, rhs) => {
-                let val = self.eval_expression(&rhs)?;
+                let val = self.eval_expression(&rhs).await?;
                 match lhs {
                     Expression::Identifier(name) => {
                         if !self.env.update(&name, val.clone()) {
@@ -257,12 +268,12 @@ impl Evaluator {
                         }
                     },
                     Expression::Index(target_expr, index_expr) => {
-                         let target = self.eval_expression(&target_expr)?;
-                         let index = self.eval_expression(&index_expr)?;
+                         let target = self.eval_expression(&target_expr).await?;
+                         let index = self.eval_expression(&index_expr).await?;
 
                          match (target, index) {
                              (Value::Array(arr), Value::Integer(i)) => {
-                                 let mut vec = arr.borrow_mut();
+                                 let mut vec = arr.lock().unwrap();
                                  if i >= 0 && (i as usize) < vec.len() {
                                      vec[i as usize] = val;
                                  } else {
@@ -270,7 +281,7 @@ impl Evaluator {
                                  }
                              },
                              (Value::Map(map), Value::String(key)) => {
-                                 let mut m = map.borrow_mut();
+                                 let mut m = map.lock().unwrap();
                                  m.insert(key, val);
                              },
                              _ => {
@@ -290,35 +301,35 @@ impl Evaluator {
                 None
             }
             Statement::Return(expr) => {
-                let val = self.eval_expression(&expr)?;
+                let val = self.eval_expression(&expr).await?;
                 Some(Value::ReturnValue(Box::new(val)))
             }
             Statement::Block(stmts) => {
-                self.eval_block(stmts)
+                self.eval_block(stmts).await
             }
             Statement::If(condition, consequence, alternative) => {
-                let cond_val = self.eval_expression(&condition)?;
+                let cond_val = self.eval_expression(&condition).await?;
                 if self.is_truthy(cond_val) {
-                    self.eval_statement(*consequence)
+                    self.eval_statement(*consequence).await
                 } else if let Some(alt) = alternative {
-                    self.eval_statement(*alt)
+                    self.eval_statement(*alt).await
                 } else {
                     None
                 }
             }
             Statement::Expression(expr) => {
-                self.eval_expression(&expr)
+                self.eval_expression(&expr).await
             }
         }
     }
 
-    fn eval_block(&mut self, stmts: Vec<Statement>) -> Option<Value> {
+    async fn eval_block(&mut self, stmts: Vec<Statement>) -> Option<Value> {
         let previous_env = self.env.clone();
         self.env = Env::new_with_outer(previous_env.clone());
 
         let mut result = None;
         for stmt in stmts {
-            let val = self.eval_statement(stmt);
+            let val = self.eval_statement(stmt).await;
             if let Some(Value::ReturnValue(_)) = val {
                 result = val;
                 break;
@@ -330,7 +341,8 @@ impl Evaluator {
         result
     }
 
-    fn eval_expression(&mut self, expr: &Expression) -> Option<Value> {
+    #[async_recursion]
+    async fn eval_expression(&mut self, expr: &Expression) -> Option<Value> {
         match expr {
             Expression::Integer(i) => Some(Value::Integer(*i)),
             Expression::StringLiteral(s) => Some(Value::String(s.clone())),
@@ -346,24 +358,24 @@ impl Evaluator {
             Expression::Array(elements) => {
                 let mut vals = Vec::new();
                 for e in elements {
-                    vals.push(self.eval_expression(e)?);
+                    vals.push(self.eval_expression(e).await?);
                 }
-                Some(Value::Array(Rc::new(RefCell::new(vals))))
+                Some(Value::Array(Arc::new(Mutex::new(vals))))
             },
              Expression::Map(pairs) => {
                 let mut map = HashMap::new();
                 for (k, v_expr) in pairs {
-                    map.insert(k.clone(), self.eval_expression(v_expr)?);
+                    map.insert(k.clone(), self.eval_expression(v_expr).await?);
                 }
-                Some(Value::Map(Rc::new(RefCell::new(map))))
+                Some(Value::Map(Arc::new(Mutex::new(map))))
             },
             Expression::Index(left, index) => {
-                 let left_val = self.eval_expression(left)?;
-                 let index_val = self.eval_expression(index)?;
+                 let left_val = self.eval_expression(left).await?;
+                 let index_val = self.eval_expression(index).await?;
 
                  match (left_val, index_val) {
                      (Value::Array(arr), Value::Integer(i)) => {
-                         let vec = arr.borrow();
+                         let vec = arr.lock().unwrap();
                          if i >= 0 && (i as usize) < vec.len() {
                              Some(vec[i as usize].clone())
                          } else {
@@ -372,7 +384,7 @@ impl Evaluator {
                          }
                      },
                      (Value::Map(map), Value::String(key)) => {
-                         let m = map.borrow();
+                         let m = map.lock().unwrap();
                          m.get(&key).cloned().or(Some(Value::Null))
                      },
                      _ => {
@@ -382,22 +394,22 @@ impl Evaluator {
                  }
             },
             Expression::BinaryOp(lhs, op, rhs) => {
-                let l_val = self.eval_expression(lhs)?;
-                let r_val = self.eval_expression(rhs)?;
+                let l_val = self.eval_expression(lhs).await?;
+                let r_val = self.eval_expression(rhs).await?;
                 self.eval_infix_expression(op, l_val, r_val)
             },
             Expression::Call(func_expr, args) => {
-                let func = self.eval_expression(func_expr)?;
+                let func = self.eval_expression(func_expr).await?;
                 let mut evaluated_args = Vec::new();
                 for arg in args {
-                    evaluated_args.push(self.eval_expression(arg)?);
+                    evaluated_args.push(self.eval_expression(arg).await?);
                 }
-                self.apply_function(func, evaluated_args)
+                self.apply_function(func, evaluated_args).await
             }
         }
     }
 
-    fn apply_function(&mut self, func: Value, args: Vec<Value>) -> Option<Value> {
+    async fn apply_function(&mut self, func: Value, args: Vec<Value>) -> Option<Value> {
         match func {
             Value::Function(params, body, closure_env) => {
                 if args.len() != params.len() {
@@ -410,7 +422,7 @@ impl Evaluator {
                 }
                 let previous_env = self.env.clone();
                 self.env = extended_env;
-                let result = self.eval_statement(body);
+                let result = self.eval_statement(body).await;
                 self.env = previous_env;
 
                 if let Some(Value::ReturnValue(val)) = result {
@@ -420,7 +432,7 @@ impl Evaluator {
                 }
             },
             Value::Builtin(_, func_ptr) => {
-                Some(func_ptr(args))
+                Some(func_ptr(args).await)
             },
             _ => {
                 eprintln!("Runtime Error: Not a function");
@@ -472,11 +484,9 @@ impl Evaluator {
 mod tests {
     use crate::parser::Parser;
     use crate::evaluator::{Evaluator, Value};
-    use std::rc::Rc;
-    use std::cell::RefCell;
 
-    #[test]
-    fn test_functions() {
+    #[tokio::test]
+    async fn test_functions() {
         let input = r#"
             fn add(a, b) {
                 return a + b;
@@ -486,7 +496,7 @@ mod tests {
         let mut parser = Parser::new(input);
         let statements = parser.parse();
         let mut evaluator = Evaluator::new();
-        evaluator.eval(statements);
+        evaluator.eval(statements).await;
 
         let val = evaluator.env.get("res");
         if let Some(Value::Integer(v)) = val {
@@ -496,8 +506,8 @@ mod tests {
         }
     }
 
-     #[test]
-    fn test_closure() {
+     #[tokio::test]
+    async fn test_closure() {
         let input = r#"
             let factor = 2;
             fn multiply(a) {
@@ -508,7 +518,7 @@ mod tests {
         let mut parser = Parser::new(input);
         let statements = parser.parse();
         let mut evaluator = Evaluator::new();
-        evaluator.eval(statements);
+        evaluator.eval(statements).await;
 
         let val = evaluator.env.get("res");
         if let Some(Value::Integer(v)) = val {
@@ -518,8 +528,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_builtin() {
+    #[tokio::test]
+    async fn test_builtin() {
         let input = r#"
             let l = len("hello");
             let u = upper("hello");
@@ -528,15 +538,15 @@ mod tests {
         let mut parser = Parser::new(input);
         let statements = parser.parse();
         let mut evaluator = Evaluator::new();
-        evaluator.eval(statements);
+        evaluator.eval(statements).await;
 
         assert_eq!(evaluator.env.get("l"), Some(Value::Integer(5)));
         assert_eq!(evaluator.env.get("u"), Some(Value::String("HELLO".to_string())));
         assert_eq!(evaluator.env.get("s"), Some(Value::String("123".to_string())));
     }
 
-    #[test]
-    fn test_arrays() {
+    #[tokio::test]
+    async fn test_arrays() {
         let input = r#"
             let arr = [1, 2, 3];
             let first = arr[0];
@@ -546,14 +556,14 @@ mod tests {
         let mut parser = Parser::new(input);
         let statements = parser.parse();
         let mut evaluator = Evaluator::new();
-        evaluator.eval(statements);
+        evaluator.eval(statements).await;
 
         assert_eq!(evaluator.env.get("first"), Some(Value::Integer(1)));
         assert_eq!(evaluator.env.get("length"), Some(Value::Integer(4)));
 
         // Check array content manually
         if let Some(Value::Array(arr)) = evaluator.env.get("arr") {
-             let vec = arr.borrow();
+             let vec = arr.lock().unwrap();
              assert_eq!(vec.len(), 4);
              assert_eq!(vec[3], Value::Integer(4));
         } else {
@@ -561,8 +571,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_maps() {
+    #[tokio::test]
+    async fn test_maps() {
         let input = r#"
             let user = {"name": "Zeno", "id": 1};
             let n = user["name"];
@@ -572,7 +582,7 @@ mod tests {
         let mut parser = Parser::new(input);
         let statements = parser.parse();
         let mut evaluator = Evaluator::new();
-        evaluator.eval(statements);
+        evaluator.eval(statements).await;
 
         assert_eq!(evaluator.env.get("n"), Some(Value::String("Zeno".to_string())));
         assert_eq!(evaluator.env.get("i"), Some(Value::Integer(99)));

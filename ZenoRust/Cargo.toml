@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-recursion = "1.1.1"
 axum = "0.8.8"
+futures = "0.3.31"
 logos = "0.16.1"
 reqwest = { version = "0.13.1", features = ["blocking", "json"] }
 serde = { version = "1.0.228", features = ["derive"] }
