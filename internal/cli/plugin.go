@@ -218,71 +218,80 @@ func handlePluginValidate(args []string) {
 	}
 
 	pluginPath := args[0]
-	fmt.Printf("\nValidating plugin at: %s\n", pluginPath)
-	fmt.Println(strings.Repeat("=", 60))
+	errors, _ := validatePlugin(pluginPath, os.Stdout)
+
+	if errors > 0 {
+		os.Exit(1)
+	}
+}
+
+// validatePlugin performs the actual validation logic
+func validatePlugin(pluginPath string, w io.Writer) (int, int) {
+	fmt.Fprintf(w, "\nValidating plugin at: %s\n", pluginPath)
+	fmt.Fprintln(w, strings.Repeat("=", 60))
 
 	errors := 0
 	warnings := 0
 
 	// Check 1: Directory exists
 	if _, err := os.Stat(pluginPath); os.IsNotExist(err) {
-		fmt.Println("❌ Plugin directory not found")
-		os.Exit(1)
+		fmt.Fprintln(w, "❌ Plugin directory not found")
+		return 1, 0
 	}
-	fmt.Println("✅ Plugin directory exists")
+	fmt.Fprintln(w, "✅ Plugin directory exists")
 
 	// Check 2: Manifest exists and is valid
 	manifestPath := filepath.Join(pluginPath, "manifest.yaml")
 	manifest, err := readManifest(manifestPath)
 	if err != nil {
-		fmt.Printf("❌ Manifest invalid: %v\n", err)
+		fmt.Fprintf(w, "❌ Manifest invalid: %v\n", err)
 		errors++
 	} else {
-		fmt.Println("✅ Manifest found and valid")
+		fmt.Fprintln(w, "✅ Manifest found and valid")
 
 		// Check required fields
 		if manifest.Name == "" {
-			fmt.Println("❌ Manifest missing required field: name")
+			fmt.Fprintln(w, "❌ Manifest missing required field: name")
 			errors++
 		}
 		if manifest.Version == "" {
-			fmt.Println("❌ Manifest missing required field: version")
+			fmt.Fprintln(w, "❌ Manifest missing required field: version")
 			errors++
 		}
 		if manifest.Binary == "" {
-			fmt.Println("❌ Manifest missing required field: binary")
+			fmt.Fprintln(w, "❌ Manifest missing required field: binary")
 			errors++
 		}
 
 		// Check optional fields
 		if manifest.Author == "" {
-			fmt.Println("⚠️  Optional field 'author' not set")
+			fmt.Fprintln(w, "⚠️  Optional field 'author' not set")
 			warnings++
 		}
 		if manifest.Description == "" {
-			fmt.Println("⚠️  Optional field 'description' not set")
+			fmt.Fprintln(w, "⚠️  Optional field 'description' not set")
 			warnings++
 		}
 		if manifest.License == "" {
-			fmt.Println("⚠️  Optional field 'license' not set")
+			fmt.Fprintln(w, "⚠️  Optional field 'license' not set")
 			warnings++
 		}
 	}
 
-	// Check 3: WASM binary exists
+	// Check 3: Binary exists
 	if manifest != nil && manifest.Binary != "" {
-		wasmPath := filepath.Join(pluginPath, manifest.Binary)
-		stat, err := os.Stat(wasmPath)
+		binaryPath := filepath.Join(pluginPath, manifest.Binary)
+		stat, err := os.Stat(binaryPath)
 		if err != nil {
-			fmt.Printf("❌ WASM binary not found: %s\n", manifest.Binary)
+			fmt.Fprintf(w, "❌ Binary not found: %s\n", manifest.Binary)
 			errors++
 		} else {
 			sizeKB := float64(stat.Size()) / 1024.0
-			fmt.Printf("✅ WASM binary found: %s (%.1f KB)\n", manifest.Binary, sizeKB)
-			
-			// Check if it's actually a WASM file (basic check)
-			if !strings.HasSuffix(manifest.Binary, ".wasm") {
-				fmt.Println("⚠️  Binary doesn't have .wasm extension")
+			fmt.Fprintf(w, "✅ Binary found: %s (%.1f KB)\n", manifest.Binary, sizeKB)
+
+			// Check if it's actually a WASM file (only for WASM plugins)
+			if manifest.Type != "sidecar" && !strings.HasSuffix(manifest.Binary, ".wasm") {
+				fmt.Fprintln(w, "⚠️  Binary doesn't have .wasm extension")
 				warnings++
 			}
 		}
@@ -290,22 +299,23 @@ func handlePluginValidate(args []string) {
 
 	// Check 4: Permissions are valid
 	if manifest != nil {
-		fmt.Println("✅ Permissions structure valid")
+		fmt.Fprintln(w, "✅ Permissions structure valid")
 	}
 
 	// Summary
-	fmt.Println(strings.Repeat("=", 60))
+	fmt.Fprintln(w, strings.Repeat("=", 60))
 	if errors > 0 {
-		fmt.Printf("\n❌ Validation failed with %d error(s) and %d warning(s)\n", errors, warnings)
-		fmt.Println("Plugin is NOT ready to install.\n")
-		os.Exit(1)
+		fmt.Fprintf(w, "\n❌ Validation failed with %d error(s) and %d warning(s)\n", errors, warnings)
+		fmt.Fprintln(w, "Plugin is NOT ready to install.")
 	} else if warnings > 0 {
-		fmt.Printf("\n⚠️  Validation passed with %d warning(s)\n", warnings)
-		fmt.Println("Plugin is valid but could be improved.\n")
+		fmt.Fprintf(w, "\n⚠️  Validation passed with %d warning(s)\n", warnings)
+		fmt.Fprintln(w, "Plugin is valid but could be improved.")
 	} else {
-		fmt.Println("\n✅ Validation passed!")
-		fmt.Println("Plugin is valid and ready to install!\n")
+		fmt.Fprintln(w, "\n✅ Validation passed!")
+		fmt.Fprintln(w, "Plugin is valid and ready to install!")
 	}
+
+	return errors, warnings
 }
 
 // Helper types and functions

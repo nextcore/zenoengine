@@ -1,9 +1,9 @@
-# Unified Plugin System Design (WASM & Sidecar)
+# Sidecar & WASM Plugin Guide
 
 ## Overview
-ZenoEngine will support a unified plugin architecture where slots can be implemented either as sandboxed WASM modules or as high-performance Native Sidecar processes. Both types will follow the same communication protocol and manifest structure.
+ZenoEngine supports a unified plugin architecture where slots can be implemented either as sandboxed WASM modules or as high-performance Native Sidecar processes. Both types follow the same communication protocol and manifest structure.
 
-## 1. Updated Manifest Structure (`manifest.yaml`)
+## 1. Plugin Manifest Structure (`manifest.yaml`)
 
 ```yaml
 name: php-high-speed
@@ -13,10 +13,10 @@ binary: php-worker.exe # For WASM: .wasm file | For Sidecar: Native executable
 
 # Sidecar-specific configuration
 sidecar:
-  protocol: json-rpc   # Options: json-rpc (stdin/stdout), fastcgi, http
-  auto_start: true
-  keep_alive: true
-  max_retries: 3
+  protocol: json-rpc   # Options: json-rpc (stdin/stdout)
+  auto_start: true     # Automatically start process on engine load
+  keep_alive: true     # Restart if crashed
+  max_retries: 3       # Max restart attempts
 
 permissions:
   network: ["*"]
@@ -24,7 +24,7 @@ permissions:
 ```
 
 ## 2. Communication Protocol (Shared)
-Both WASM and Sidecar plugins will use the existing JSON protocol defined in `WASM_PLUGIN_SPEC.md`.
+Both WASM and Sidecar plugins use the existing JSON protocol defined in `WASM_PLUGIN_SPEC.md`.
 
 ### Execution Request (Host -> Guest)
 ```json
@@ -46,29 +46,22 @@ Both WASM and Sidecar plugins will use the existing JSON protocol defined in `WA
 }
 ```
 
-## 3. Sidecar Manager Architecture
-The `PluginManager` will be extended to handle `type: sidecar`:
+## 3. Sidecar Architecture
+The Plugin Manager handles `type: sidecar` plugins transparently:
 
 1.  **Process Lifecycle**: Uses Go's `os/exec` to start the sidecar process on demand or at engine startup.
 2.  **IPC (Inter-Process Communication)**:
-    -   **StdIn/StdOut**: Primary channel for JSON-RPC. Highly portable across Windows and Linux.
-    -   **Shared Memory (Future)**: For zero-copy data transfer in extreme performance scenarios.
-3.  **Health Monitoring**: Monitors the sidecar process PID. If it crashes, the manager can automatically restart it.
+    -   **StdIn/StdOut**: Primary channel for JSON-RPC. Highly portable across Windows, Linux, and macOS.
+3.  **Health Monitoring**: Monitors the sidecar process PID. If it crashes, the manager automatically restarts it based on `max_retries` config.
 4.  **Resource Cleanup**: Ensures all sidecar processes are killed when ZenoEngine shuts down.
 
-## 4. Why this is "Plug-and-Play"?
--   **Universal Slot Registration**: The user writes ZenoLang code without knowing if the slot is WASM or Sidecar.
--   **Zero-Config Binary selection**: The `manifest.yaml` can eventually support OS-specific binaries:
-    ```yaml
-    binaries:
-      windows: ./bin/win/worker.exe
-      linux: ./bin/linux/worker
-      wasm: ./bin/universal.wasm
-    ```
+## 4. "Plug-and-Play" Features
+-   **Universal Slot Registration**: You can write ZenoLang code without knowing if the slot is WASM or Sidecar.
+-   **Zero-Config Binary selection**: The `manifest.yaml` points to the correct binary for the platform.
 -   **Lean Core**: Native binaries are kept in the plugin folder, keeping the ZenoEngine core purely Go.
 
 ## 5. Ecosystem Example: .NET 8/9 Sidecar
-Because Sidecar plugins use standard OS processes, you can use **C# / .NET** to build high-performance plugins.
+Because Sidecar plugins use standard OS processes, you can use languages like **C# / .NET**, **Python**, **Node.js**, or **PHP** to build high-performance plugins.
 
 ### Sample C# Sidecar (`Program.cs`)
 ```csharp
@@ -99,7 +92,4 @@ sidecar:
   protocol: json-rpc
 ```
 
-## 6. Implementation Path
-1.  **Refactor `LoadedPlugin`**: Add a `Driver` interface (WASMDriver, SidecarDriver).
-2.  **Implement `SidecarDriver`**: Handles process spawning and pipe-based communication.
-3.  **Update `PluginManager.LoadPlugin`**: Branch logic based on `type` field in manifest.
+For a working PHP example, see `examples/sidecar-plugins/php-native/`.
