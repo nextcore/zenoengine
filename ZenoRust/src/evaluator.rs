@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use async_recursion::async_recursion;
 use std::future::Future;
 use std::pin::Pin;
-use sqlx::{AnyPool, Row, Column, TypeInfo, ValueRef};
+use sqlx::{AnyPool, Row, Column, TypeInfo};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -116,8 +116,7 @@ impl Env {
                  store.insert(name.to_string(), val);
                  return true;
              }
-         } // Drop lock before checking outer
-
+         }
          if let Some(ref mut outer) = self.outer {
              return outer.update(name, val);
          }
@@ -147,7 +146,6 @@ impl Evaluator {
     }
 
     fn register_builtins(&mut self) {
-        // ... (existing built-ins omitted for brevity in thought, but included in file write)
         self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
@@ -349,10 +347,7 @@ impl Evaluator {
                 };
                 let data = args[1].clone();
 
-                // Create a temporary evaluator to render
                 let mut renderer = Evaluator::new(pool);
-
-                // Inject data
                 if let Value::Map(map) = data {
                     let m = map.lock().unwrap();
                     for (k, v) in m.iter() {
@@ -369,7 +364,6 @@ impl Evaluator {
         }));
     }
 
-    // Helper for rendering blade nodes
     #[async_recursion]
     async fn render_nodes(&mut self, nodes: Vec<BladeNode>) -> String {
         let mut output = String::new();
@@ -395,7 +389,6 @@ impl Evaluator {
         output
     }
 
-    // ... (rest of Evaluator implementation: eval, eval_statement, etc.)
     pub async fn eval(&mut self, statements: Vec<Statement>) {
         for stmt in statements {
             let result = self.eval_statement(stmt).await;

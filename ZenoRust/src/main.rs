@@ -1,8 +1,3 @@
-pub mod lexer;
-pub mod parser;
-pub mod evaluator;
-pub mod template;
-
 use std::fs;
 use std::env;
 use std::net::SocketAddr;
@@ -13,9 +8,14 @@ use axum::{
     extract::State,
 };
 use serde::{Deserialize, Serialize};
-use parser::Parser;
-use evaluator::Evaluator;
 use sqlx::{AnyPool, any::AnyPoolOptions};
+use tower_http::trace::TraceLayer;
+use tower_http::cors::CorsLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+// Use modules from the library crate
+use ZenoRust::parser::Parser;
+use ZenoRust::evaluator::Evaluator;
 
 #[derive(Clone)]
 struct AppState {
@@ -24,17 +24,22 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    // 1. Initialize Logging
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // 2. Load .env
+    dotenvy::dotenv().ok();
+
     let args: Vec<String> = env::args().collect();
 
-    // Initialize DB Pool
-    // Priority: DATABASE_URL env > sqlite://zeno.db
-    // We must install default drivers for AnyPool to work
+    // 3. Initialize DB Pool
     sqlx::any::install_default_drivers();
-
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://zeno.db?mode=rwc".to_string());
-    // However, AnyPool expects protocol prefix.
-    // "sqlite::memory:" works if sqlite is the protocol.
-    // If user provides "mysql://...", it works.
 
     let db_pool = AnyPoolOptions::new()
         .connect(&db_url)
@@ -42,9 +47,9 @@ async fn main() {
         .ok();
 
     if db_pool.is_none() {
-        println!("Warning: Failed to connect to database at '{}'. Running without DB support.", db_url);
+        tracing::warn!("Failed to connect to database at '{}'. Running without DB support.", db_url);
     } else {
-        println!("Connected to database: {}", db_url);
+        tracing::info!("Connected to database: {}", db_url);
     }
 
     if args.len() > 1 && args[1] == "server" {
@@ -55,13 +60,18 @@ async fn main() {
 }
 
 async fn run_cli_mode(pool: Option<AnyPool>) {
-    println!("ZenoEngine Rust Edition (2024) - CLI Mode (Async)");
+    tracing::info!("ZenoEngine Rust Edition (2024) - CLI Mode (Async)");
 
     let file_path = "source/test.zl";
-    println!("Executing ZenoLang script: {}", file_path);
+    tracing::info!("Executing ZenoLang script: {}", file_path);
 
-    let contents = fs::read_to_string(file_path)
-        .expect("Should have been able to read the file");
+    let contents = match fs::read_to_string(file_path) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Could not read file {}: {}", file_path, e);
+            return;
+        }
+    };
 
     let mut parser = Parser::new(&contents);
     let statements = parser.parse();
@@ -71,18 +81,54 @@ async fn run_cli_mode(pool: Option<AnyPool>) {
 }
 
 async fn start_server(pool: Option<AnyPool>) {
-    println!("ZenoEngine Rust Edition (2024) - Server Mode (Async)");
-    println!("Listening on http://localhost:3000");
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let addr_str = format!("0.0.0.0:{}", port);
+
+    tracing::info!("ZenoEngine Rust Edition (2024) - Server Mode (Async)");
+    tracing::info!("Listening on http://{}", addr_str);
 
     let state = AppState { db_pool: pool };
 
     let app = Router::new()
         .route("/execute", post(execute_script))
+        .layer(TraceLayer::new_for_http()) // Logging Middleware
+        .layer(CorsLayer::permissive()) // CORS Middleware
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr: SocketAddr = addr_str.parse().expect("Invalid address");
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+
+    // Graceful Shutdown
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("Signal received, starting graceful shutdown...");
 }
 
 #[derive(Deserialize)]
