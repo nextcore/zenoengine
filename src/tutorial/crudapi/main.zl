@@ -17,107 +17,92 @@ log: "✅ Database initialized."
 // 2. Define Routes
 
 // GET /api/todos - List all todos
-http.route: "GET /api/todos" {
-    handler: {
-        db.table: "todos"
-        db.order_by: "created_at DESC"
-        db.get: { as: $todos }
+http.get: "/api/todos" {
+    db.table: "todos"
+    db.order_by: "created_at DESC"
+    db.get: { as: $todos }
 
-        if: $todos == nil {
-            then: {
-                json.parse: "[]" { as: $todos }
-            }
+    if: $todos == nil {
+        then: {
+            json.parse: "[]" { as: $todos }
         }
-
-        // Use http.ok which sends JSON
-        http.ok: { data: $todos }
     }
+    http.ok: { data: $todos }
 }
 
 // POST /api/todos - Create a new todo
-http.route: "POST /api/todos" {
-    handler: {
-        http.json_body { as: $input }
+http.post: "/api/todos" {
+    http.json_body { as: $input }
 
-        // Debug
-        // log: "Input Title: " + $input.title
-
-        if: $input.title == "" || $input.title == nil {
-            then: {
-                http.bad_request: { error: "Title is required" }
-                return
-            }
+    if: $input.title == "" || $input.title == nil {
+        then: {
+            http.bad_request: { error: "Title is required" }
+            return
         }
-
-        db.table: "todos"
-        db.insert: { title: $input.title }
-
-        http.created: { message: "Todo created", title: $input.title }
     }
+
+    db.table: "todos"
+    db.insert: { title: $input.title }
+
+    http.created: { message: "Todo created", title: $input.title }
 }
 
 // GET /api/todos/{id} - Get single todo
-http.route: "GET /api/todos/{id}" {
-    handler: {
-        http.param: "id" { as: $id }
+http.get: "/api/todos/{id}" {
+    http.param: "id" { as: $id }
 
-        db.table: "todos"
-        db.where: { col: "id", val: $id }
-        db.first: { as: $todo }
+    db.table: "todos"
+    db.where: { col: "id", val: $id }
+    db.first: { as: $todo }
 
-        if: $todo == nil {
-            then: {
-                http.not_found: { error: "Todo not found" }
-            }
-            else: {
-                http.ok: { data: $todo }
-            }
+    if: $todo == nil {
+        then: {
+            http.not_found: { error: "Todo not found" }
+        }
+        else: {
+            http.ok: { data: $todo }
         }
     }
 }
 
 // PUT /api/todos/{id} - Update todo
-http.route: "PUT /api/todos/{id}" {
-    handler: {
-        http.param: "id" { as: $id }
-        http.json_body { as: $input }
+http.put: "/api/todos/{id}" {
+    http.param: "id" { as: $id }
+    http.json_body { as: $input }
 
-        // Check if exists
-        db.table: "todos"
-        db.where: { col: "id", val: $id }
-        db.first: { as: $existing }
+    // Check if exists
+    db.table: "todos"
+    db.where: { col: "id", val: $id }
+    db.first: { as: $existing }
 
-        if: $existing == nil {
-            then: {
-                http.not_found: { error: "Todo not found" }
-                return
-            }
+    if: $existing == nil {
+        then: {
+            http.not_found: { error: "Todo not found" }
+            return
         }
-
-        // Update
-        if: $input != nil {
-            then: {
-                db.table: "todos"
-                db.where: { col: "id", val: $id }
-                db.update: $input
-            }
-        }
-
-        http.ok: { message: "Todo updated", id: $id }
     }
+
+    // Update
+    if: $input != nil {
+        then: {
+            db.table: "todos"
+            db.where: { col: "id", val: $id }
+            db.update: $input
+        }
+    }
+
+    http.ok: { message: "Todo updated", id: $id }
 }
 
 // DELETE /api/todos/{id} - Delete todo
-http.route: "DELETE /api/todos/{id}" {
-    handler: {
-        http.param: "id" { as: $id }
+http.delete: "/api/todos/{id}" {
+    http.param: "id" { as: $id }
 
-        db.table: "todos"
-        db.where: { col: "id", val: $id }
-        db.delete: {}
+    db.table: "todos"
+    db.where: { col: "id", val: $id }
+    db.delete: {}
 
-        http.no_content: {}
-    }
+    http.no_content: {}
 }
 
 // 3. Start Server
