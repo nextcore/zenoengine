@@ -1,0 +1,25 @@
+// Simulating a basic router
+// Request context is available in 'request' map (path, method, body, query)
+
+print("Incoming Request: " + request["method"] + " " + request["path"]);
+
+if (request["path"] == "/api/status") {
+    response_json({
+        "status": "ok",
+        "engine": "ZenoRust",
+        "version": "1.0"
+    });
+} else if (request["path"] == "/api/echo") {
+    // Echo back the body
+    let body_content = request["body"];
+    response_json({
+        "received": body_content,
+        "echo": true
+    });
+} else {
+    response_status(404);
+    response_json({
+        "error": "Not Found",
+        "path": request["path"]
+    });
+}

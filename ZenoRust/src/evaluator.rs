@@ -14,8 +14,8 @@ pub enum Value {
     Boolean(bool),
     Null,
     Function(Vec<String>, Statement, Env),
-    // Builtin now holds a function pointer that returns a BoxFuture
-    Builtin(String, fn(Vec<Value>, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
+    // Builtin now accepts Env to allow modifying state (response, etc.)
+    Builtin(String, fn(Vec<Value>, Env, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
     ReturnValue(Box<Value>),
     Array(Arc<Mutex<Vec<Value>>>),
     Map(Arc<Mutex<HashMap<String, Value>>>),
@@ -145,8 +145,32 @@ impl Evaluator {
         self.output.clone()
     }
 
+    pub fn get_final_response(&self) -> Option<(i32, Value)> {
+        let status = self.env.get("_response_status");
+        let body = self.env.get("_response_body");
+
+        if let (Some(Value::Integer(s)), Some(b)) = (status, body) {
+            Some((s as i32, b))
+        } else {
+            None
+        }
+    }
+
+    pub fn set_request_context(&mut self, method: &str, path: &str, query: &str, body: &str) {
+        let mut req_map = HashMap::new();
+        req_map.insert("method".to_string(), Value::String(method.to_string()));
+        req_map.insert("path".to_string(), Value::String(path.to_string()));
+        req_map.insert("query".to_string(), Value::String(query.to_string()));
+        req_map.insert("body".to_string(), Value::String(body.to_string()));
+
+        self.env.set("request".to_string(), Value::Map(Arc::new(Mutex::new(req_map))));
+        // Initialize response variables in root scope so built-ins can update them from inner scopes
+        self.env.set("_response_body".to_string(), Value::Null);
+        self.env.set("_response_status".to_string(), Value::Null);
+    }
+
     fn register_builtins(&mut self) {
-        self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args, _| {
+        self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args, _, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
                 match &args[0] {
@@ -158,7 +182,7 @@ impl Evaluator {
             })
         }));
 
-        self.env.set("upper".to_string(), Value::Builtin("upper".to_string(), |args, _| {
+        self.env.set("upper".to_string(), Value::Builtin("upper".to_string(), |args, _, _| {
              Box::pin(async move {
                  if args.len() != 1 { return Value::Null; }
                  match &args[0] {
@@ -168,14 +192,14 @@ impl Evaluator {
              })
         }));
 
-        self.env.set("str".to_string(), Value::Builtin("str".to_string(), |args, _| {
+        self.env.set("str".to_string(), Value::Builtin("str".to_string(), |args, _, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
                 Value::String(format!("{}", args[0]))
             })
         }));
 
-        self.env.set("push".to_string(), Value::Builtin("push".to_string(), |args, _| {
+        self.env.set("push".to_string(), Value::Builtin("push".to_string(), |args, _, _| {
             Box::pin(async move {
                 if args.len() != 2 { return Value::Null; }
                 if let Value::Array(arr) = &args[0] {
@@ -186,73 +210,40 @@ impl Evaluator {
             })
         }));
 
-        self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args, _| {
+        self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args, _, _| {
             Box::pin(async move {
                 if args.len() != 1 { return Value::Null; }
                 let url = match &args[0] {
                     Value::String(s) => s.clone(),
                     _ => return Value::Null,
                 };
-
                 match reqwest::get(&url).await {
-                    Ok(resp) => {
-                         match resp.text().await {
-                             Ok(text) => Value::String(text),
-                             Err(_) => Value::Null
-                         }
-                    },
-                    Err(e) => {
-                        eprintln!("HTTP Error: {}", e);
-                        Value::Null
-                    }
+                    Ok(resp) => match resp.text().await { Ok(t) => Value::String(t), Err(_) => Value::Null },
+                    Err(_) => Value::Null
                 }
             })
         }));
 
-        self.env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args, _| {
+        self.env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args, _, _| {
             Box::pin(async move {
                 if args.len() != 2 { return Value::Null; }
-                let url = match &args[0] {
-                    Value::String(s) => s.clone(),
-                    _ => return Value::Null,
-                };
-                let body = match &args[1] {
-                    Value::String(s) => s.clone(),
-                    _ => return Value::Null,
-                };
-
+                let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+                let body = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
                 let client = reqwest::Client::new();
                 match client.post(&url).body(body).send().await {
-                    Ok(resp) => {
-                         match resp.text().await {
-                             Ok(text) => Value::String(text),
-                             Err(_) => Value::Null
-                         }
-                    },
-                    Err(e) => {
-                        eprintln!("HTTP Error: {}", e);
-                        Value::Null
-                    }
+                    Ok(resp) => match resp.text().await { Ok(t) => Value::String(t), Err(_) => Value::Null },
+                    Err(_) => Value::Null
                 }
             })
         }));
 
-        self.env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, pool| {
+        self.env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, _, pool| {
             Box::pin(async move {
-                if pool.is_none() {
-                    eprintln!("DB Error: No database pool configured");
-                    return Value::Null;
-                }
+                if pool.is_none() { return Value::Null; }
                 let pool = pool.unwrap();
-
                 if args.len() < 1 { return Value::Null; }
-                let sql = match &args[0] {
-                    Value::String(s) => s.clone(),
-                    _ => return Value::Null,
-                };
-
+                let sql = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
                 let mut query = sqlx::query(&sql);
-
                 if args.len() > 1 {
                     if let Value::Array(params) = &args[1] {
                         for param in params.lock().unwrap().iter() {
@@ -266,33 +257,20 @@ impl Evaluator {
                         }
                     }
                 }
-
                 match query.execute(&pool).await {
                     Ok(result) => Value::Integer(result.rows_affected() as i64),
-                    Err(e) => {
-                        eprintln!("DB Execute Error: {}", e);
-                        Value::Null
-                    }
+                    Err(_) => Value::Null
                 }
             })
         }));
 
-        self.env.set("db_query".to_string(), Value::Builtin("db_query".to_string(), |args, pool| {
+        self.env.set("db_query".to_string(), Value::Builtin("db_query".to_string(), |args, _, pool| {
             Box::pin(async move {
-                if pool.is_none() {
-                    eprintln!("DB Error: No database pool configured");
-                    return Value::Null;
-                }
+                if pool.is_none() { return Value::Null; }
                 let pool = pool.unwrap();
-
                 if args.len() < 1 { return Value::Null; }
-                let sql = match &args[0] {
-                    Value::String(s) => s.clone(),
-                    _ => return Value::Null,
-                };
-
+                let sql = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
                 let mut query = sqlx::query(&sql);
-
                 if args.len() > 1 {
                     if let Value::Array(params) = &args[1] {
                         for param in params.lock().unwrap().iter() {
@@ -306,7 +284,6 @@ impl Evaluator {
                         }
                     }
                 }
-
                 match query.fetch_all(&pool).await {
                     Ok(rows) => {
                         let mut result_rows = Vec::new();
@@ -314,39 +291,26 @@ impl Evaluator {
                             let mut map = HashMap::new();
                             for col in row.columns() {
                                 let name = col.name();
-                                let val = if let Ok(v) = row.try_get::<i64, _>(name) {
-                                    Value::Integer(v)
-                                } else if let Ok(v) = row.try_get::<String, _>(name) {
-                                    Value::String(v)
-                                } else if let Ok(v) = row.try_get::<bool, _>(name) {
-                                    Value::Boolean(v)
-                                } else {
-                                    Value::Null
-                                };
+                                let val = if let Ok(v) = row.try_get::<i64, _>(name) { Value::Integer(v) }
+                                else if let Ok(v) = row.try_get::<String, _>(name) { Value::String(v) }
+                                else if let Ok(v) = row.try_get::<bool, _>(name) { Value::Boolean(v) }
+                                else { Value::Null };
                                 map.insert(name.to_string(), val);
                             }
                             result_rows.push(Value::Map(Arc::new(Mutex::new(map))));
                         }
                         Value::Array(Arc::new(Mutex::new(result_rows)))
                     },
-                    Err(e) => {
-                        eprintln!("DB Query Error: {}", e);
-                        Value::Null
-                    }
+                    Err(_) => Value::Null
                 }
             })
         }));
 
-        // VIEW / RENDER
-        self.env.set("view".to_string(), Value::Builtin("view".to_string(), |args, pool| {
+        self.env.set("view".to_string(), Value::Builtin("view".to_string(), |args, _, pool| {
             Box::pin(async move {
                 if args.len() != 2 { return Value::Null; }
-                let tpl = match &args[0] {
-                    Value::String(s) => s.clone(),
-                    _ => return Value::Null,
-                };
+                let tpl = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
                 let data = args[1].clone();
-
                 let mut renderer = Evaluator::new(pool);
                 if let Value::Map(map) = data {
                     let m = map.lock().unwrap();
@@ -354,12 +318,35 @@ impl Evaluator {
                         renderer.env.set(k.clone(), v.clone());
                     }
                 }
-
                 let mut parser = ZenoBladeParser::new(&tpl);
                 let nodes = parser.parse();
-
                 let output = renderer.render_nodes(nodes).await;
                 Value::String(output)
+            })
+        }));
+
+        // Response Control
+        self.env.set("response_json".to_string(), Value::Builtin("response_json".to_string(), |args, mut env, _| {
+            Box::pin(async move {
+                if args.len() != 1 { return Value::Null; }
+                // Use update to target root scope variables
+                env.update("_response_body", args[0].clone());
+
+                // Only set status to 200 if it's currently Null (not manually set)
+                if let Some(Value::Null) = env.get("_response_status") {
+                    env.update("_response_status", Value::Integer(200));
+                }
+                Value::Null
+            })
+        }));
+
+        self.env.set("response_status".to_string(), Value::Builtin("response_status".to_string(), |args, mut env, _| {
+            Box::pin(async move {
+                if args.len() != 1 { return Value::Null; }
+                if let Value::Integer(_) = args[0] {
+                    env.update("_response_status", args[0].clone());
+                }
+                Value::Null
             })
         }));
     }
@@ -586,7 +573,8 @@ impl Evaluator {
                 }
             },
             Value::Builtin(_, func_ptr) => {
-                Some(func_ptr(args, self.db_pool.clone()).await)
+                // Pass env clone to builtin
+                Some(func_ptr(args, self.env.clone(), self.db_pool.clone()).await)
             },
             _ => {
                 eprintln!("Runtime Error: Not a function");
@@ -615,6 +603,9 @@ impl Evaluator {
 
             (Value::Boolean(l), Op::Equal, Value::Boolean(r)) => Some(Value::Boolean(l == r)),
             (Value::Boolean(l), Op::NotEqual, Value::Boolean(r)) => Some(Value::Boolean(l != r)),
+
+            (Value::String(l), Op::Equal, Value::String(r)) => Some(Value::Boolean(l == r)),
+            (Value::String(l), Op::NotEqual, Value::String(r)) => Some(Value::Boolean(l != r)),
 
             _ => {
                 eprintln!("Runtime Error: Mismatched types in binary operation");

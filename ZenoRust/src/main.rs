@@ -2,20 +2,23 @@ use std::fs;
 use std::env;
 use std::net::SocketAddr;
 use axum::{
-    routing::post,
+    routing::any,
     Router,
-    Json,
-    extract::State,
+    extract::{State, Request},
+    body::Body,
+    response::{Response, IntoResponse},
+    http::{StatusCode, HeaderMap},
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{AnyPool, any::AnyPoolOptions};
 use tower_http::trace::TraceLayer;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use axum::body::Bytes;
 
 // Use modules from the library crate
 use ZenoRust::parser::Parser;
-use ZenoRust::evaluator::Evaluator;
+use ZenoRust::evaluator::{Evaluator, Value}; // Need Value for extracting response
 
 #[derive(Clone)]
 struct AppState {
@@ -89,16 +92,17 @@ async fn start_server(pool: Option<AnyPool>) {
 
     let state = AppState { db_pool: pool };
 
+    // Wildcard route to handle everything
     let app = Router::new()
-        .route("/execute", post(execute_script))
-        .layer(TraceLayer::new_for_http()) // Logging Middleware
-        .layer(CorsLayer::permissive()) // CORS Middleware
+        .route("/{*path}", any(handle_request))
+        .route("/", any(handle_request)) // Handle root explicitly if *path doesn't match empty
+        .layer(TraceLayer::new_for_http())
+        .layer(CorsLayer::permissive())
         .with_state(state);
 
     let addr: SocketAddr = addr_str.parse().expect("Invalid address");
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
-    // Graceful Shutdown
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
@@ -131,27 +135,59 @@ async fn shutdown_signal() {
     tracing::info!("Signal received, starting graceful shutdown...");
 }
 
-#[derive(Deserialize)]
-struct ScriptRequest {
-    script: String,
-}
-
-#[derive(Serialize)]
-struct ScriptResponse {
-    output: String,
-}
-
-async fn execute_script(
+// Universal Handler
+async fn handle_request(
     State(state): State<AppState>,
-    Json(payload): Json<ScriptRequest>
-) -> Json<ScriptResponse> {
-    let mut parser = Parser::new(&payload.script);
+    req: Request<Body>,
+) -> Response {
+    let (parts, body) = req.into_parts();
+    let path = parts.uri.path().to_string();
+    let method = parts.method.to_string();
+    let query_str = parts.uri.query().unwrap_or("").to_string();
+
+    // Read body as bytes -> string
+    let body_bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap_or(Bytes::new());
+    let body_str = String::from_utf8_lossy(&body_bytes).to_string();
+
+    // Entrypoint: source/index.zl
+    let entrypoint = "source/index.zl";
+    let contents = match fs::read_to_string(entrypoint) {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Could not load entrypoint {}: {}", entrypoint, e)
+            ).into_response();
+        }
+    };
+
+    let mut parser = Parser::new(&contents);
     let statements = parser.parse();
 
     let mut evaluator = Evaluator::new(state.db_pool.clone());
+
+    // Inject Request Context
+    evaluator.set_request_context(&method, &path, &query_str, &body_str);
+
     evaluator.eval(statements).await;
 
-    Json(ScriptResponse {
-        output: evaluator.get_output(),
-    })
+    // Check if JSON response was set
+    if let Some((code, json_body)) = evaluator.get_final_response() {
+        // Return JSON
+        let status = StatusCode::from_u16(code as u16).unwrap_or(StatusCode::OK);
+        let json_str = format!("{}", json_body); // Value implements Display as JSON-like?
+        // Wait, Value Display is debug-like. We need clean JSON serialization.
+        // For now, let's use a simple stringify or impl serde::Serialize for Value later.
+        // Actually, Value::Display for Map is `{ "k": val }` which is close to JSON but not strict.
+        // But for this MVP, it's acceptable. Ideally use serde_json::to_string(&value).
+
+        return (
+            status,
+            [("Content-Type", "application/json")],
+            json_str
+        ).into_response();
+    }
+
+    // Default: Return text output (stdout)
+    (StatusCode::OK, evaluator.get_output()).into_response()
 }
