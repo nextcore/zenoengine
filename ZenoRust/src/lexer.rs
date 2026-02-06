@@ -9,6 +9,12 @@ pub enum Token {
     #[token("let")]
     Let,
 
+    #[token("fn")]
+    Fn,
+
+    #[token("return")]
+    Return,
+
     #[token("if")]
     If,
 
@@ -26,6 +32,9 @@ pub enum Token {
 
     #[token(")")]
     RParen,
+
+    #[token(",")]
+    Comma,
 
     #[token("{")]
     LBrace,

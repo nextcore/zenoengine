@@ -1,35 +1,26 @@
-print("--- ZenoLang Control Flow Test ---");
+print("--- ZenoLang Functions Test ---");
 
-let x = 10;
-let y = 20;
-
-print("Testing If/Else:");
-if (x < y) {
-    print("Correct: x is less than y");
-} else {
-    print("Incorrect: x should be less than y");
+fn add(a, b) {
+    return a + b;
 }
 
-if (x > y) {
-    print("Incorrect: x is not greater than y");
-} else {
-    print("Correct: x is NOT greater than y");
-}
+let sum = add(10, 20);
+print("Sum of 10 + 20 is:");
+print(sum);
 
-print("Testing Scoping:");
-let z = 50;
-if (true) {
-    let z = 99;
-    print("Inside block, z should be 99:");
-    print(z);
+print("Testing Closures:");
+let factor = 3;
+fn multiply(x) {
+    return x * factor;
 }
-print("Outside block, z should be 50:");
-print(z);
+let product = multiply(10);
+print("Product of 10 * 3 (factor) is:");
+print(product);
 
-print("Testing Boolean Logic:");
-if (10 == 10) {
-    print("10 equals 10");
+print("Testing Nested Calls:");
+fn square(n) {
+    return n * n;
 }
-if (10 != 20) {
-    print("10 not equals 20");
-}
+let res = square(add(2, 3)); // square(5) = 25
+print("Square of (2+3) is:");
+print(res);

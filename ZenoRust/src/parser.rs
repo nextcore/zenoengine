@@ -9,6 +9,7 @@ pub enum Expression {
     Boolean(bool),
     Identifier(String),
     BinaryOp(Box<Expression>, Op, Box<Expression>),
+    Call(Box<Expression>, Vec<Expression>), // FuncName, Args
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,12 +24,15 @@ pub enum Op {
     GreaterThan,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Print(Expression),
     Let(String, Expression),
     Block(Vec<Statement>),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
+    Function(String, Vec<String>, Box<Statement>), // Name, Params, Body
+    Return(Expression),
+    Expression(Expression), // Allow calling functions as statements: `doSomething();`
 }
 
 pub struct Parser<'a> {
@@ -47,38 +51,40 @@ impl<'a> Parser<'a> {
         while let Some(token_result) = self.lexer.peek() {
             if let Ok(token) = token_result {
                 match token {
+                    Token::Fn => {
+                        self.lexer.next();
+                        if let Some(stmt) = self.parse_function() { statements.push(stmt); }
+                    },
+                    Token::Return => {
+                        self.lexer.next();
+                        if let Some(stmt) = self.parse_return() { statements.push(stmt); }
+                    },
                     Token::Print => {
                         self.lexer.next();
-                        if let Some(stmt) = self.parse_print() {
-                            statements.push(stmt);
-                        }
+                        if let Some(stmt) = self.parse_print() { statements.push(stmt); }
                     }
                     Token::Let => {
                         self.lexer.next();
-                        if let Some(stmt) = self.parse_let() {
-                            statements.push(stmt);
-                        }
+                        if let Some(stmt) = self.parse_let() { statements.push(stmt); }
                     }
                     Token::If => {
                         self.lexer.next();
-                        if let Some(stmt) = self.parse_if() {
-                            statements.push(stmt);
-                        }
+                        if let Some(stmt) = self.parse_if() { statements.push(stmt); }
                     }
                     Token::LBrace => {
-                        if let Some(stmt) = self.parse_block() {
-                            statements.push(stmt);
-                        }
+                        if let Some(stmt) = self.parse_block() { statements.push(stmt); }
                     }
-                    Token::RBrace => {
-                        // Handled by parse_block, but if seen here it might be an extra brace
-                        // For now, we stop parsing this block (or top level) if we see },
-                        // but since parse() is top level, this usually means error or end of block logic
-                        // We'll break loop if we see unexpected RBrace at top level so we don't infinite loop if caller didn't consume it
-                        break;
-                    }
+                    Token::RBrace => { break; }
                     _ => {
-                        self.lexer.next();
+                        // Attempt to parse as an expression statement (e.g., function call)
+                        if let Some(expr) = self.parse_expression(0) {
+                            if let Some(Ok(Token::Semicolon)) = self.lexer.peek() {
+                                self.lexer.next();
+                            }
+                            statements.push(Statement::Expression(expr));
+                        } else {
+                            self.lexer.next(); // Skip unknown
+                        }
                     }
                 }
             } else {
@@ -88,91 +94,75 @@ impl<'a> Parser<'a> {
         statements
     }
 
-    fn parse_block(&mut self) -> Option<Statement> {
-        // Expect '{'
-        match self.lexer.next() {
-            Some(Ok(Token::LBrace)) => {}
-            _ => return None,
+    fn parse_function(&mut self) -> Option<Statement> {
+        let name = match self.lexer.next() { Some(Ok(Token::Identifier(s))) => s, _ => return None };
+        match self.lexer.next() { Some(Ok(Token::LParen)) => {}, _ => return None }
+
+        let mut params = Vec::new();
+        if let Some(Ok(Token::RParen)) = self.lexer.peek() {
+            self.lexer.next();
+        } else {
+            loop {
+                match self.lexer.next() { Some(Ok(Token::Identifier(s))) => params.push(s), _ => return None };
+                match self.lexer.peek() {
+                    Some(Ok(Token::Comma)) => { self.lexer.next(); },
+                    Some(Ok(Token::RParen)) => { self.lexer.next(); break; },
+                    _ => return None
+                }
+            }
         }
 
+        let body = self.parse_block()?;
+        Some(Statement::Function(name, params, Box::new(body)))
+    }
+
+    fn parse_return(&mut self) -> Option<Statement> {
+        let expr = self.parse_expression(0)?;
+        if let Some(Ok(Token::Semicolon)) = self.lexer.peek() { self.lexer.next(); }
+        Some(Statement::Return(expr))
+    }
+
+    fn parse_block(&mut self) -> Option<Statement> {
+        match self.lexer.next() { Some(Ok(Token::LBrace)) => {}, _ => return None }
         let mut statements = Vec::new();
         while let Some(token_result) = self.lexer.peek() {
             if let Ok(Token::RBrace) = token_result {
-                self.lexer.next(); // consume '}'
-                return Some(Statement::Block(statements));
+                self.lexer.next(); return Some(Statement::Block(statements));
             }
-
-            // Parse statement
-             if let Ok(token) = token_result {
-                match token {
-                    Token::Print => {
-                         self.lexer.next();
-                         if let Some(stmt) = self.parse_print() { statements.push(stmt); }
-                    },
-                    Token::Let => {
-                         self.lexer.next();
-                         if let Some(stmt) = self.parse_let() { statements.push(stmt); }
-                    },
-                     Token::If => {
-                        self.lexer.next();
-                        if let Some(stmt) = self.parse_if() { statements.push(stmt); }
+            if let Ok(token) = token_result {
+                 match token {
+                    Token::Fn => { self.lexer.next(); if let Some(stmt) = self.parse_function() { statements.push(stmt); } },
+                    Token::Return => { self.lexer.next(); if let Some(stmt) = self.parse_return() { statements.push(stmt); } },
+                    Token::Print => { self.lexer.next(); if let Some(stmt) = self.parse_print() { statements.push(stmt); } },
+                    Token::Let => { self.lexer.next(); if let Some(stmt) = self.parse_let() { statements.push(stmt); } },
+                    Token::If => { self.lexer.next(); if let Some(stmt) = self.parse_if() { statements.push(stmt); } },
+                    Token::LBrace => { if let Some(stmt) = self.parse_block() { statements.push(stmt); } },
+                    _ => {
+                         if let Some(expr) = self.parse_expression(0) {
+                            if let Some(Ok(Token::Semicolon)) = self.lexer.peek() { self.lexer.next(); }
+                            statements.push(Statement::Expression(expr));
+                         } else { self.lexer.next(); }
                     }
-                    Token::LBrace => {
-                         if let Some(stmt) = self.parse_block() { statements.push(stmt); }
-                    },
-                    _ => { self.lexer.next(); } // skip unknown inside block
                 }
-             } else {
-                 self.lexer.next();
-             }
+            } else { self.lexer.next(); }
         }
-
-        None // Missing closing brace
+        None
     }
 
     fn parse_if(&mut self) -> Option<Statement> {
-        // Expect '('
-        match self.lexer.next() {
-            Some(Ok(Token::LParen)) => {}
-            _ => return None,
-        }
-
+        match self.lexer.next() { Some(Ok(Token::LParen)) => {}, _ => return None }
         let condition = self.parse_expression(0)?;
-
-        // Expect ')'
-        match self.lexer.next() {
-            Some(Ok(Token::RParen)) => {}
-            _ => return None,
-        }
-
-        // Parse Consequence (usually a Block)
-        // Check if next is LBrace
-        let consequence = if let Some(Ok(Token::LBrace)) = self.lexer.peek() {
-             self.parse_block()?
-        } else {
-            // Single statement if support? Let's just enforce blocks for now or single statement
-            // Ideally should support any statement.
-             // For simplicity, let's just reuse top-level parse logic for one statement if we wanted,
-             // but `parse_block` is standard for `if`. Let's assume block required for now.
-             return None;
-        };
-
-        // Check for Else
+        match self.lexer.next() { Some(Ok(Token::RParen)) => {}, _ => return None }
+        let consequence = if let Some(Ok(Token::LBrace)) = self.lexer.peek() { self.parse_block()? } else { return None; };
         let mut alternative = None;
         if let Some(Ok(Token::Else)) = self.lexer.peek() {
-            self.lexer.next(); // consume else
-
-            // Check if next is 'if' (else if) or block
+            self.lexer.next();
             if let Some(Ok(Token::If)) = self.lexer.peek() {
-                 self.lexer.next();
-                 alternative = Some(Box::new(self.parse_if()?));
+                 self.lexer.next(); alternative = Some(Box::new(self.parse_if()?));
             } else if let Some(Ok(Token::LBrace)) = self.lexer.peek() {
                  alternative = Some(Box::new(self.parse_block()?));
-            } else {
-                return None;
-            }
+            } else { return None; }
         }
-
         Some(Statement::If(condition, Box::new(consequence), alternative))
     }
 
@@ -207,6 +197,31 @@ impl<'a> Parser<'a> {
         };
 
         loop {
+            // Handle Call expression (suffix: '(')
+            if let Some(Ok(Token::LParen)) = self.lexer.peek() {
+                // If binding power of call (usually highest, e.g. 8) is < min_bp, break?
+                // Call binding power is extremely high.
+                let call_bp = 10;
+                if call_bp < min_bp { break; }
+
+                self.lexer.next(); // Consume '('
+                let mut args = Vec::new();
+                if let Some(Ok(Token::RParen)) = self.lexer.peek() {
+                    self.lexer.next();
+                } else {
+                    loop {
+                        args.push(self.parse_expression(0)?);
+                        match self.lexer.peek() {
+                            Some(Ok(Token::Comma)) => { self.lexer.next(); },
+                            Some(Ok(Token::RParen)) => { self.lexer.next(); break; },
+                            _ => return None
+                        }
+                    }
+                }
+                lhs = Expression::Call(Box::new(lhs), args);
+                continue;
+            }
+
             let op = match self.lexer.peek() {
                 Some(Ok(Token::Plus)) => Op::Add,
                 Some(Ok(Token::Minus)) => Op::Subtract,
