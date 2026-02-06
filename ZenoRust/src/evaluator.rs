@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Integer(i64),
     String(String),
@@ -11,7 +11,28 @@ pub enum Value {
     Null,
     // Parameters, Body, Closure Environment (captured)
     Function(Vec<String>, Statement, Env),
+    // Builtin Function: Name, Function Pointer
+    Builtin(String, fn(Vec<Value>) -> Value),
     ReturnValue(Box<Value>), // Wrapper to signal return
+}
+
+// Manual PartialEq to ignore function pointer comparison
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            (Value::Function(params_a, body_a, _), Value::Function(params_b, body_b, _)) => {
+                params_a == params_b && body_a == body_b
+                // We ignore Env comparison for simplicity/cycles
+            },
+            (Value::Builtin(name_a, _), Value::Builtin(name_b, _)) => name_a == name_b,
+            (Value::ReturnValue(a), Value::ReturnValue(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl std::fmt::Display for Value {
@@ -22,6 +43,7 @@ impl std::fmt::Display for Value {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Null => write!(f, "null"),
             Value::Function(params, _, _) => write!(f, "fn({})", params.join(", ")),
+            Value::Builtin(name, _) => write!(f, "builtin({})", name),
             Value::ReturnValue(val) => write!(f, "return {}", val),
         }
     }
@@ -71,9 +93,36 @@ pub struct Evaluator {
 
 impl Evaluator {
     pub fn new() -> Self {
-        Self {
+        let mut evaluator = Self {
             env: Env::new(),
-        }
+        };
+        evaluator.register_builtins();
+        evaluator
+    }
+
+    fn register_builtins(&mut self) {
+        self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args| {
+            if args.len() != 1 {
+                return Value::Null; // Should be error, but keeping simple
+            }
+            match &args[0] {
+                Value::String(s) => Value::Integer(s.len() as i64),
+                _ => Value::Integer(0),
+            }
+        }));
+
+        self.env.set("upper".to_string(), Value::Builtin("upper".to_string(), |args| {
+             if args.len() != 1 { return Value::Null; }
+             match &args[0] {
+                 Value::String(s) => Value::String(s.to_uppercase()),
+                 _ => Value::Null,
+             }
+        }));
+
+        self.env.set("str".to_string(), Value::Builtin("str".to_string(), |args| {
+            if args.len() != 1 { return Value::Null; }
+            Value::String(format!("{}", args[0]))
+        }));
     }
 
     pub fn eval(&mut self, statements: Vec<Statement>) {
@@ -213,6 +262,9 @@ impl Evaluator {
                     Some(Value::Null) // Function returns null if no return statement
                 }
             },
+            Value::Builtin(_, func_ptr) => {
+                Some(func_ptr(args))
+            },
             _ => {
                 eprintln!("Runtime Error: Not a function");
                 None
@@ -305,5 +357,22 @@ mod tests {
         } else {
             panic!("Closure capture failed");
         }
+    }
+
+    #[test]
+    fn test_builtin() {
+        let input = r#"
+            let l = len("hello");
+            let u = upper("hello");
+            let s = str(123);
+        "#;
+        let mut parser = Parser::new(input);
+        let statements = parser.parse();
+        let mut evaluator = Evaluator::new();
+        evaluator.eval(statements);
+
+        assert_eq!(evaluator.env.get("l"), Some(Value::Integer(5)));
+        assert_eq!(evaluator.env.get("u"), Some(Value::String("HELLO".to_string())));
+        assert_eq!(evaluator.env.get("s"), Some(Value::String("123".to_string())));
     }
 }

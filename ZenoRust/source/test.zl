@@ -1,26 +1,20 @@
-print("--- ZenoLang Functions Test ---");
+print("--- ZenoLang Built-in Functions Test ---");
 
-fn add(a, b) {
-    return a + b;
+let text = "hello zeno";
+print("Original text: " + text);
+
+let u = upper(text);
+print("Uppercase: " + u);
+
+let l = len(text);
+print("Length: " + str(l));
+
+print("Type conversion (str):");
+print(str(100) + " is a number");
+
+fn greet(name) {
+    return "Hello " + upper(name);
 }
 
-let sum = add(10, 20);
-print("Sum of 10 + 20 is:");
-print(sum);
-
-print("Testing Closures:");
-let factor = 3;
-fn multiply(x) {
-    return x * factor;
-}
-let product = multiply(10);
-print("Product of 10 * 3 (factor) is:");
-print(product);
-
-print("Testing Nested Calls:");
-fn square(n) {
-    return n * n;
-}
-let res = square(add(2, 3)); // square(5) = 25
-print("Square of (2+3) is:");
-print(res);
+print("Combined with function:");
+print(greet("world"));
