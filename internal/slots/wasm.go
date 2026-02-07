@@ -293,12 +293,6 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 			return nil, fmt.Errorf("scope access not available in this context")
 		}
 
-		// Check plugin permission (via context)
-		pluginName, _ := ctx.Value("pluginName").(string)
-		if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "read") {
-			return nil, fmt.Errorf("plugin %s does not have scope read permission", pluginName)
-		}
-
 		val, found := scope.Get(key)
 		if !found {
 			return nil, fmt.Errorf("variable $%s not found", key)
@@ -313,19 +307,12 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 			return fmt.Errorf("scope access not available in this context")
 		}
 
-		pluginName, _ := ctx.Value("pluginName").(string)
-		if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "write") {
-			return fmt.Errorf("plugin %s does not have scope write permission", pluginName)
-		}
-
 		scope.Set(key, value)
 		return nil
 	})
 
 	// File read callback
 	pm.SetHostCallback("file_read", func(ctx context.Context, path string) (string, error) {
-		// Note: Permission checking happens in executeWASMSlot context
-		// For now, we allow reading from safe directories only
 		// Clean and validate path
 		cleanPath := filepath.Clean(path)
 		
@@ -363,10 +350,6 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 
 	// Environment variable callback
 	pm.SetHostCallback("env_get", func(ctx context.Context, key string) string {
-		pluginName, _ := ctx.Value("pluginName").(string)
-		if pluginName != "" && !pm.CheckPermission(pluginName, "env", key) {
-			return ""
-		}
 		return os.Getenv(key)
 	})
 }
