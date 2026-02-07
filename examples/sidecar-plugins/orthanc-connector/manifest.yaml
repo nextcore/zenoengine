@@ -1,0 +1,35 @@
+name: orthanc-connector
+version: 1.0.0
+type: sidecar
+binary: connector
+description: "High-performance Sidecar connector for Orthanc DICOM Server"
+author: "Zeno Team"
+license: "MIT"
+sidecar:
+  protocol: json-rpc
+  auto_start: true
+  keep_alive: true
+  max_retries: 5
+
+permissions:
+  network: ["http://localhost:8042/*", "http://127.0.0.1:8042/*"]
+  filesystem: ["/tmp/*", "./uploads/*"] # For temporary DICOM file uploads
+  env: ["ORTHANC_URL", "ORTHANC_USER", "ORTHANC_PASSWORD"]
+
+config:
+  orthanc_url:
+    type: string
+    required: true
+    env: ORTHANC_URL
+    default: "http://localhost:8042"
+    description: "URL of the Orthanc server API"
+  orthanc_user:
+    type: string
+    required: false
+    env: ORTHANC_USER
+    description: "Username for Orthanc Basic Auth"
+  orthanc_password:
+    type: string
+    required: false
+    env: ORTHANC_PASSWORD
+    description: "Password for Orthanc Basic Auth"
