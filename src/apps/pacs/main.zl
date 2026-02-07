@@ -1,0 +1,69 @@
+http.get: "/pacs" {
+    async: false
+    # Fetch studies from Orthanc Sidecar
+    # Note: We use 'pacs.search_patient' with wildcard for now to get list
+    # In a real app, we would query our own database that syncs with Orthanc
+    pacs.search_patient: "*" { as: $patient_ids }
+
+    # For MVP, we just render the dashboard with raw IDs
+    # Ideally we'd loop and fetch details, but let's keep it simple
+    view: "dashboard" {
+        patients: $patient_ids
+        count: 0
+    }
+}
+
+http.post: "/pacs/upload" {
+    # Handle file upload
+    # Zeno's `http.file` saves to temporary location
+    http.file: "dicom_file" { as: $uploaded_file }
+
+    if: $uploaded_file {
+        then:
+            # Send to Orthanc Sidecar
+            pacs.upload_instance: $uploaded_file.path { as: $result }
+            http.redirect: "/pacs?status=uploaded"
+        else:
+            http.redirect: "/pacs?error=no_file"
+    }
+}
+
+http.get: "/pacs/viewer/:study_id" {
+    # Render OHIF Viewer wrapper
+    view: "viewer" {
+        study_id: $params.study_id
+    }
+}
+
+# DICOMWeb Proxy for OHIF
+# OHIF requests: /pacs/api/dicom-web/studies/...
+http.get: "/pacs/api/dicom-web/*path" {
+    # Forward to Orthanc Sidecar
+    # We construct the Orthanc API path
+    # Orthanc DICOMWeb plugin usually lives at /dicom-web/
+
+    # Check permissions/auth here if needed
+
+    # Sidecar call to proxy (we need a new slot for generic proxy or use specific ones)
+    # Since our sidecar 'orthanc-connector' only has specific slots,
+    # we should add a 'pacs.proxy' slot or similar.
+    # For now, let's assume we update the sidecar to support raw proxying or
+    # use 'http.request' to call Orthanc directly from Zeno (since Zeno is on same machine).
+
+    # Better approach for OHIF:
+    # Use Zeno's 'http.proxy' if available, or 'http.request'
+
+    # Construct target URL
+    # Assuming Orthanc is at localhost:8042
+    # Path inside Orthanc: /dicom-web/{path}
+
+    http.request: {
+        method: "GET"
+        url: "http://localhost:8042/dicom-web/" + $params.path
+        headers: $request.headers
+    } { as: $resp }
+
+    # Return response
+    response.status: $resp.status
+    response.json: $resp.body
+}
