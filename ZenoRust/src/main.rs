@@ -175,11 +175,7 @@ async fn handle_request(
     if let Some((code, json_body)) = evaluator.get_final_response() {
         // Return JSON
         let status = StatusCode::from_u16(code as u16).unwrap_or(StatusCode::OK);
-        let json_str = format!("{}", json_body); // Value implements Display as JSON-like?
-        // Wait, Value Display is debug-like. We need clean JSON serialization.
-        // For now, let's use a simple stringify or impl serde::Serialize for Value later.
-        // Actually, Value::Display for Map is `{ "k": val }` which is close to JSON but not strict.
-        // But for this MVP, it's acceptable. Ideally use serde_json::to_string(&value).
+        let json_str = serde_json::to_string(&json_body).unwrap_or_else(|_| "{}".to_string());
 
         return (
             status,

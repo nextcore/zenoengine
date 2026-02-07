@@ -7,6 +7,7 @@ pub enum Expression {
     StringLiteral(String),
     Integer(i64),
     Boolean(bool),
+    Null,
     Identifier(String),
     Array(Vec<Expression>),
     Map(Vec<(String, Expression)>), // Key (String), Value
@@ -214,6 +215,7 @@ impl<'a> Parser<'a> {
             Some(Ok(Token::Integer(Some(i)))) => Expression::Integer(i),
             Some(Ok(Token::True)) => Expression::Boolean(true),
             Some(Ok(Token::False)) => Expression::Boolean(false),
+            Some(Ok(Token::Null)) => Expression::Null,
             Some(Ok(Token::StringLiteral(s))) => Expression::StringLiteral(s),
             Some(Ok(Token::Identifier(s))) => Expression::Identifier(s),
             Some(Ok(Token::LBracket)) => {

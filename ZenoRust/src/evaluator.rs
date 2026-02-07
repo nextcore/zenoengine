@@ -8,6 +8,7 @@ use std::pin::Pin;
 use sqlx::{AnyPool, Row, Column, TypeInfo};
 use reqwest::{Method, header::{HeaderMap, HeaderName, HeaderValue}};
 use std::str::FromStr;
+use serde::Serialize;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -16,11 +17,43 @@ pub enum Value {
     Boolean(bool),
     Null,
     Function(Vec<String>, Statement, Env),
-    // Builtin accepts Env to allow modifying state
     Builtin(String, fn(Vec<Value>, Env, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
     ReturnValue(Box<Value>),
     Array(Arc<Mutex<Vec<Value>>>),
     Map(Arc<Mutex<HashMap<String, Value>>>),
+}
+
+impl Serialize for Value {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Value::Integer(i) => serializer.serialize_i64(*i),
+            Value::String(s) => serializer.serialize_str(s),
+            Value::Boolean(b) => serializer.serialize_bool(*b),
+            Value::Null => serializer.serialize_none(),
+            Value::Array(arr) => {
+                let vec = arr.lock().unwrap();
+                use serde::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(vec.len()))?;
+                for element in vec.iter() {
+                    seq.serialize_element(element)?;
+                }
+                seq.end()
+            },
+            Value::Map(map) => {
+                let m = map.lock().unwrap();
+                use serde::ser::SerializeMap;
+                let mut map_ser = serializer.serialize_map(Some(m.len()))?;
+                for (k, v) in m.iter() {
+                    map_ser.serialize_entry(k, v)?;
+                }
+                map_ser.end()
+            },
+            _ => serializer.serialize_none(), // Functions etc serialize to null
+        }
+    }
 }
 
 // Manual PartialEq
@@ -171,9 +204,9 @@ impl Evaluator {
     }
 
     fn register_builtins(&mut self) {
-        // ... (Standard Built-ins: len, upper, str, push, db_*, view, response_*)
-        // Duplicating for brevity, assuming they are kept as is.
-        // NOTE: I must include them or they will be lost. I will include compact versions.
+        // ... (Builtins omitted to save space, but logically same as before)
+        // I must ensure I don't lose them!
+        // Re-pasting standard builtins logic.
 
         self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args, _, _| Box::pin(async move {
             if args.len() != 1 { return Value::Null; }
@@ -204,6 +237,26 @@ impl Evaluator {
             Value::Null
         })));
 
+        self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            match reqwest::get(&url).await {
+                Ok(resp) => match resp.text().await { Ok(t) => Value::String(t), Err(_) => Value::Null },
+                Err(_) => Value::Null
+            }
+        })));
+
+        self.env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 2 { return Value::Null; }
+            let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let body = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let client = reqwest::Client::new();
+            match client.post(&url).body(body).send().await {
+                Ok(resp) => match resp.text().await { Ok(t) => Value::String(t), Err(_) => Value::Null },
+                Err(_) => Value::Null
+            }
+        })));
+
         self.env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, _, pool| Box::pin(async move {
             if pool.is_none() { return Value::Null; }
             let pool = pool.unwrap();
@@ -225,7 +278,10 @@ impl Evaluator {
             }
             match query.execute(&pool).await {
                 Ok(result) => Value::Integer(result.rows_affected() as i64),
-                Err(_) => Value::Null
+                Err(e) => {
+                    eprintln!("DB Execute Error: {}", e);
+                    Value::Null
+                }
             }
         })));
 
@@ -265,7 +321,10 @@ impl Evaluator {
                     }
                     Value::Array(Arc::new(Mutex::new(result_rows)))
                 },
-                Err(_) => Value::Null
+                Err(e) => {
+                    eprintln!("DB Query Error: {}", e);
+                    Value::Null
+                }
             }
         })));
 
@@ -303,73 +362,61 @@ impl Evaluator {
             Value::Null
         })));
 
-        // NEW: fetch(url, options)
-        self.env.set("fetch".to_string(), Value::Builtin("fetch".to_string(), |args, _, _| {
-            Box::pin(async move {
-                if args.len() < 1 { return Value::Null; }
-                let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
-
-                let mut method = Method::GET;
-                let mut headers = HeaderMap::new();
-                let mut body = String::new();
-
-                if args.len() > 1 {
-                    if let Value::Map(opts_arc) = &args[1] {
-                        let opts = opts_arc.lock().unwrap();
-
-                        if let Some(Value::String(m)) = opts.get("method") {
-                            method = Method::from_str(&m.to_uppercase()).unwrap_or(Method::GET);
-                        }
-
-                        if let Some(Value::String(b)) = opts.get("body") {
-                            body = b.clone();
-                        }
-
-                        if let Some(Value::Map(h_arc)) = opts.get("headers") {
-                            let h_map = h_arc.lock().unwrap();
-                            for (k, v) in h_map.iter() {
-                                if let Value::String(v_str) = v {
-                                    if let (Ok(hn), Ok(hv)) = (HeaderName::from_str(k), HeaderValue::from_str(v_str)) {
-                                        headers.insert(hn, hv);
-                                    }
+        self.env.set("fetch".to_string(), Value::Builtin("fetch".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() < 1 { return Value::Null; }
+            let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let mut method = Method::GET;
+            let mut headers = HeaderMap::new();
+            let mut body = String::new();
+            if args.len() > 1 {
+                if let Value::Map(opts_arc) = &args[1] {
+                    let opts = opts_arc.lock().unwrap();
+                    if let Some(Value::String(m)) = opts.get("method") {
+                        method = Method::from_str(&m.to_uppercase()).unwrap_or(Method::GET);
+                    }
+                    if let Some(Value::String(b)) = opts.get("body") { body = b.clone(); }
+                    if let Some(Value::Map(h_arc)) = opts.get("headers") {
+                        let h_map = h_arc.lock().unwrap();
+                        for (k, v) in h_map.iter() {
+                            if let Value::String(v_str) = v {
+                                if let (Ok(hn), Ok(hv)) = (HeaderName::from_str(k), HeaderValue::from_str(v_str)) {
+                                    headers.insert(hn, hv);
                                 }
                             }
                         }
                     }
                 }
-
-                let client = reqwest::Client::new();
-                let resp = client.request(method, &url)
-                    .headers(headers)
-                    .body(body)
-                    .send()
-                    .await;
-
-                match resp {
-                    Ok(r) => {
-                        let status = r.status().as_u16() as i64;
-                        let mut resp_headers = HashMap::new();
-                        for (k, v) in r.headers() {
-                            if let Ok(v_str) = v.to_str() {
-                                resp_headers.insert(k.to_string(), Value::String(v_str.to_string()));
-                            }
+            }
+            let client = reqwest::Client::new();
+            let resp = client.request(method, &url).headers(headers).body(body).send().await;
+            match resp {
+                Ok(r) => {
+                    let status = r.status().as_u16() as i64;
+                    let mut resp_headers = HashMap::new();
+                    for (k, v) in r.headers() {
+                        if let Ok(v_str) = v.to_str() {
+                            resp_headers.insert(k.to_string(), Value::String(v_str.to_string()));
                         }
-                        let body_text = r.text().await.unwrap_or_default();
-
-                        let mut result_map = HashMap::new();
-                        result_map.insert("status".to_string(), Value::Integer(status));
-                        result_map.insert("headers".to_string(), Value::Map(Arc::new(Mutex::new(resp_headers))));
-                        result_map.insert("body".to_string(), Value::String(body_text));
-
-                        Value::Map(Arc::new(Mutex::new(result_map)))
-                    },
-                    Err(e) => {
-                        eprintln!("Fetch Error: {}", e);
-                        Value::Null
                     }
-                }
-            })
-        }));
+                    let body_text = r.text().await.unwrap_or_default();
+                    let mut result_map = HashMap::new();
+                    result_map.insert("status".to_string(), Value::Integer(status));
+                    result_map.insert("headers".to_string(), Value::Map(Arc::new(Mutex::new(resp_headers))));
+                    result_map.insert("body".to_string(), Value::String(body_text));
+                    Value::Map(Arc::new(Mutex::new(result_map)))
+                },
+                Err(_) => Value::Null
+            }
+        })));
+
+        self.env.set("json_parse".to_string(), Value::Builtin("json_parse".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let json_str = match &args[0] { Value::String(s) => s, _ => return Value::Null };
+            match serde_json::from_str::<serde_json::Value>(json_str) {
+                Ok(v) => json_to_value(v),
+                Err(_) => Value::Null
+            }
+        })));
     }
 
     #[async_recursion]
@@ -509,6 +556,7 @@ impl Evaluator {
             Expression::Integer(i) => Some(Value::Integer(*i)),
             Expression::StringLiteral(s) => Some(Value::String(s.clone())),
             Expression::Boolean(b) => Some(Value::Boolean(*b)),
+            Expression::Null => Some(Value::Null),
             Expression::Identifier(name) => {
                 if let Some(val) = self.env.get(name) {
                     Some(val)
@@ -594,7 +642,6 @@ impl Evaluator {
                 }
             },
             Value::Builtin(_, func_ptr) => {
-                // Pass env clone to builtin
                 Some(func_ptr(args, self.env.clone(), self.db_pool.clone()).await)
             },
             _ => {
@@ -628,6 +675,14 @@ impl Evaluator {
             (Value::String(l), Op::Equal, Value::String(r)) => Some(Value::Boolean(l == r)),
             (Value::String(l), Op::NotEqual, Value::String(r)) => Some(Value::Boolean(l != r)),
 
+            // Null Handling
+            (Value::Null, Op::Equal, Value::Null) => Some(Value::Boolean(true)),
+            (Value::Null, Op::NotEqual, Value::Null) => Some(Value::Boolean(false)),
+            (_, Op::Equal, Value::Null) => Some(Value::Boolean(false)),
+            (Value::Null, Op::Equal, _) => Some(Value::Boolean(false)),
+            (_, Op::NotEqual, Value::Null) => Some(Value::Boolean(true)),
+            (Value::Null, Op::NotEqual, _) => Some(Value::Boolean(true)),
+
             _ => {
                 eprintln!("Runtime Error: Mismatched types in binary operation");
                 None
@@ -642,6 +697,33 @@ impl Evaluator {
             Value::String(s) => !s.is_empty(),
             Value::Null => false,
             _ => false,
+        }
+    }
+}
+
+// Helper to convert Serde JSON to Zeno Value
+fn json_to_value(v: serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Null,
+        serde_json::Value::Bool(b) => Value::Boolean(b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Integer(i)
+            } else {
+                Value::Integer(n.as_f64().unwrap_or(0.0) as i64)
+            }
+        },
+        serde_json::Value::String(s) => Value::String(s),
+        serde_json::Value::Array(arr) => {
+            let zeno_arr: Vec<Value> = arr.into_iter().map(json_to_value).collect();
+            Value::Array(Arc::new(Mutex::new(zeno_arr)))
+        },
+        serde_json::Value::Object(obj) => {
+            let mut map = HashMap::new();
+            for (k, v) in obj {
+                map.insert(k, json_to_value(v));
+            }
+            Value::Map(Arc::new(Mutex::new(map)))
         }
     }
 }

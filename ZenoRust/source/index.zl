@@ -1,29 +1,37 @@
-// Simulating a basic router
-print("Incoming Request: " + request["method"] + " " + request["path"]);
+// Initialize DB
+db_execute("CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, completed INTEGER)", []);
 
-if (request["path"] == "/api/status") {
-    response_json({
-        "status": "ok",
-        "engine": "ZenoRust",
-        "version": "1.0"
-    });
-} else if (request["path"] == "/api/echo") {
-    let body_content = request["body"];
-    response_json({
-        "received": body_content,
-        "echo": true
-    });
-} else if (request["path"] == "/api/proxy") {
-    // Proxy request using fetch
-    let res = fetch("https://httpbin.org/get");
-    response_json({
-        "proxy_status": res["status"],
-        "external_body_len": len(res["body"])
-    });
+// Router
+let method = request["method"];
+let path = request["path"];
+
+print("Handling " + method + " " + path);
+
+if (path == "/api/todos") {
+    if (method == "GET") {
+        let rows = db_query("SELECT * FROM todos", []);
+        print("Rows fetched: " + str(rows));
+        response_json(rows);
+    } else if (method == "POST") {
+        // Parse Body
+        let body_str = request["body"];
+        let data = json_parse(body_str);
+
+        if (data == null) {
+            response_status(400);
+            response_json({"error": "Invalid JSON"});
+        } else {
+            let title = data["title"];
+            db_execute("INSERT INTO todos (title, completed) VALUES (?, ?)", [title, false]);
+            response_status(201);
+            response_json({"status": "created", "title": title});
+        }
+    } else {
+        response_status(405);
+    }
+} else if (path == "/api/health") {
+    response_json({"status": "healthy"});
 } else {
     response_status(404);
-    response_json({
-        "error": "Not Found",
-        "path": request["path"]
-    });
+    response_json({"error": "Not Found"});
 }

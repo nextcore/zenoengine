@@ -38,6 +38,9 @@ pub enum Token {
     #[token("false")]
     False,
 
+    #[token("null")]
+    Null,
+
     #[token("(")]
     LParen,
 
