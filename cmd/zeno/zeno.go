@@ -565,8 +565,8 @@ func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWor
 	workerWG.Wait()
 	slog.Info("✅ Worker Stopped")
 
-	// Cleanup WASM Plugins
-	slots.CleanupWASMPlugins()
+	// Cleanup plugins on shutdown
+	defer slots.CleanupPlugins()
 
 	// Shutdown HTTP Server (30s timeout for SSE connections)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
