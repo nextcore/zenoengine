@@ -11,19 +11,19 @@
 Anda **TIDAK PERLU** menginstal Go atau melakukan build manual.
 
 1.  **Download Engine**:
-    *   Unduh file `zeno.wasm.gz` dari [repository resmi](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/zeno.wasm.gz).
+    *   Unduh file `zeno.wasm.gz` (Gzip ~3.5MB) atau `zeno.wasm.br` (Brotli ~2.9MB) dari [repository resmi](https://github.com/nextcore/zenoengine/blob/main/ZenoWasm/public/).
     *   Unduh file [wasm_exec.js](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/wasm_exec.js).
     *   Simpan keduanya di folder `public/`.
 
 2.  **Jalankan Server (Wajib Mendukung Kompresi)**:
-    Kami sangat menyarankan menggunakan **Caddy** karena otomatis menangani dekompresi `.gz` di browser, sehingga loading sangat cepat (hanya ~3.5MB).
+    Kami sangat menyarankan menggunakan **Caddy** karena otomatis menyajikan file `.br` atau `.gz` ke browser tanpa perlu ekstraksi manual.
 
     *Buat file `Caddyfile` di root project:*
     ```caddy
     :8080
     root * public
     file_server
-    encode gzip
+    encode gzip zstd br
     ```
 
     *Jalankan:*
@@ -41,12 +41,12 @@ my-app/
 ├── Caddyfile       # Konfigurasi Server
 ├── public/
 │   ├── index.html  # Titik masuk
-│   ├── zeno.wasm.gz # Engine (Jangan diekstrak!)
+│   ├── zeno.wasm.br # Engine (Brotli Compressed)
 │   └── wasm_exec.js
 ```
 
-### 3. Mengapa Caddy?
-Server biasa (seperti `python http.server`) tidak otomatis mengirim header `Content-Encoding: gzip`. Jika Anda tidak pakai Caddy, Anda harus mengekstrak `zeno.wasm.gz` menjadi `zeno.wasm` (15MB) yang akan membuat loading awal terasa lambat. Dengan Caddy, browser hanya mendownload 3.5MB.
+### 3. Mengapa Brotli?
+Format **Brotli (`.br`)** memberikan kompresi lebih baik (sekitar 15-20% lebih kecil dari Gzip). Dengan ukuran file < 3MB, aplikasi ZenoWasm dimuat hampir instan di jaringan modern.
 
 ---
 
@@ -371,7 +371,7 @@ js.log: 'Pesan debug'
 
 ## 🚀 Tips Performa
 
-1.  **Gunakan Caddy**: Selalu gunakan server yang mendukung kompresi (Gzip/Brotli) agar user tidak perlu mendownload file 15MB penuh.
+1.  **Gunakan Caddy**: Selalu gunakan server yang mendukung kompresi (Brotli/Gzip) agar user tidak perlu mendownload file 15MB penuh.
 2.  **Lazy Load Data**: Render kerangka halaman (skeleton) dulu, lalu panggil `http.fetch` di dalam rute untuk mengisi data.
 
 Selamat berkarya dengan **ZenoWasm**! 🎉

@@ -2,7 +2,7 @@
 
 root * public
 file_server
-encode gzip zstd
+encode gzip zstd br
 
 header / {
 	# Cache static assets for 1 year

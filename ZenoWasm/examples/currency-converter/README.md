@@ -18,8 +18,7 @@ Pastikan Anda berada di dalam folder `currency-converter`.
 ### 2. Download Engine
 Unduh 2 file inti ke dalam folder `public/`:
 
-*   **zeno.wasm** (Engine): [Download Disini](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/zeno.wasm.gz)
-    *   *Catatan: File ini terkompresi (.gz). Harap ekstrak menjadi `zeno.wasm`.*
+*   **zeno.wasm.gz** (Engine): [Download Disini](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/zeno.wasm.gz)
 *   **wasm_exec.js** (Loader): [Download Disini](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/wasm_exec.js)
 
 **Cara Cepat via Terminal (Linux/Mac/Git Bash):**
@@ -27,21 +26,17 @@ Unduh 2 file inti ke dalam folder `public/`:
 cd public
 curl -L -O https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/zeno.wasm.gz
 curl -L -O https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/wasm_exec.js
-gzip -d zeno.wasm.gz
 ```
 
-### 3. Jalankan Server
-Jalankan web server statis di folder `public/`.
+### 3. Jalankan Server (Wajib Mendukung Kompresi)
+Untuk performa terbaik (dan agar tidak perlu ekstrak file `.gz`), gunakan **Caddy**.
 
 ```bash
-# Menggunakan Python
-python3 -m http.server -d public 8080
-
-# Atau Node.js (http-server)
-npx http-server public
+# Di folder project ini (ada file Caddyfile di root repo, atau buat sendiri)
+caddy run
 ```
 
-Buka browser di `http://localhost:8080`.
+Atau jika menggunakan `python3 -m http.server`, Anda **HARUS** mengekstrak file `.gz` terlebih dahulu menjadi `zeno.wasm` (15MB).
 
 ---
 
@@ -72,9 +67,11 @@ Jika Anda ingin mengubah website ini menjadi aplikasi Android native.
 ---
 
 ## 🛠️ Build Manual (Untuk Developer Go)
-Jika Anda ingin mengkompilasi ulang engine dari source code (misal: habis edit `main.go`).
+Jika Anda ingin mengkompilasi ulang engine dari source code.
 
 ```bash
 # Dari root repo
-GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o ZenoWasm/examples/currency-converter/public/zeno.wasm ZenoWasm/main.go
+cd ZenoWasm
+./build.sh # Akan menghasilkan zeno.wasm dan zeno.wasm.br
+cp public/zeno.wasm* examples/currency-converter/public/
 ```
