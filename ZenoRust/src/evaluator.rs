@@ -9,6 +9,9 @@ use sqlx::{AnyPool, Row, Column, TypeInfo};
 use reqwest::{Method, header::{HeaderMap, HeaderName, HeaderValue}};
 use std::str::FromStr;
 use serde::Serialize;
+use tokio::fs;
+use std::path::Path;
+use chrono::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -229,11 +232,143 @@ impl Evaluator {
             Value::String(format!("{}", args[0]))
         })));
 
+        self.env.set("str_concat".to_string(), Value::Builtin("str_concat".to_string(), |args, _, _| Box::pin(async move {
+            let mut result = String::new();
+            for arg in args {
+                result.push_str(&format!("{}", arg));
+            }
+            Value::String(result)
+        })));
+
+        self.env.set("str_replace".to_string(), Value::Builtin("str_replace".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() < 3 { return Value::Null; }
+            let s = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let from = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let to = match &args[2] { Value::String(s) => s.clone(), _ => return Value::Null };
+            Value::String(s.replace(&from, &to))
+        })));
+
+        self.env.set("coalesce".to_string(), Value::Builtin("coalesce".to_string(), |args, _, _| Box::pin(async move {
+            for arg in args {
+                if let Value::Null = arg { continue; }
+                return arg;
+            }
+            Value::Null
+        })));
+
+        self.env.set("sleep".to_string(), Value::Builtin("sleep".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            if let Value::Integer(ms) = args[0] {
+                tokio::time::sleep(std::time::Duration::from_millis(ms as u64)).await;
+            }
+            Value::Null
+        })));
+
+        self.env.set("time_now".to_string(), Value::Builtin("time_now".to_string(), |_, _, _| Box::pin(async move {
+            let now = Local::now();
+            Value::String(now.to_rfc3339())
+        })));
+
+        self.env.set("time_format".to_string(), Value::Builtin("time_format".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() < 2 { return Value::Null; }
+            let time_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let format_str = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
+
+            if let Ok(dt) = DateTime::parse_from_rfc3339(&time_str) {
+                return Value::String(dt.format(&format_str).to_string());
+            }
+            Value::Null
+        })));
+
         self.env.set("push".to_string(), Value::Builtin("push".to_string(), |args, _, _| Box::pin(async move {
             if args.len() != 2 { return Value::Null; }
             if let Value::Array(arr) = &args[0] {
                 arr.lock().unwrap().push(args[1].clone());
                 return Value::Array(arr.clone());
+            }
+            Value::Null
+        })));
+
+        self.env.set("arr_join".to_string(), Value::Builtin("arr_join".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() < 2 { return Value::Null; }
+            if let Value::Array(arr) = &args[0] {
+                let sep = match &args[1] { Value::String(s) => s.clone(), _ => ",".to_string() };
+                let vec = arr.lock().unwrap();
+                let strings: Vec<String> = vec.iter().map(|v| format!("{}", v)).collect();
+                return Value::String(strings.join(&sep));
+            }
+            Value::Null
+        })));
+
+        self.env.set("arr_pop".to_string(), Value::Builtin("arr_pop".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            if let Value::Array(arr) = &args[0] {
+                return arr.lock().unwrap().pop().unwrap_or(Value::Null);
+            }
+            Value::Null
+        })));
+
+        self.env.set("file_read".to_string(), Value::Builtin("file_read".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            match fs::read_to_string(&path_str).await {
+                Ok(content) => Value::String(content),
+                Err(_) => Value::Null
+            }
+        })));
+
+        self.env.set("file_write".to_string(), Value::Builtin("file_write".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 2 { return Value::Null; }
+            let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let content = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
+
+            // Security check
+            let path = Path::new(&path_str);
+            if let Some(ext) = path.extension() {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                if (ext_str == "zl" || ext_str == "env") && std::env::var("APP_ENV").unwrap_or_default() != "development" {
+                    eprintln!("Security Error: Cannot write to sensitive files in production");
+                    return Value::Null;
+                }
+            }
+
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent).await;
+            }
+
+            match fs::write(&path_str, content).await {
+                Ok(_) => Value::Boolean(true),
+                Err(_) => Value::Boolean(false)
+            }
+        })));
+
+        self.env.set("file_delete".to_string(), Value::Builtin("file_delete".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            match fs::remove_file(&path_str).await {
+                Ok(_) => Value::Boolean(true),
+                Err(_) => Value::Boolean(false)
+            }
+        })));
+
+        self.env.set("dir_create".to_string(), Value::Builtin("dir_create".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            match fs::create_dir_all(&path_str).await {
+                Ok(_) => Value::Boolean(true),
+                Err(_) => Value::Boolean(false)
+            }
+        })));
+
+        self.env.set("map_keys".to_string(), Value::Builtin("map_keys".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            if let Value::Map(map) = &args[0] {
+                let m = map.lock().unwrap();
+                let mut keys = Vec::new();
+                for k in m.keys() {
+                    keys.push(Value::String(k.clone()));
+                }
+                return Value::Array(Arc::new(Mutex::new(keys)));
             }
             Value::Null
         })));

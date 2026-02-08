@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 async-recursion = "1.1.1"
 axum = { version = "0.8.8", optional = true }
+chrono = "0.4.43"
 dotenvy = "0.15.7"
 futures = "0.3.31"
 getrandom = { version = "0.2", features = ["js"] }
