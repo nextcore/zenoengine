@@ -16,6 +16,7 @@ use uuid::Uuid;
 use rand::Rng; // For .random()
 use regex::Regex;
 use base64::prelude::*;
+use bcrypt::{hash, verify, DEFAULT_COST};
 
 type BuiltinFn = fn(Vec<Value>, Env, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>;
 
@@ -496,6 +497,32 @@ pub fn register(env: &mut Env) {
         hasher.update(s);
         let result = hasher.finalize();
         Value::String(hex::encode(result))
+    })));
+
+    env.set("password_hash".to_string(), Value::Builtin("password_hash".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() < 1 { return Value::Null; }
+        let password = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+        let cost = if args.len() > 1 {
+            match &args[1] { Value::Integer(i) => *i as u32, _ => DEFAULT_COST }
+        } else {
+            DEFAULT_COST
+        };
+
+        match hash(&password, cost) {
+            Ok(h) => Value::String(h),
+            Err(_) => Value::Null
+        }
+    })));
+
+    env.set("password_verify".to_string(), Value::Builtin("password_verify".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 2 { return Value::Boolean(false); }
+        let password = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+        let hash_str = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+
+        match verify(&password, &hash_str) {
+            Ok(valid) => Value::Boolean(valid),
+            Err(_) => Value::Boolean(false)
+        }
     })));
 
     env.set("uuid_v4".to_string(), Value::Builtin("uuid_v4".to_string(), |_, _, _| Box::pin(async move {
