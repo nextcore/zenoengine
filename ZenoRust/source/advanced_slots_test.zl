@@ -1,0 +1,28 @@
+print("--- Advanced Slots Test ---");
+
+// Regex
+let text = "Hello 123 World";
+print("Regex Match 123: " + str(regex_match("\\d+", text)));
+let replaced = regex_replace("\\d+", text, "Zeno");
+print("Regex Replace: " + replaced);
+
+// Encoding
+let raw = "Hello Zeno";
+let encoded = base64_encode(raw);
+print("Base64 Encoded: " + encoded);
+print("Base64 Decoded: " + base64_decode(encoded));
+
+let hexed = hex_encode(raw);
+print("Hex Encoded: " + hexed);
+print("Hex Decoded: " + hex_decode(hexed));
+
+// Validator
+let email1 = "test@example.com";
+let email2 = "invalid-email";
+print("Is Email 1: " + str(is_email(email1)));
+print("Is Email 2: " + str(is_email(email2)));
+
+let num1 = "123.45";
+let num2 = "abc";
+print("Is Numeric 1: " + str(is_numeric(num1)));
+print("Is Numeric 2: " + str(is_numeric(num2)));
