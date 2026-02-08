@@ -23,7 +23,7 @@ ZenoRust is now a production-ready replacement for the core ZenoEngine (Go), cap
 | **Crypto/Security** | ✅ 100% | SHA256, UUID, Random, Base64, Hex, **Bcrypt**. | |
 | **Utilities** | ✅ 100% | String Utils, Regex (`match`, `replace`), Time, Env, Coalesce. | |
 | **Validation** | ✅ 100% | Email, Numeric. | |
-| **Ecosystem** | ❌ 10% | None. | Missing WASM/Sidecar Plugin system. |
+| **Ecosystem** | ✅ 80% | Sidecar (JSON-RPC), WASM (WASI Preview 1). | Basic WASM support. |
 
 ## Detailed Breakdown
 
@@ -39,14 +39,15 @@ ZenoRust is now a production-ready replacement for the core ZenoEngine (Go), cap
 4.  **Security:**
     *   Production mode (`APP_ENV`) prevents overwriting source code.
     *   Middleware automatically adds security headers.
+5.  **Plugin System:**
+    *   **Sidecar:** Full JSON-RPC support for external process plugins via Stdin/Stdout.
+    *   **WASM:** Basic support for loading and executing WASI modules (Preview 1).
 
 ### 🚧 Pending Features (For 100% Parity)
 1.  **ORM / Query Builder:**
     *   The Go version allows `db.table("users").where("id", 1).first()`.
     *   ZenoRust currently requires `db_query("SELECT * FROM users WHERE id = ?", [1])`.
-2.  **Plugin System:**
-    *   Support for loading WASM modules or communicating with local sidecar processes is not yet implemented.
-3.  **Specialized Libs:**
+2.  **Specialized Libs:**
     *   Image processing, Mail sending, and Excel generation slots are not yet ported.
 
 ## Next Steps Recommendations

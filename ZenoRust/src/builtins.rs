@@ -17,6 +17,21 @@ use rand::Rng; // For .random()
 use regex::Regex;
 use base64::prelude::*;
 use bcrypt::{hash, verify, DEFAULT_COST};
+use crate::plugins::sidecar::SidecarManager;
+use crate::plugins::wasm::WasmManager;
+use std::sync::OnceLock;
+
+// Global Sidecar Manager (Lazy Init)
+static SIDECAR_MANAGER: OnceLock<Arc<SidecarManager>> = OnceLock::new();
+static WASM_MANAGER: OnceLock<Arc<WasmManager>> = OnceLock::new();
+
+fn get_sidecar_manager() -> Arc<SidecarManager> {
+    SIDECAR_MANAGER.get_or_init(|| Arc::new(SidecarManager::new())).clone()
+}
+
+fn get_wasm_manager() -> Arc<WasmManager> {
+    WASM_MANAGER.get_or_init(|| Arc::new(WasmManager::new().expect("Failed to init WASM"))).clone()
+}
 
 type BuiltinFn = fn(Vec<Value>, Env, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>;
 
@@ -562,6 +577,77 @@ pub fn register(env: &mut Env) {
             sub_evaluator.eval(statements).await;
         }
         Value::Null
+    })));
+
+    // --- PLUGINS (Sidecar) ---
+    env.set("plugin_load_sidecar".to_string(), Value::Builtin("plugin_load_sidecar".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 3 { return Value::Boolean(false); }
+        let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+        let binary = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+        let cwd = match &args[2] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+
+        let manager = get_sidecar_manager();
+        match manager.load_plugin(name, binary, cwd).await {
+            Ok(_) => Value::Boolean(true),
+            Err(e) => {
+                eprintln!("Plugin Load Error: {}", e);
+                Value::Boolean(false)
+            }
+        }
+    })));
+
+    env.set("plugin_call".to_string(), Value::Builtin("plugin_call".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 3 { return Value::Null; }
+        let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+        let method = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
+        // params handling: convert Value to serde_json::Value
+        // For simple test, we pass args[2] assuming it is a Map or String
+        let params_val = args[2].clone();
+
+        // Helper to convert Value -> serde_json::Value
+        // We rely on Serialize implementation of Value
+        let params_json = serde_json::to_value(&params_val).unwrap_or(serde_json::Value::Null);
+
+        let manager = get_sidecar_manager();
+        match manager.call(&name, &method, params_json).await {
+            Ok(v) => crate::evaluator::json_to_value(v),
+            Err(e) => {
+                eprintln!("Plugin Call Error: {}", e);
+                Value::Null
+            }
+        }
+    })));
+
+    // --- WASM ---
+    env.set("wasm_load".to_string(), Value::Builtin("wasm_load".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 2 { return Value::Boolean(false); }
+        let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+        let path = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+
+        let manager = get_wasm_manager();
+        match manager.load_plugin(name, path).await {
+            Ok(_) => Value::Boolean(true),
+            Err(e) => {
+                eprintln!("WASM Load Error: {}", e);
+                Value::Boolean(false)
+            }
+        }
+    })));
+
+    env.set("wasm_call".to_string(), Value::Builtin("wasm_call".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 2 { return Value::Null; }
+        let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+        let func = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
+        let params = serde_json::Value::Null; // Params not fully implemented for MVP WASM
+
+        let manager = get_wasm_manager();
+        match manager.call(&name, &func, params).await {
+            Ok(_) => Value::Boolean(true), // Returns boolean success for void calls
+            Err(e) => {
+                eprintln!("WASM Call Error: {}", e);
+                Value::Null
+            }
+        }
     })));
 
     // --- ROUTER ---
