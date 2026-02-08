@@ -24,12 +24,12 @@ import (
 // Global plugin manager for cleanup
 var globalPluginManager *wasm.PluginManager
 
-// RegisterWASMPluginSlots loads and registers all WASM plugins
-func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager) {
-	// Check if WASM plugins are enabled
+// RegisterPluginSlots loads and registers all plugins (WASM & Sidecar)
+func RegisterPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager) {
+	// Check if plugins are enabled
 	enabled := os.Getenv("ZENO_PLUGINS_ENABLED")
 	if enabled != "true" && enabled != "1" {
-		slog.Debug("WASM plugins disabled", "env", "ZENO_PLUGINS_ENABLED")
+		slog.Debug("Plugins disabled", "env", "ZENO_PLUGINS_ENABLED")
 		return
 	}
 
@@ -69,7 +69,7 @@ func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DB
 			eng.Register(slotName, func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 				// Inject scope into context for host functions
 				ctx = context.WithValue(ctx, "scope", scope)
-				return executeWASMSlot(ctx, pm, pluginName, slotName, node, scope)
+				return executePluginSlot(ctx, pm, pluginName, slotName, node, scope)
 			}, engine.SlotMeta{
 				Description: slot.Description,
 				Example:     slot.Example,
@@ -81,7 +81,7 @@ func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DB
 	}
 
 	if totalSlots > 0 {
-		slog.Info("🔌 WASM plugins registered",
+		slog.Info("🔌 Plugins registered",
 			"plugins", len(plugins),
 			"slots", totalSlots)
 	}
@@ -126,15 +126,15 @@ func RegisterWASMPluginSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DB
 	})
 }
 
-// CleanupWASMPlugins gracefully shuts down all WASM plugins
+// CleanupPlugins gracefully shuts down all plugins
 // This should be called during application shutdown
-func CleanupWASMPlugins() {
+func CleanupPlugins() {
 	if globalPluginManager != nil {
-		slog.Info("🔌 Cleaning up WASM plugins...")
+		slog.Info("🔌 Cleaning up plugins...")
 		if err := globalPluginManager.Close(); err != nil {
-			slog.Error("Failed to cleanup WASM plugins", "error", err)
+			slog.Error("Failed to cleanup plugins", "error", err)
 		} else {
-			slog.Info("✅ WASM plugins cleaned up")
+			slog.Info("✅ Plugins cleaned up")
 		}
 		globalPluginManager = nil
 	}
@@ -146,15 +146,15 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 	pm.SetHostCallback("log", func(ctx context.Context, level, message string) {
 		switch level {
 		case "debug":
-			slog.Debug("[WASM Plugin] " + message)
+			slog.Debug("[Plugin] " + message)
 		case "info":
-			slog.Info("[WASM Plugin] " + message)
+			slog.Info("[Plugin] " + message)
 		case "warn":
-			slog.Warn("[WASM Plugin] " + message)
+			slog.Warn("[Plugin] " + message)
 		case "error":
-			slog.Error("[WASM Plugin] " + message)
+			slog.Error("[Plugin] " + message)
 		default:
-			slog.Info("[WASM Plugin] " + message)
+			slog.Info("[Plugin] " + message)
 		}
 	})
 
@@ -293,12 +293,6 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 			return nil, fmt.Errorf("scope access not available in this context")
 		}
 
-		// Check plugin permission (via context)
-		pluginName, _ := ctx.Value("pluginName").(string)
-		if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "read") {
-			return nil, fmt.Errorf("plugin %s does not have scope read permission", pluginName)
-		}
-
 		val, found := scope.Get(key)
 		if !found {
 			return nil, fmt.Errorf("variable $%s not found", key)
@@ -313,19 +307,12 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 			return fmt.Errorf("scope access not available in this context")
 		}
 
-		pluginName, _ := ctx.Value("pluginName").(string)
-		if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "write") {
-			return fmt.Errorf("plugin %s does not have scope write permission", pluginName)
-		}
-
 		scope.Set(key, value)
 		return nil
 	})
 
 	// File read callback
 	pm.SetHostCallback("file_read", func(ctx context.Context, path string) (string, error) {
-		// Note: Permission checking happens in executeWASMSlot context
-		// For now, we allow reading from safe directories only
 		// Clean and validate path
 		cleanPath := filepath.Clean(path)
 		
@@ -363,16 +350,12 @@ func setupHostCallbacks(pm *wasm.PluginManager, eng *engine.Engine, dbMgr *dbman
 
 	// Environment variable callback
 	pm.SetHostCallback("env_get", func(ctx context.Context, key string) string {
-		pluginName, _ := ctx.Value("pluginName").(string)
-		if pluginName != "" && !pm.CheckPermission(pluginName, "env", key) {
-			return ""
-		}
 		return os.Getenv(key)
 	})
 }
 
-// executeWASMSlot executes a WASM plugin slot
-func executeWASMSlot(ctx context.Context, pm *wasm.PluginManager, pluginName, slotName string, node *engine.Node, scope *engine.Scope) error {
+// executePluginSlot executes a plugin slot (WASM or Sidecar)
+func executePluginSlot(ctx context.Context, pm *wasm.PluginManager, pluginName, slotName string, node *engine.Node, scope *engine.Scope) error {
 	// Inject plugin name into context for permission checking in host functions
 	ctx = context.WithValue(ctx, "pluginName", pluginName)
 

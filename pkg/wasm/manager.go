@@ -330,43 +330,87 @@ func (pm *PluginManager) SetHostCallback(name string, callback interface{}) erro
 		}
 	case "db_query":
 		if cb, ok := callback.(func(context.Context, string, string, map[string]interface{}) ([]map[string]interface{}, error)); ok {
-			pm.hostFunctions.OnDBQuery = cb
+			pm.hostFunctions.OnDBQuery = func(ctx context.Context, connection, sql string, params map[string]interface{}) ([]map[string]interface{}, error) {
+				pluginName, _ := ctx.Value("pluginName").(string)
+				if pluginName != "" && !pm.CheckPermission(pluginName, "database", connection) {
+					return nil, fmt.Errorf("plugin %s does not have permission to access database: %s", pluginName, connection)
+				}
+				return cb(ctx, connection, sql, params)
+			}
 		} else {
 			return fmt.Errorf("invalid callback type for db_query")
 		}
 	case "http_request":
 		if cb, ok := callback.(func(context.Context, string, string, map[string]interface{}, map[string]interface{}) (map[string]interface{}, error)); ok {
-			pm.hostFunctions.OnHTTPRequest = cb
+			pm.hostFunctions.OnHTTPRequest = func(ctx context.Context, method, url string, headers, body map[string]interface{}) (map[string]interface{}, error) {
+				pluginName, _ := ctx.Value("pluginName").(string)
+				if pluginName != "" && !pm.CheckPermission(pluginName, "network", url) {
+					return nil, fmt.Errorf("plugin %s does not have permission to access network: %s", pluginName, url)
+				}
+				return cb(ctx, method, url, headers, body)
+			}
 		} else {
 			return fmt.Errorf("invalid callback type for http_request")
 		}
 	case "scope_get":
 		if cb, ok := callback.(func(context.Context, string) (interface{}, error)); ok {
-			pm.hostFunctions.OnScopeGet = cb
+			pm.hostFunctions.OnScopeGet = func(ctx context.Context, key string) (interface{}, error) {
+				pluginName, _ := ctx.Value("pluginName").(string)
+				if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "read") {
+					return nil, fmt.Errorf("plugin %s does not have scope read permission", pluginName)
+				}
+				return cb(ctx, key)
+			}
 		} else {
 			return fmt.Errorf("invalid callback type for scope_get")
 		}
 	case "scope_set":
 		if cb, ok := callback.(func(context.Context, string, interface{}) error); ok {
-			pm.hostFunctions.OnScopeSet = cb
+			pm.hostFunctions.OnScopeSet = func(ctx context.Context, key string, val interface{}) error {
+				pluginName, _ := ctx.Value("pluginName").(string)
+				if pluginName != "" && !pm.CheckPermission(pluginName, "scope", "write") {
+					return fmt.Errorf("plugin %s does not have scope write permission", pluginName)
+				}
+				return cb(ctx, key, val)
+			}
 		} else {
 			return fmt.Errorf("invalid callback type for scope_set")
 		}
 	case "file_read":
 		if cb, ok := callback.(func(context.Context, string) (string, error)); ok {
-			pm.hostFunctions.OnFileRead = cb
+			pm.hostFunctions.OnFileRead = func(ctx context.Context, path string) (string, error) {
+				cleanPath := filepath.Clean(path)
+				pluginName, _ := ctx.Value("pluginName").(string)
+				if pluginName != "" && !pm.CheckPermission(pluginName, "filesystem", cleanPath) {
+					return "", fmt.Errorf("plugin %s does not have permission to read file: %s", pluginName, cleanPath)
+				}
+				return cb(ctx, path)
+			}
 		} else {
 			return fmt.Errorf("invalid callback type for file_read")
 		}
 	case "file_write":
 		if cb, ok := callback.(func(context.Context, string, string) error); ok {
-			pm.hostFunctions.OnFileWrite = cb
+			pm.hostFunctions.OnFileWrite = func(ctx context.Context, path, content string) error {
+				cleanPath := filepath.Clean(path)
+				pluginName, _ := ctx.Value("pluginName").(string)
+				if pluginName != "" && !pm.CheckPermission(pluginName, "filesystem", cleanPath) {
+					return fmt.Errorf("plugin %s does not have permission to write file: %s", pluginName, cleanPath)
+				}
+				return cb(ctx, path, content)
+			}
 		} else {
 			return fmt.Errorf("invalid callback type for file_write")
 		}
 	case "env_get":
 		if cb, ok := callback.(func(context.Context, string) string); ok {
-			pm.hostFunctions.OnEnvGet = cb
+			pm.hostFunctions.OnEnvGet = func(ctx context.Context, key string) string {
+				pluginName, _ := ctx.Value("pluginName").(string)
+				if pluginName != "" && !pm.CheckPermission(pluginName, "env", key) {
+					return ""
+				}
+				return cb(ctx, key)
+			}
 		} else {
 			return fmt.Errorf("invalid callback type for env_get")
 		}

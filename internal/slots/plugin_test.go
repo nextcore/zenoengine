@@ -13,24 +13,24 @@ type MockPluginManager struct {
 	// Add fields to track calls if needed
 }
 
-func TestWASMSlots(t *testing.T) {
+func TestPluginSlots(t *testing.T) {
 	// Since we cannot easily mock the internal PluginManager logic which is deeply coupled
-	// with wazero and file system, and RegisterWASMPluginSlots depends on finding actual plugins on disk,
+	// with wazero and file system, and RegisterPluginSlots depends on finding actual plugins on disk,
 	// we will focus on testing the parameter parsing logic and context injection helpers
 	// which are the "slot" part of the logic.
 
-	// However, executeWASMSlot is not exported.
+	// However, executePluginSlot is not exported.
 	// We might need to rely on integration tests or simply verify that
 	// the registration function doesn't panic when disabled.
 
 	eng := engine.NewEngine()
 
-	t.Run("RegisterWASMPluginSlots disabled by default", func(t *testing.T) {
+	t.Run("RegisterPluginSlots disabled by default", func(t *testing.T) {
 		// Ensure env var is unset
 		t.Setenv("ZENO_PLUGINS_ENABLED", "false")
 
 		// Should not panic and not register anything significant if no plugins
-		RegisterWASMPluginSlots(eng, nil, nil)
+		RegisterPluginSlots(eng, nil, nil)
 
 		// No way to assert internal state easily without side effects,
 		// but passing here means no crash.

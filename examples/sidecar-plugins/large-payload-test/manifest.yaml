@@ -1,0 +1,9 @@
+name: large-payload-test
+version: 1.0.0
+type: sidecar
+binary: test-plugin
+sidecar:
+  protocol: json-rpc
+permissions:
+  network: []
+  filesystem: []

@@ -20,7 +20,7 @@ type SidecarPlugin struct {
 	workDir      string
 	cmd          *exec.Cmd
 	stdin        io.WriteCloser
-	stdout       *bufio.Scanner
+	stdout       *json.Decoder
 	mu           sync.Mutex
 	initialized  bool
 	cancel       context.CancelFunc
@@ -75,7 +75,7 @@ func (p *SidecarPlugin) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.stdout = bufio.NewScanner(stdoutPipe)
+	p.stdout = json.NewDecoder(stdoutPipe)
 
 	// Capture StdErr
 	stderrPipe, err := p.cmd.StderrPipe()
@@ -266,22 +266,17 @@ func (p *SidecarPlugin) call(ctx context.Context, method string, params interfac
 }
 
 func (p *SidecarPlugin) commLoop(ctx context.Context) {
-	for p.stdout.Scan() {
-		line := p.stdout.Bytes()
-
-		// Try legacy parse first (for simple plugins that only output one JSON line per request)
-		var legacyResp PluginResponse
-		if err := json.Unmarshal(line, &legacyResp); err == nil && (legacyResp.Success || legacyResp.Error != "") {
-			p.mu.Lock()
-			if ch, ok := p.pendingCalls["legacy"]; ok {
-				delete(p.pendingCalls, "legacy")
-				ch <- &legacyResp
-				p.mu.Unlock()
-				continue
+	for {
+		// Use json.Decoder to stream JSON objects (handles >64KB)
+		var raw json.RawMessage
+		if err := p.stdout.Decode(&raw); err != nil {
+			if err != io.EOF {
+				slog.Error("⚠️ Sidecar decode error (terminating loop)", "error", err, "plugin", p.pluginName)
 			}
-			p.mu.Unlock()
+			break
 		}
 
+		// Parse structure
 		var msg struct {
 			Type     string          `json:"type"`
 			ID       string          `json:"id"`
@@ -292,22 +287,41 @@ func (p *SidecarPlugin) commLoop(ctx context.Context) {
 			Success  bool            `json:"success"`
 		}
 
-		if err := json.Unmarshal(line, &msg); err != nil {
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			slog.Error("⚠️ Sidecar invalid JSON message", "error", err)
 			continue
 		}
 
-		switch msg.Type {
-		case "host_call":
-			go p.handleHostCall(ctx, msg.ID, msg.Function, msg.Params)
-		case "guest_response":
-			p.mu.Lock()
-			if ch, ok := p.pendingCalls[msg.ID]; ok {
-				delete(p.pendingCalls, msg.ID)
-				ch <- &PluginResponse{
-					Success: msg.Success,
-					Data:    decodeRaw(msg.Data),
-					Error:   msg.Error,
+		// Handle Standard Messages
+		if msg.Type != "" {
+			switch msg.Type {
+			case "host_call":
+				go p.handleHostCall(ctx, msg.ID, msg.Function, msg.Params)
+			case "guest_response":
+				p.mu.Lock()
+				if ch, ok := p.pendingCalls[msg.ID]; ok {
+					delete(p.pendingCalls, msg.ID)
+					ch <- &PluginResponse{
+						Success: msg.Success,
+						Data:    decodeRaw(msg.Data),
+						Error:   msg.Error,
+					}
 				}
+				p.mu.Unlock()
+			}
+			continue
+		}
+
+		// Handle Legacy Messages (Implicit type, usually plugin_init response)
+		// Legacy format: {"success": true, "data": {...}, "error": "..."}
+		var legacyResp PluginResponse
+		if err := json.Unmarshal(raw, &legacyResp); err == nil {
+			p.mu.Lock()
+			if ch, ok := p.pendingCalls["legacy"]; ok {
+				delete(p.pendingCalls, "legacy")
+				ch <- &legacyResp
+				p.mu.Unlock()
+				continue
 			}
 			p.mu.Unlock()
 		}
