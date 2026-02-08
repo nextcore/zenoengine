@@ -1,0 +1,20 @@
+print("--- ZenoBlade Test ---");
+
+let data = {
+    "name": "Zeno",
+    "isAdmin": true,
+    "role": "SuperUser"
+};
+
+let tpl = "<h1>Hello {{ name }}</h1>\n@if(isAdmin) \n  <button>Admin Panel</button>\n  <p>Role: {{ role }}</p>\n@else \n  <p>Welcome User</p>\n@endif";
+
+print("Template:");
+print(tpl);
+print("\nRendered Output:");
+let output = view(tpl, data);
+print(output);
+
+print("\n--- Nested If Test ---");
+let data2 = {"score": 85};
+let tpl2 = "Score: {{ score }} - Grade: @if(score > 90) A @else @if(score > 80) B @else C @endif @endif";
+print(view(tpl2, data2));
