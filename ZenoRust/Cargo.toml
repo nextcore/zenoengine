@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 async-recursion = "1.1.1"
 axum = { version = "0.8.8", optional = true }
 base64 = "0.22.1"
+bcrypt = "0.18.0"
 chrono = "0.4.43"
 dotenvy = "0.15.7"
 futures = "0.3.31"

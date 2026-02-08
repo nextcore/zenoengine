@@ -1,0 +1,11 @@
+print("--- Bcrypt Test ---");
+
+let password = "super_secret_password";
+let hashed = password_hash(password);
+print("Generated Hash: " + hashed);
+
+let valid = password_verify(password, hashed);
+print("Verify Correct: " + str(valid));
+
+let invalid = password_verify("wrong_password", hashed);
+print("Verify Wrong: " + str(invalid));
