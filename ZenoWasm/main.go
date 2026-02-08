@@ -27,6 +27,8 @@ func main() {
 	adapter.RegisterJSSlots(eng)
 	adapter.RegisterFetchSlots(eng)
 	adapter.RegisterMathSlots(eng)
+	adapter.RegisterStorageSlots(eng)
+	adapter.RegisterAuthSlots(eng)
 
 	// Expose functions to JS
 	js.Global().Set("zenoRegisterTemplate", js.FuncOf(registerTemplate))
@@ -50,11 +52,14 @@ func main() {
 }
 
 // Simple Auth State for Middleware Demo
+// Deprecated: Use auth.login/logout slots instead
 var isAuthenticated bool = false
 
 func setAuthState(this js.Value, args []js.Value) interface{} {
 	if len(args) > 0 {
 		isAuthenticated = args[0].Bool()
+		// Also sync to storage for compatibility?
+		// For now just keep in memory for legacy demo parts
 		fmt.Println("Auth State Changed:", isAuthenticated)
 	}
 	return nil
@@ -112,7 +117,8 @@ func navigate(this js.Value, args []js.Value) interface{} {
 	// === MIDDLEWARE CHECK ===
 	for _, mw := range route.Middleware {
 		if mw == "auth" {
-			if !isAuthenticated {
+			// Check Persistent Auth OR Memory Auth (Legacy)
+			if !adapter.CheckAuth() && !isAuthenticated {
 				fmt.Println("Middleware Blocked: Auth Required. Redirecting to /login")
 				// Redirect to login
 				// Prevent loop if login itself requires auth (bad config)
@@ -137,7 +143,7 @@ func navigate(this js.Value, args []js.Value) interface{} {
 		scope.Set(k, v)
 	}
 	// Inject Auth State
-	scope.Set("auth_check", isAuthenticated)
+	scope.Set("auth_check", adapter.CheckAuth() || isAuthenticated)
 
 	// Execute Handler
 	if err := eng.Execute(ctx, route.Handler, scope); err != nil {

@@ -22,7 +22,7 @@
 								<a href="/" class="hover:underline">Home</a>
 								<a href="/finance" class="hover:underline">Finance</a>
 								<a href="/fetch" class="hover:underline">Fetch</a>
-								<a href="/interop" class="hover:underline">Interop</a>
+								<a href="/dashboard" class="hover:underline font-semibold text-yellow-300">Dashboard</a>
 
 								<button class="px-3 py-1 text-sm bg-white text-indigo-600 rounded"
 								        onclick="toggleAuth()">
@@ -58,12 +58,12 @@
 								<p>Financial calculations using Decimal types.</p>
 							</div>
 							<div class="p-6 bg-white rounded-lg shadow">
-								<h3 class="font-bold text-xl mb-2">🛡️ Secure</h3>
-								<p>Supports Route Guards (Middleware) to protect pages.</p>
+								<h3 class="font-bold text-xl mb-2">💾 Persistent</h3>
+								<p>Supports LocalStorage and Session Persistence.</p>
 							</div>
 							<div class="p-6 bg-white rounded-lg shadow">
-								<h3 class="font-bold text-xl mb-2">🎈 Lightweight</h3>
-								<p>Zero dependencies. No Node.js.</p>
+								<h3 class="font-bold text-xl mb-2">🌐 Native Fetch</h3>
+								<p>Async HTTP client built-in for data fetching.</p>
 							</div>
 						</div>
 					</div>
@@ -92,8 +92,6 @@
 						<div class="p-4 bg-gray-100 rounded border border-gray-300">
 							<div class="flex justify-between mb-2">
 								<span>Subtotal:</span>
-								<!-- Logic calculated by Zeno on Render or via signals if we implemented signal expressions.
-								     For now, let's use a button to trigger precise calculation via Zeno logic. -->
 								<span data-text="$subtotal">0</span>
 							</div>
 							<div class="flex justify-between mb-2">
@@ -114,22 +112,16 @@
 				@endsection
 			`);
 
-			// Register Calculation Logic
 			zenoRegisterTemplate("calc_action", `
 				do: {
-					# Recieve inputs from params
-					# Use money.calc for precision
-
 					money.calc: $price * $qty { as: $sub }
 					money.calc: $sub * 0.11 { as: $tax_val }
 					money.calc: $sub + $tax_val { as: $tot }
 
-					# Format output
 					money.format: $sub { as: $f_sub }
 					money.format: $tax_val { as: $f_tax }
 					money.format: $tot { as: $f_tot }
 
-					# Update UI via JS
 					js.call: 'updateFinanceUI' { args: [$f_sub, $f_tax, $f_tot] }
 				}
 			`);
@@ -159,21 +151,24 @@
 				@endsection
 			`);
 
-			zenoRegisterTemplate("interop", `
+			zenoRegisterTemplate("dashboard", `
 				@extends('layout')
 				@section('content')
-					<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
-						<h2 class="text-2xl font-bold mb-4">JS Interop Demo</h2>
-						<div class="space-y-4">
-							<div class="p-4 border rounded bg-gray-50">
-								<h3 class="font-bold">1. Call JS Alert</h3>
-								<button class="px-4 py-2 bg-purple-600 text-white rounded"
-								        onclick="zenoNavigate('/run-alert')">
-									Trigger Alert
-								</button>
-							</div>
-						</div>
+					<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4" role="alert">
+						<p class="font-bold">Access Granted</p>
+						<p>You are viewing the protected Dashboard.</p>
 					</div>
+
+					<div class="bg-white p-6 rounded shadow mb-6">
+						<h2 class="text-2xl font-bold mb-4">User Profile</h2>
+						<p><strong>Username:</strong> {{ $user.username }}</p>
+						<p><strong>Role:</strong> {{ $user.role }}</p>
+					</div>
+
+					<button class="px-4 py-2 bg-red-600 text-white rounded"
+					        onclick="zenoNavigate('/action-logout')">
+						Logout
+					</button>
 				@endsection
 			`);
 
@@ -181,11 +176,11 @@
 				@extends('layout')
 				@section('content')
 					<div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md text-center">
-						<h2 class="text-2xl font-bold mb-4 text-red-600">Access Denied</h2>
-						<p class="mb-6">You must login to view that page.</p>
+						<h2 class="text-2xl font-bold mb-4 text-gray-800">Login Required</h2>
+						<p class="mb-6 text-gray-600">Please login to access the dashboard.</p>
 						<button class="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
-						        onclick="toggleAuth(); zenoNavigate('/dashboard')">
-							Login & Go to Dashboard
+						        onclick="zenoNavigate('/action-login')">
+							Login as Admin
 						</button>
 					</div>
 				@endsection
@@ -207,10 +202,35 @@
 						view: 'fetch'
 					}
 				}
-				router.get: '/interop' { view: 'interop' }
 				router.get: '/login' { view: 'login' }
 
-				# Actions
+				# Auth Actions
+				router.get: '/action-login' {
+					do: {
+						# Simulate API login
+						var: $user
+						scope.set: {
+							as: $user
+							val: { username: 'admin', role: 'superuser' }
+						}
+
+						auth.login: {
+							token: 'mock-jwt-token-123'
+							user: $user
+						}
+
+						# Redirect to dashboard
+						js.call: 'zenoNavigate' { args: ['/dashboard'] }
+					}
+				}
+
+				router.get: '/action-logout' {
+					do: {
+						auth.logout
+						js.call: 'zenoNavigate' { args: ['/'] }
+					}
+				}
+
 				router.get: '/do-fetch' {
 					do: {
 						http.fetch: 'https://jsonplaceholder.typicode.com/todos/2' {
@@ -222,18 +242,16 @@
 					}
 				}
 
-				router.get: '/run-alert' {
-					do: {
-						js.call: 'alert' { args: ['Hello from Zeno!'] }
-						view: 'interop'
-					}
-				}
-
 				# Protected Routes
 				router.group: {
 					middleware: 'auth'
 					do: {
-						router.get: '/dashboard' { view: 'home' } # Redirect to home as placeholder
+						router.get: '/dashboard' {
+							do: {
+								auth.user: { as: $user }
+								view: 'dashboard'
+							}
+						}
 					}
 				}
 			`);
@@ -242,12 +260,16 @@
 			console.error(err);
 		});
 
-		// Auth Helper
-		let isAuth = false;
+		// Helper to toggle auth via simple button in navbar (for quick testing)
+		// But real logic is now in /action-login
 		function toggleAuth() {
-			isAuth = !isAuth;
-			zenoSetAuthState(isAuth);
-			zenoNavigate(window.location.pathname);
+			// Check if logged in via storage
+			const token = localStorage.getItem("zeno_auth_token");
+			if (token) {
+				zenoNavigate('/action-logout');
+			} else {
+				zenoNavigate('/action-login');
+			}
 		}
 
 		window.updateSignals = function(todo) {
@@ -255,13 +277,9 @@
 			if(titleEl) titleEl.textContent = todo.title;
 		}
 
-		// Finance Helper
 		window.calculateTotal = function() {
-			// Read signals manually for this demo (or use Datastar store if available)
 			const price = document.querySelector('[data-bind-price]').value;
 			const qty = document.querySelector('[data-bind-qty]').value;
-
-			// Call Zeno Logic
 			const data = JSON.stringify({ price: price, qty: qty });
 			zenoRender("calc_action", data);
 		}
