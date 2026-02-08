@@ -20,8 +20,9 @@ ZenoRust is now a production-ready replacement for the core ZenoEngine (Go), cap
 | **Middleware** | ✅ 100% | IP Blocker, Security Headers, CORS. | |
 | **File System** | ✅ 100% | Read, Write (Secure), Delete, Mkdir. | |
 | **JSON** | ✅ 100% | Parse, Stringify. | |
-| **Crypto/Security** | ✅ 90% | SHA256, UUID, Random, Base64, Hex. | Missing complex hashing (Bcrypt/Argon2). |
-| **Utilities** | ✅ 100% | String Utils, Regex, Time, Env, Coalesce. | |
+| **Crypto/Security** | ✅ 100% | SHA256, UUID, Random, Base64, Hex, **Bcrypt**. | |
+| **Utilities** | ✅ 100% | String Utils, Regex (`match`, `replace`), Time, Env, Coalesce. | |
+| **Validation** | ✅ 100% | Email, Numeric. | |
 | **Ecosystem** | ❌ 10% | None. | Missing WASM/Sidecar Plugin system. |
 
 ## Detailed Breakdown

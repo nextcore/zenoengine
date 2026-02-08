@@ -84,6 +84,7 @@ ZenoLang in ZenoRust supports:
 - `file_read(path)`, `file_write(path, content)`, `file_delete(path)`
 - `base64_encode(str)`, `hex_encode(str)`
 - `hash_sha256(str)`, `uuid_v4()`, `random_int(min, max)`
+- `password_hash(str, cost?)`, `password_verify(str, hash)`
 - `is_email(str)`, `is_numeric(str)`
 - `str_concat`, `str_replace`, `upper`, `len`
 - `env_get(key)`
