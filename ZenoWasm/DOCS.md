@@ -49,6 +49,104 @@ Buka browser di `http://localhost:8080`.
 
 ---
 
+## 📖 Syntax Dasar ZenoLang
+
+Bagi Anda yang berasal dari PHP (Laravel) atau bahasa skrip lain, ZenoLang dirancang sangat familiar namun lebih ringkas.
+
+### Variabel & Tipe Data
+ZenoLang menggunakan tipe data dinamis.
+
+```zeno
+# Deklarasi Variabel
+var: $nama { val: 'Budi' }
+var: $umur { val: 25 }
+
+# Shorthand (Direkomendasikan)
+$kota: 'Jakarta'
+$aktif: true
+
+# Array & Map
+$hobi: ['Coding', 'Gaming']
+$profil: {
+    role: 'admin'
+    level: 99
+}
+
+# Akses Data
+log: $hobi.0       # Output: Coding
+log: $profil.role  # Output: admin
+```
+
+### Logika Percabangan (Control Flow)
+
+```zeno
+# IF - ELSE
+if: $umur > 17 {
+    then: {
+        log: 'Dewasa'
+    }
+    else: {
+        log: 'Belum Cukup Umur'
+    }
+}
+
+# SWITCH
+switch: $status {
+    case: 'pending' { log: 'Menunggu...' }
+    case: 'success' { log: 'Berhasil!' }
+    default: { log: 'Status tidak dikenal' }
+}
+
+# NULL COALESCE (Default Value)
+# Jika $input null, gunakan 'Default'
+coalesce: $input { default: 'Default'; as: $hasil }
+```
+
+### Perulangan (Loops)
+
+```zeno
+# FOREACH (Iterasi Array/Map)
+foreach: $items {
+    as: $item
+    do: {
+        log: $item.name
+    }
+}
+
+# FOR (C-Style)
+for: '$i = 0; $i < 5; $i++' {
+    do: {
+        log: $i
+    }
+}
+
+# WHILE
+while: $count > 0 {
+    do: {
+        log: $count
+        $count-- # Decrement
+    }
+}
+```
+
+### Error Handling
+
+```zeno
+try {
+    do: {
+        # Kode yang mungkin error
+        http.fetch: 'https://api-error.com'
+    }
+    catch: {
+        # Tangkap error di variabel $error
+        as: $error
+        js.call: 'alert' { args: ['Terjadi kesalahan: ' + $error] }
+    }
+}
+```
+
+---
+
 ## 🎨 Templating (Zeno Blade)
 
 ZenoWasm menggunakan engine **Blade** yang sama persis dengan ZenoEngine di backend. Bedanya, template tidak dibaca dari disk, melainkan didaftarkan ke **Virtual Filesystem** di browser.
@@ -195,6 +293,61 @@ Manajemen sesi pengguna (disimpan di LocalStorage).
 *   `auth.user`: Ambil data user login `{ as: $user }`.
 *   `auth.check`: Cek status login `{ as: $isLoggedIn }`.
 *   `storage.set`, `storage.get`, `storage.remove`: Akses raw LocalStorage.
+
+#### Studi Kasus: Autentikasi dengan JWT
+Berikut adalah pola standar untuk menangani Login di ZenoWasm:
+
+1.  **Form Login** mengirim data ke Backend API.
+2.  Backend mengembalikan **JWT Token**.
+3.  ZenoWasm menyimpan token menggunakan `auth.login`.
+
+```zeno
+# Rute Aksi Login
+router.get: '/do-login' {
+    do: {
+        # 1. Kirim Request ke API Backend
+        http.fetch: 'https://api.myapp.com/login' {
+            method: 'POST'
+            body: {
+                username: $username
+                password: $password
+            }
+            then: {
+                as: $resp
+
+                # 2. Simpan Token & User (Jika sukses)
+                if: $resp.token {
+                    then: {
+                        auth.login: {
+                            token: $resp.token
+                            user: $resp.user
+                        }
+                        # Redirect ke Dashboard
+                        js.call: 'zenoNavigate' { args: ['/dashboard'] }
+                    }
+                    else: {
+                        js.call: 'alert' { args: ['Login Gagal!'] }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+Untuk request selanjutnya yang butuh Auth (Authenticated Request), sertakan token di header:
+
+```zeno
+auth.user: { as: $user } # Ambil user/token dari storage (jika tersimpan di object user)
+storage.get: { key: 'zeno_auth_token'; as: $token } # Atau ambil raw token
+
+http.fetch: 'https://api.myapp.com/protected-data' {
+    headers: {
+        'Authorization': 'Bearer ' + $token
+    }
+    # ... handle response
+}
+```
 
 ### 🔌 JS Interop
 Berinteraksi langsung dengan JavaScript browser.
