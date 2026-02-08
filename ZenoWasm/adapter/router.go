@@ -13,16 +13,20 @@ import (
 
 // Router Structure
 type Route struct {
-	Method  string
-	Pattern string
-	Handler *engine.Node
-	Params  []string
-	Regex   *regexp.Regexp
+	Method     string
+	Pattern    string
+	Handler    *engine.Node
+	Params     []string
+	Regex      *regexp.Regexp
+	Middleware []string // List of middleware names
 }
 
 var (
 	Routes []*Route
 	RouterMu sync.RWMutex
+
+	// Track active middleware during registration
+	activeMiddleware []string
 )
 
 // Normalize path: remove trailing slash, ensure leading slash
@@ -62,6 +66,50 @@ func patternToRegex(p string) (*regexp.Regexp, []string) {
 }
 
 func RegisterRouterSlots(eng *engine.Engine) {
+	// ROUTE GROUP (Middleware)
+	eng.Register("router.group", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		var newMiddleware []string
+
+		// Parse 'middleware' arg
+		for _, c := range node.Children {
+			if c.Name == "middleware" {
+				val := ResolveValue(c.Value, scope)
+				if str, ok := val.(string); ok {
+					newMiddleware = append(newMiddleware, str)
+				} else if list, err := coerce.ToSlice(val); err == nil {
+					for _, item := range list {
+						newMiddleware = append(newMiddleware, coerce.ToString(item))
+					}
+				}
+			}
+		}
+
+		// Push middleware to stack
+		previousStackLen := len(activeMiddleware)
+		activeMiddleware = append(activeMiddleware, newMiddleware...)
+
+		// Execute DO block (which contains routes)
+		for _, c := range node.Children {
+			if c.Name == "do" {
+				// Execute children of do block directly?
+				// No, the engine.Execute recursively calls slots.
+				// We need to execute the 'do' node so that its children (router.get calls) run.
+				// However, 'router.get' calls 'addRoute' which reads global 'activeMiddleware'.
+				// So standard execution is fine.
+				if err := eng.Execute(ctx, c, scope); err != nil {
+					// Restore stack on error?
+					activeMiddleware = activeMiddleware[:previousStackLen]
+					return err
+				}
+			}
+		}
+
+		// Pop middleware from stack
+		activeMiddleware = activeMiddleware[:previousStackLen]
+
+		return nil
+	}, engine.SlotMeta{Description: "Group routes with middleware"})
+
 	// ROUTE DEFINITION: route: '/path' { ... }
 	eng.Register("route", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		path := coerce.ToString(ResolveValue(node.Value, scope))
@@ -116,14 +164,19 @@ func addRoute(method, path string, handler *engine.Node) {
 	normPath := normalizePath(path)
 	regex, params := patternToRegex(normPath)
 
+	// Copy current active middleware
+	mw := make([]string, len(activeMiddleware))
+	copy(mw, activeMiddleware)
+
 	Routes = append(Routes, &Route{
-		Method:  method,
-		Pattern: normPath,
-		Handler: handler,
-		Params:  params,
-		Regex:   regex,
+		Method:     method,
+		Pattern:    normPath,
+		Handler:    handler,
+		Params:     params,
+		Regex:      regex,
+		Middleware: mw,
 	})
-	fmt.Printf("Route Registered: %s -> %s\n", method, normPath)
+	fmt.Printf("Route Registered: %s -> %s [Middleware: %v]\n", method, normPath, mw)
 }
 
 // MatchRoute finds the first matching route for a given path

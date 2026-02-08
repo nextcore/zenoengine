@@ -34,6 +34,9 @@ func main() {
 	js.Global().Set("zenoInitRouter", js.FuncOf(initRouter))
 	js.Global().Set("zenoNavigate", js.FuncOf(navigate))
 
+	// Middleware API
+	js.Global().Set("zenoSetAuthState", js.FuncOf(setAuthState))
+
 	// Inject Datastar
 	injectDatastar()
 
@@ -43,6 +46,17 @@ func main() {
 	select {}
 }
 
+// Simple Auth State for Middleware Demo
+var isAuthenticated bool = false
+
+func setAuthState(this js.Value, args []js.Value) interface{} {
+	if len(args) > 0 {
+		isAuthenticated = args[0].Bool()
+		fmt.Println("Auth State Changed:", isAuthenticated)
+	}
+	return nil
+}
+
 // initRouter registers routes defined in a Zeno script
 func initRouter(this js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
@@ -50,29 +64,11 @@ func initRouter(this js.Value, args []js.Value) interface{} {
 	}
 	scriptContent := args[0].String()
 
-	// Parse and Execute Script to Register Routes
-	// We wrap it in a dummy node execution context
 	ctx := context.Background()
 	scope := engine.NewScope(nil)
 
-	// Need to parse script content into AST first.
-	// Since we don't have direct parser access here easily (it's in pkg/engine/parser.go but internal logic might need engine helpers),
-	// we will rely on adapter.RegisterTemplate to store it as a virtual file, then load it.
-
+	// Store routes script as template for reference
 	adapter.RegisterTemplate("routes.zl", scriptContent)
-
-	// Create a node to include/execute this routes file
-	// Actually, we can just use engine.LoadScript if we adapted it, but LoadScript reads from OS.
-	// We need to use our virtual adapter.
-	// Best hack: Use 'include' slot logic which we haven't fully exposed for virtual yet.
-	// Simpler: Just parse the string directly if we can access Parser.
-	// Since engine.LoadScript is for files, let's use a helper in adapter or main.
-	// Wait, we can't easily parse raw string without creating a file.
-	// Workaround: We execute a virtual "view.blade" which contains the script.
-	// But view.blade parses as Blade (HTML mixed). Routes script is pure logic.
-
-	// Solution: We assume the user passes a ZenoLang script.
-	// We can use `engine.ParseString` if exported.
 
 	program, err := engine.ParseString(scriptContent, "routes.zl")
 	if err != nil {
@@ -105,8 +101,25 @@ func navigate(this js.Value, args []js.Value) interface{} {
 	route, params := adapter.MatchRoute(path)
 	if route == nil {
 		fmt.Println("No route found for:", path)
-		// Render 404 if registered, or ignore
+		// Render 404 if registered
+		// Try to find explicit 404 route in future, for now fallback to root or nothing
 		return nil
+	}
+
+	// === MIDDLEWARE CHECK ===
+	for _, mw := range route.Middleware {
+		if mw == "auth" {
+			if !isAuthenticated {
+				fmt.Println("Middleware Blocked: Auth Required. Redirecting to /login")
+				// Redirect to login
+				// Prevent loop if login itself requires auth (bad config)
+				if path != "/login" {
+					navigate(js.Value{}, []js.Value{js.ValueOf("/login")})
+					return nil
+				}
+			}
+		}
+		// Add more middleware checks here...
 	}
 
 	// Create Context & Scope
@@ -120,6 +133,8 @@ func navigate(this js.Value, args []js.Value) interface{} {
 	for k, v := range params {
 		scope.Set(k, v)
 	}
+	// Inject Auth State
+	scope.Set("auth_check", isAuthenticated)
 
 	// Execute Handler
 	if err := eng.Execute(ctx, route.Handler, scope); err != nil {
@@ -135,9 +150,6 @@ func navigate(this js.Value, args []js.Value) interface{} {
 		app.Set("innerHTML", html)
 
 		// Update Browser URL (History PushState)
-		// Only push if it's a new navigation, not initial load
-		// For simplicity here we assume simple forward nav.
-		// Check if current path matches to avoid duplicates
 		current := js.Global().Get("window").Get("location").Get("pathname").String()
 		if current != path {
 			js.Global().Get("history").Call("pushState", nil, "", path)

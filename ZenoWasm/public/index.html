@@ -13,14 +13,20 @@
 
 			// 1. Register Views
 			zenoRegisterTemplate("layout", `
-				<div class="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800">
+				<div class="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800"
+				     data-signals="{isAuth: {{ $auth_check ? 'true' : 'false' }} }">
 					<nav class="bg-indigo-600 text-white p-4 shadow-md">
 						<div class="container mx-auto flex justify-between items-center">
 							<a href="/" class="text-xl font-bold">ZenoWasm SPA</a>
-							<div class="space-x-4">
+							<div class="space-x-4 flex items-center">
 								<a href="/" class="hover:underline">Home</a>
 								<a href="/counter" class="hover:underline">Counter</a>
-								<a href="/about" class="hover:underline">About</a>
+								<a href="/dashboard" class="hover:underline font-semibold text-yellow-300">Dashboard (Protected)</a>
+
+								<button class="px-3 py-1 text-sm bg-white text-indigo-600 rounded"
+								        onclick="toggleAuth()">
+									{{ $auth_check ? 'Logout' : 'Login' }}
+								</button>
 							</div>
 						</div>
 					</nav>
@@ -47,8 +53,8 @@
 								<p>Compiles to WebAssembly for near-native performance.</p>
 							</div>
 							<div class="p-6 bg-white rounded-lg shadow">
-								<h3 class="font-bold text-xl mb-2">🛠️ Familiar</h3>
-								<p>Use standard Blade syntax and Go logic you already know.</p>
+								<h3 class="font-bold text-xl mb-2">🛡️ Secure</h3>
+								<p>Supports Route Guards (Middleware) to protect pages.</p>
 							</div>
 							<div class="p-6 bg-white rounded-lg shadow">
 								<h3 class="font-bold text-xl mb-2">🎈 Lightweight</h3>
@@ -85,33 +91,30 @@
 				@endsection
 			`);
 
-			zenoRegisterTemplate("about", `
+			zenoRegisterTemplate("dashboard", `
 				@extends('layout')
 				@section('content')
-					<div class="prose max-w-2xl mx-auto">
-						<h1>About ZenoWasm</h1>
-						<p>
-							ZenoWasm ports the robust ZenoEngine to the browser using WebAssembly.
-							It allows you to build Single Page Applications using the same templates
-							and logic you use on the backend.
-						</p>
-						<h3>Why?</h3>
-						<ul>
-							<li>Share code between Backend and Frontend.</li>
-							<li>Eliminate API latency for UI logic.</li>
-							<li>Offline-first capabilities.</li>
-						</ul>
+					<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4" role="alert">
+						<p class="font-bold">Access Granted</p>
+						<p>You are viewing the protected Dashboard.</p>
+					</div>
+					<div class="bg-white p-6 rounded shadow">
+						<h2 class="text-2xl font-bold mb-4">User Dashboard</h2>
+						<p>This page is only accessible if you are logged in.</p>
 					</div>
 				@endsection
 			`);
 
-			zenoRegisterTemplate("404", `
+			zenoRegisterTemplate("login", `
 				@extends('layout')
 				@section('content')
-					<div class="text-center py-20">
-						<h1 class="text-6xl font-bold text-gray-300 mb-4">404</h1>
-						<p class="text-xl text-gray-600">Page Not Found</p>
-						<a href="/" class="mt-4 inline-block text-indigo-600 hover:underline">Go Home</a>
+					<div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md text-center">
+						<h2 class="text-2xl font-bold mb-4 text-red-600">Access Denied</h2>
+						<p class="mb-6">You must login to view that page.</p>
+						<button class="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
+						        onclick="toggleAuth(); zenoNavigate('/dashboard')">
+							Login & Go to Dashboard
+						</button>
 					</div>
 				@endsection
 			`);
@@ -120,15 +123,29 @@
 			zenoInitRouter(`
 				router.get: '/' { view: 'home' }
 				router.get: '/counter' { view: 'counter' }
-				router.get: '/about' { view: 'about' }
+				router.get: '/login' { view: 'login' }
 
-				# Catch-all 404 (needs regex support in router adapter, or specific last route)
-				# For now, we assume explicit routes.
+				# Protected Routes
+				router.group: {
+					middleware: 'auth'
+					do: {
+						router.get: '/dashboard' { view: 'dashboard' }
+					}
+				}
 			`);
 
 		}).catch((err) => {
 			console.error(err);
 		});
+
+		// Auth Helper
+		let isAuth = false;
+		function toggleAuth() {
+			isAuth = !isAuth;
+			zenoSetAuthState(isAuth);
+			// Refresh current page to update layout
+			zenoNavigate(window.location.pathname);
+		}
 	</script>
 </head>
 <body>
