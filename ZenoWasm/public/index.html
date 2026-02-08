@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<script src="wasm_exec.js"></script>
+	<script>
+		const go = new Go();
+		WebAssembly.instantiateStreaming(fetch("zeno.wasm"), go.importObject).then((result) => {
+			go.run(result.instance);
+
+			// Test Zeno
+			console.log("Zeno Engine Loaded");
+
+			// 1. Register a Template
+			zenoRegisterTemplate("home", `
+				<div class="p-4 bg-gray-100 rounded">
+					<h1 class="text-2xl font-bold">Hello, {{ $name }}!</h1>
+					<p>Welcome to ZenoWasm.</p>
+
+					@if($count > 0)
+						<p>You have {{ $count }} notifications.</p>
+					@else
+						<p>No new notifications.</p>
+					@endif
+
+					<ul>
+					@foreach($items as $item)
+						<li>Item: {{ $item }}</li>
+					@endforeach
+					</ul>
+				</div>
+			`);
+
+			// 2. Render it
+			const data = {
+				name: "User",
+				count: 5,
+				items: ["Apple", "Banana", "Cherry"]
+			};
+
+			const html = zenoRender("home", JSON.stringify(data));
+			document.getElementById("app").innerHTML = html;
+
+		}).catch((err) => {
+			console.error(err);
+		});
+	</script>
+</head>
+<body>
+	<h1>ZenoWasm SPA Demo</h1>
+	<div id="app">Loading WASM...</div>
+</body>
+</html>
