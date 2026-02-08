@@ -8,38 +8,45 @@ Ini berarti Anda bisa membangun aplikasi web yang dinamis, reaktif, dan offline-
 
 ## 🏁 Memulai (Getting Started)
 
-### Prasyarat
-- **Go 1.21+** terinstal di sistem Anda.
-- Browser modern (Chrome/Firefox/Edge) yang mendukung WebAssembly.
+### Cara Cepat (Download Binary) ⚡
 
-### 1. Instalasi & Build
-ZenoWasm adalah project *standalone*. Anda perlu mengkompilasi kode sumber ZenoWasm menjadi file binary `.wasm`.
+Anda **TIDAK PERLU** menginstal Go atau melakukan build manual untuk menggunakan ZenoWasm. Cukup download binary engine yang sudah kami sediakan.
+
+1.  **Download Engine**:
+    *   Unduh file `zeno.wasm.gz` dari [repository resmi](https://github.com/nextcore/zenoengine/blob/main/ZenoWasm/public/zeno.wasm.gz).
+    *   Ekstrak file tersebut (gunakan WinRAR/7-Zip atau command `gzip -d zeno.wasm.gz`) menjadi `zeno.wasm`.
+
+2.  **Download Loader**:
+    *   Unduh file [wasm_exec.js](https://github.com/nextcore/zenoengine/blob/main/ZenoWasm/public/wasm_exec.js).
+
+3.  **Buat index.html**:
+    *   Buat file `index.html` dan muat kedua file di atas. (Lihat contoh di bawah).
+
+### Cara Manual (Build from Source) 🛠️
+*Hanya jika Anda ingin memodifikasi engine core atau menambahkan slot kustom.*
+
+Prasyarat: **Go 1.21+**.
 
 ```bash
-# Masuk ke direktori ZenoWasm
 cd ZenoWasm
-
-# Jalankan build script (Linux/Mac)
 ./build.sh
-
-# Atau build manual
-GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o public/zeno.wasm main.go
+# Hasil build ada di public/zeno.wasm
 ```
 
-Hasil build akan ada di folder `public/zeno.wasm` (sekitar 3.5MB setelah gzip).
+---
 
-### 2. Struktur Proyek
-Untuk menjalankan aplikasi, Anda hanya butuh 3 file statis:
+## 2. Struktur Proyek
+Untuk menjalankan aplikasi, Anda hanya butuh 3 file statis di folder `public`:
 
 ```text
 public/
 ├── index.html      # Titik masuk aplikasi (HTML + JS Loader)
-├── zeno.wasm       # Engine Zeno (Binary)
-└── wasm_exec.js    # Go WASM Loader (bawaan Go)
+├── zeno.wasm       # Engine Zeno (Binary yang sudah didownload)
+└── wasm_exec.js    # Go WASM Loader
 ```
 
 ### 3. Menjalankan Server Dev
-Anda bisa menggunakan server statis apa saja (Python, Nginx, Caddy).
+Anda bisa menggunakan server statis apa saja (Python, Nginx, Caddy, VS Code Live Server).
 
 ```bash
 # Contoh dengan Python
@@ -322,7 +329,7 @@ router.get: '/do-login' {
                             token: $resp.token
                             user: $resp.user
                         }
-                        # Redirect ke Dashboard
+                        # Redirect to Dashboard
                         js.call: 'zenoNavigate' { args: ['/dashboard'] }
                     }
                     else: {
