@@ -2,56 +2,136 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<title>ZenoWasm + Datastar Demo</title>
+	<title>ZenoWasm SPA</title>
 	<script src="wasm_exec.js"></script>
+	<script src="https://cdn.tailwindcss.com"></script>
 	<script>
 		const go = new Go();
 		WebAssembly.instantiateStreaming(fetch("zeno.wasm"), go.importObject).then((result) => {
 			go.run(result.instance);
-
 			console.log("Zeno Engine Loaded");
 
-			// 1. Register Template with Datastar Attributes
-			zenoRegisterTemplate("counter", `
-				<div class="p-8 border rounded-lg shadow-md max-w-md mx-auto mt-10 bg-white"
-				     data-signals="{count: {{ $count }}}">
-
-					<h2 class="text-2xl font-bold mb-4">Zeno + Datastar Counter</h2>
-
-					<div class="text-4xl font-mono text-center my-6" data-text="$count">
-						{{ $count }}
-					</div>
-
-					<div class="flex gap-4 justify-center">
-						<button class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-						        data-on-click="$count--">
-							Decrease
-						</button>
-
-						<button class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-						        data-on-click="$count++">
-							Increase
-						</button>
-					</div>
-
-					<p class="mt-4 text-gray-600 text-sm text-center">
-						Logic handled by Zeno Blade. State handled by Datastar.
-					</p>
+			// 1. Register Views
+			zenoRegisterTemplate("layout", `
+				<div class="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800">
+					<nav class="bg-indigo-600 text-white p-4 shadow-md">
+						<div class="container mx-auto flex justify-between items-center">
+							<a href="/" class="text-xl font-bold">ZenoWasm SPA</a>
+							<div class="space-x-4">
+								<a href="/" class="hover:underline">Home</a>
+								<a href="/counter" class="hover:underline">Counter</a>
+								<a href="/about" class="hover:underline">About</a>
+							</div>
+						</div>
+					</nav>
+					<main class="container mx-auto p-6 flex-grow">
+						@yield('content')
+					</main>
+					<footer class="bg-gray-200 text-center p-4 text-sm text-gray-600">
+						Powered by ZenoWasm & Datastar
+					</footer>
 				</div>
 			`);
 
-			// 2. Initial Render
-			// We pass initial state to Zeno to render the first HTML frame
-			const initialHtml = zenoRender("counter", { count: 10 });
-			document.getElementById("app").innerHTML = initialHtml;
+			zenoRegisterTemplate("home", `
+				@extends('layout')
+				@section('content')
+					<div class="text-center py-10">
+						<h1 class="text-4xl font-bold text-indigo-700 mb-4">Welcome to ZenoWasm</h1>
+						<p class="text-lg text-gray-600 mb-8">
+							A lightweight, serverless SPA framework running Go & Blade in your browser.
+						</p>
+						<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+							<div class="p-6 bg-white rounded-lg shadow">
+								<h3 class="font-bold text-xl mb-2">⚡ Fast</h3>
+								<p>Compiles to WebAssembly for near-native performance.</p>
+							</div>
+							<div class="p-6 bg-white rounded-lg shadow">
+								<h3 class="font-bold text-xl mb-2">🛠️ Familiar</h3>
+								<p>Use standard Blade syntax and Go logic you already know.</p>
+							</div>
+							<div class="p-6 bg-white rounded-lg shadow">
+								<h3 class="font-bold text-xl mb-2">🎈 Lightweight</h3>
+								<p>Zero dependencies. No Node.js. No complex build tools.</p>
+							</div>
+						</div>
+					</div>
+				@endsection
+			`);
+
+			zenoRegisterTemplate("counter", `
+				@extends('layout')
+				@section('content')
+					<div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md"
+					     data-signals="{count: 0}">
+						<h2 class="text-2xl font-bold mb-4">Reactive Counter</h2>
+						<p class="mb-6 text-gray-600">This state is managed client-side by Datastar.</p>
+
+						<div class="text-5xl font-mono text-center my-8 text-indigo-600" data-text="$count">
+							0
+						</div>
+
+						<div class="flex gap-4 justify-center">
+							<button class="px-6 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition"
+									data-on-click="$count--">
+								- Decrease
+							</button>
+							<button class="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+									data-on-click="$count++">
+								+ Increase
+							</button>
+						</div>
+					</div>
+				@endsection
+			`);
+
+			zenoRegisterTemplate("about", `
+				@extends('layout')
+				@section('content')
+					<div class="prose max-w-2xl mx-auto">
+						<h1>About ZenoWasm</h1>
+						<p>
+							ZenoWasm ports the robust ZenoEngine to the browser using WebAssembly.
+							It allows you to build Single Page Applications using the same templates
+							and logic you use on the backend.
+						</p>
+						<h3>Why?</h3>
+						<ul>
+							<li>Share code between Backend and Frontend.</li>
+							<li>Eliminate API latency for UI logic.</li>
+							<li>Offline-first capabilities.</li>
+						</ul>
+					</div>
+				@endsection
+			`);
+
+			zenoRegisterTemplate("404", `
+				@extends('layout')
+				@section('content')
+					<div class="text-center py-20">
+						<h1 class="text-6xl font-bold text-gray-300 mb-4">404</h1>
+						<p class="text-xl text-gray-600">Page Not Found</p>
+						<a href="/" class="mt-4 inline-block text-indigo-600 hover:underline">Go Home</a>
+					</div>
+				@endsection
+			`);
+
+			// 2. Initialize Router
+			zenoInitRouter(`
+				router.get: '/' { view: 'home' }
+				router.get: '/counter' { view: 'counter' }
+				router.get: '/about' { view: 'about' }
+
+				# Catch-all 404 (needs regex support in router adapter, or specific last route)
+				# For now, we assume explicit routes.
+			`);
 
 		}).catch((err) => {
 			console.error(err);
 		});
 	</script>
-	<script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50">
-	<div id="app" class="p-10">Loading ZenoWasm...</div>
+<body>
+	<div id="app">Loading...</div>
 </body>
 </html>
