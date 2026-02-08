@@ -522,6 +522,26 @@ impl Evaluator {
                         }
                     }
                 }
+                BladeNode::ForEach(collection_expr, item_name, block) => {
+                    if let Some(collection_val) = self.eval_expression(&collection_expr).await {
+                        if let Value::Array(arr) = collection_val {
+                             let elements = {
+                                 let vec = arr.lock().unwrap();
+                                 vec.clone()
+                             };
+
+                             for element in elements {
+                                 let previous_env = self.env.clone();
+                                 self.env = Env::new_with_outer(previous_env.clone());
+                                 self.env.set(item_name.clone(), element);
+
+                                 output.push_str(&self.render_nodes(block.clone()).await);
+
+                                 self.env = previous_env;
+                             }
+                        }
+                    }
+                }
             }
         }
         output

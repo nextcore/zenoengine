@@ -58,14 +58,13 @@ async fn main() {
     if args.len() > 1 && args[1] == "server" {
         start_server(db_pool).await;
     } else {
-        run_cli_mode(db_pool).await;
+        let file_path = if args.len() > 1 { &args[1] } else { "source/test.zl" };
+        run_cli_mode(db_pool, file_path).await;
     }
 }
 
-async fn run_cli_mode(pool: Option<AnyPool>) {
+async fn run_cli_mode(pool: Option<AnyPool>, file_path: &str) {
     tracing::info!("ZenoEngine Rust Edition (2024) - CLI Mode (Async)");
-
-    let file_path = "source/test.zl";
     tracing::info!("Executing ZenoLang script: {}", file_path);
 
     let contents = match fs::read_to_string(file_path) {

@@ -8,6 +8,7 @@ pub enum BladeNode {
     Text(String),
     Interpolation(Expression), // {{ expr }}
     If(Expression, Vec<BladeNode>, Option<Vec<BladeNode>>), // @if(expr) ... @else ... @endif
+    ForEach(Expression, String, Vec<BladeNode>), // @foreach(collection as item) ... @endforeach
 }
 
 pub struct ZenoBladeParser<'a> {
@@ -39,7 +40,11 @@ impl<'a> ZenoBladeParser<'a> {
                 if let Some(node) = self.parse_if() {
                     nodes.push(node);
                 }
-            } else if self.peek_str("@else") || self.peek_str("@endif") {
+            } else if self.peek_str("@foreach") {
+                if let Some(node) = self.parse_foreach() {
+                    nodes.push(node);
+                }
+            } else if self.peek_str("@else") || self.peek_str("@endif") || self.peek_str("@endforeach") {
                 if inside_block {
                     break;
                 } else {
@@ -47,14 +52,7 @@ impl<'a> ZenoBladeParser<'a> {
                 }
             } else {
                 if self.pos < self.input.len() {
-                     // Should be handled by parse_text unless it's a specific char
-                     // break loop to avoid infinite if parse_text returns None but we are not at end
-                     // Actually parse_text consumes until tag. If we are at tag, we handle it.
-                     // If we are at EOF, loop ends.
-                     // If we are at unknown tag, parse_text should have consumed it? No, parse_text stops AT tag.
-                     // So if we are here, we are at a tag start.
-                     // If it's none of the above, skip 1 char.
-                     if !self.peek_str("{{") && !self.peek_str("@if") && !self.peek_str("@else") && !self.peek_str("@endif") {
+                     if !self.peek_str("{{") && !self.peek_str("@if") && !self.peek_str("@else") && !self.peek_str("@endif") && !self.peek_str("@foreach") && !self.peek_str("@endforeach") {
                          self.pos += 1;
                      }
                 }
@@ -66,7 +64,7 @@ impl<'a> ZenoBladeParser<'a> {
     fn parse_text(&mut self) -> Option<String> {
         let start = self.pos;
         while self.pos < self.input.len() {
-            if self.peek_str("{{") || self.peek_str("@if") || self.peek_str("@else") || self.peek_str("@endif") {
+            if self.peek_str("{{") || self.peek_str("@if") || self.peek_str("@else") || self.peek_str("@endif") || self.peek_str("@foreach") || self.peek_str("@endforeach") {
                 break;
             }
             self.pos += 1;
@@ -134,6 +132,46 @@ impl<'a> ZenoBladeParser<'a> {
                  }
 
                  return Some(BladeNode::If(condition, true_block, false_block));
+             }
+        }
+        None
+    }
+
+    fn parse_foreach(&mut self) -> Option<BladeNode> {
+        self.pos += 8; // Skip @foreach
+        // Expect (collection as item)
+        if let Some(start) = self.input[self.pos..].find('(') {
+             self.pos += start + 1;
+
+             let mut depth = 1;
+             let mut end = 0;
+             for (i, c) in self.input[self.pos..].char_indices() {
+                 if c == '(' { depth += 1; }
+                 else if c == ')' { depth -= 1; }
+                 if depth == 0 {
+                     end = i;
+                     break;
+                 }
+             }
+
+             if end > 0 {
+                 let content_str = &self.input[self.pos..self.pos+end];
+                 self.pos += end + 1;
+
+                 // Split by " as "
+                 if let Some(pos_as) = content_str.find(" as ") {
+                     let collection_str = &content_str[..pos_as];
+                     let item_str = &content_str[pos_as+4..].trim(); // Extract identifier
+
+                     let mut parser = Parser::new(collection_str);
+                     if let Some(collection_expr) = parser.parse_expression_entry() {
+                         let loop_block = self.parse_nodes(true);
+                         if self.peek_str("@endforeach") {
+                             self.pos += 11;
+                         }
+                         return Some(BladeNode::ForEach(collection_expr, item_str.to_string(), loop_block));
+                     }
+                 }
              }
         }
         None
