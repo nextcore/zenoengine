@@ -23,7 +23,7 @@ ZenoRust is now a production-ready replacement for the core ZenoEngine (Go), cap
 | **Crypto/Security** | ✅ 100% | SHA256, UUID, Random, Base64, Hex, **Bcrypt**. | |
 | **Utilities** | ✅ 100% | String Utils, Regex (`match`, `replace`), Time, Env, Coalesce. | |
 | **Validation** | ✅ 100% | Email, Numeric. | |
-| **Ecosystem** | ✅ 80% | Sidecar (JSON-RPC), WASM (WASI Preview 1). | Basic WASM support. |
+| **Ecosystem** | ✅ 100% | Sidecar (JSON-RPC), WASM (String ABI + WASI). | Full data passing support. |
 
 ## Detailed Breakdown
 
@@ -41,7 +41,7 @@ ZenoRust is now a production-ready replacement for the core ZenoEngine (Go), cap
     *   Middleware automatically adds security headers.
 5.  **Plugin System:**
     *   **Sidecar:** Full JSON-RPC support for external process plugins via Stdin/Stdout.
-    *   **WASM:** Basic support for loading and executing WASI modules (Preview 1).
+    *   **WASM:** Advanced support for loading WASI modules with a String/JSON ABI. Automatically handles memory allocation (`alloc/malloc`) to pass complex arguments (JSON) and receive string results.
 
 ### 🚧 Pending Features (For 100% Parity)
 1.  **ORM / Query Builder:**

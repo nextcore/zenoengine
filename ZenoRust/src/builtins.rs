@@ -635,14 +635,19 @@ pub fn register(env: &mut Env) {
     })));
 
     env.set("wasm_call".to_string(), Value::Builtin("wasm_call".to_string(), |args, _, _| Box::pin(async move {
-        if args.len() != 2 { return Value::Null; }
+        if args.len() < 2 { return Value::Null; }
         let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
         let func = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
-        let params = serde_json::Value::Null; // Params not fully implemented for MVP WASM
+
+        let params = if args.len() > 2 {
+             args[2].clone()
+        } else {
+             Value::Null
+        };
 
         let manager = get_wasm_manager();
         match manager.call(&name, &func, params).await {
-            Ok(_) => Value::Boolean(true), // Returns boolean success for void calls
+            Ok(v) => v,
             Err(e) => {
                 eprintln!("WASM Call Error: {}", e);
                 Value::Null
