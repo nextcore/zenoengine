@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<title>Zeno Money</title>
+	<script src="wasm_exec.js"></script>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		const go = new Go();
+		WebAssembly.instantiateStreaming(fetch("zeno.wasm"), go.importObject).then((result) => {
+			go.run(result.instance);
+			console.log("Zeno Engine Loaded");
+
+			// 1. Initialize Views
+			zenoRegisterTemplate("app", `
+				<div class="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 font-sans"
+				     data-signals="{
+						usd: '1',
+						idr: '16000',
+						rate: '16000',
+						lastUpdate: 'Loading...'
+					 }">
+
+					<div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
+						<h1 class="text-2xl font-bold text-gray-800 mb-2 text-center">💸 Zeno Kurs</h1>
+						<p class="text-xs text-gray-500 text-center mb-6">Realtime WASM Conversion</p>
+
+						<!-- Rate Info -->
+						<div class="bg-blue-50 border border-blue-100 p-3 rounded-lg mb-6 flex justify-between items-center">
+							<span class="text-blue-600 text-xs font-semibold">1 USD = <span data-text="$rate">...</span> IDR</span>
+							<button class="text-blue-500 hover:text-blue-700"
+							        onclick="zenoNavigate('/refresh-rate')">
+								🔄
+							</button>
+						</div>
+
+						<!-- Converter Form -->
+						<div class="space-y-4">
+							<div>
+								<label class="block text-sm font-medium text-gray-600 mb-1">USD (Dollar)</label>
+								<div class="relative">
+									<span class="absolute left-3 top-2 text-gray-400">$</span>
+									<input type="number"
+									       data-bind-usd
+									       class="w-full pl-8 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg font-semibold"
+									       oninput="zenoNavigate('/convert-usd')">
+								</div>
+							</div>
+
+							<div class="flex justify-center text-gray-400">
+								⬇️⬆️
+							</div>
+
+							<div>
+								<label class="block text-sm font-medium text-gray-600 mb-1">IDR (Rupiah)</label>
+								<div class="relative">
+									<span class="absolute left-3 top-2 text-gray-400">Rp</span>
+									<input type="number"
+									       data-bind-idr
+									       class="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-lg font-semibold"
+									       oninput="zenoNavigate('/convert-idr')">
+								</div>
+							</div>
+						</div>
+
+						<div class="mt-8 text-center text-gray-400 text-xs">
+							Powered by ZenoWasm & Capacitor
+						</div>
+					</div>
+				</div>
+			`);
+
+			// 2. Logic Routes
+			zenoInitRouter(`
+				router.get: '/' {
+					do: {
+						# Initial Fetch
+						http.fetch: 'https://api.exchangerate-api.com/v4/latest/USD' {
+							then: {
+								as: $data
+								# Update Rate Signal
+								js.call: 'window.updateRate' { args: [$data.rates.IDR] }
+							}
+						}
+						view: 'app'
+					}
+				}
+
+				router.get: '/refresh-rate' {
+					do: {
+						http.fetch: 'https://api.exchangerate-api.com/v4/latest/USD' {
+							then: {
+								as: $data
+								js.call: 'window.updateRate' { args: [$data.rates.IDR] }
+							}
+						}
+					}
+				}
+
+				router.get: '/convert-usd' {
+					do: {
+						# Get Input from Signal (via JS Helper since direct signal access is tricky in pure route)
+						js.get: 'window.getSignal("usd")' { as: $usd }
+						js.get: 'window.getSignal("rate")' { as: $rate }
+
+						# Calc: IDR = USD * Rate
+						money.calc: $usd * $rate { as: $res }
+
+						# Update UI
+						js.call: 'window.setSignal' { args: ['idr', $res] }
+					}
+				}
+
+				router.get: '/convert-idr' {
+					do: {
+						js.get: 'window.getSignal("idr")' { as: $idr }
+						js.get: 'window.getSignal("rate")' { as: $rate }
+
+						# Calc: USD = IDR / Rate
+						# Use rounding for USD display
+						money.calc: $idr / $rate { as: $res }
+
+						js.call: 'window.setSignal' { args: ['usd', $res] }
+					}
+				}
+			`);
+
+		}).catch((err) => {
+			console.error(err);
+		});
+
+		// Helper for Signals (Interim solution until full Datastar Store Interop slot)
+		// We use DOM scanning to read/write signals for now.
+		window.getSignal = function(key) {
+			const el = document.querySelector('[data-bind-' + key + ']');
+			return el ? el.value : '0';
+		}
+
+		window.setSignal = function(key, value) {
+			const el = document.querySelector('[data-bind-' + key + ']');
+			if(el) {
+				el.value = parseFloat(value).toFixed(2).replace(/\.00$/, '');
+				// Dispatch input event to notify Datastar/Listeners if needed
+				// el.dispatchEvent(new Event('input'));
+			}
+		}
+
+		window.updateRate = function(rate) {
+			// Update the rate signal stored in the root element (if we had store access)
+			// For visualization:
+			document.querySelector('[data-text="$rate"]').innerText = rate.toLocaleString();
+			// Store in a hidden field or global var for calc?
+			// Ideally we update the datastar store.
+			// Hack: Update inputs to trigger recalc? No.
+			// Let's store in a global var accessible by getSignal logic if needed,
+			// OR just update the rate input if we had one.
+
+			// Override getSignal for rate
+			window._currentRate = rate;
+		}
+
+		// Monkey patch getSignal to read cached rate
+		const originalGet = window.getSignal;
+		window.getSignal = function(key) {
+			if(key === 'rate') return window._currentRate || 16000;
+			return originalGet(key);
+		}
+
+	</script>
+</head>
+<body class="bg-gray-100">
+	<div id="app">Loading...</div>
+</body>
+</html>
