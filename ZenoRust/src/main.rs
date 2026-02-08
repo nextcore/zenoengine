@@ -12,13 +12,15 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::{AnyPool, any::AnyPoolOptions};
 use tower_http::trace::TraceLayer;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{CorsLayer, Any};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use axum::body::Bytes;
+use axum::middleware;
 
 // Use modules from the library crate
 use ZenoRust::parser::Parser;
-use ZenoRust::evaluator::{Evaluator, Value}; // Need Value for extracting response
+use ZenoRust::evaluator::{Evaluator, Value};
+use ZenoRust::middleware::{ip_blocker, security_headers};
 
 #[derive(Clone)]
 struct AppState {
@@ -92,11 +94,18 @@ async fn start_server(pool: Option<AnyPool>) {
     let state = AppState { db_pool: pool };
 
     // Wildcard route to handle everything
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/{*path}", any(handle_request))
-        .route("/", any(handle_request)) // Handle root explicitly if *path doesn't match empty
+        .route("/", any(handle_request))
+        .layer(middleware::from_fn(security_headers))
+        .layer(middleware::from_fn(ip_blocker))
+        .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
         .with_state(state);
 
     let addr: SocketAddr = addr_str.parse().expect("Invalid address");
