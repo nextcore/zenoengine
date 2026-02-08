@@ -1,0 +1,29 @@
+<div class="min-h-screen bg-indigo-100 flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-md"
+         data-signals="{username: 'emilys', password: 'emilyspass'}">
+
+        <h1 class="text-2xl font-bold text-center mb-6 text-gray-800">Login Admin</h1>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Username</label>
+                <input type="text" data-bind-username
+                       class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" data-bind-password
+                       class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+
+            <button class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition"
+                    onclick="doLogin()">
+                Sign In
+            </button>
+        </div>
+
+        <p class="text-xs text-center mt-6 text-gray-500">
+            Demo User: emilys / emilyspass (DummyJSON)
+        </p>
+    </div>
+</div>

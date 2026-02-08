@@ -1,0 +1,39 @@
+@extends('views/layout.blade.zl')
+@section('content')
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow p-6"
+         data-signals="{
+            id: '{{ $product.id ?? '' }}',
+            title: '{{ $product.title ?? '' }}',
+            price: '{{ $product.price ?? 0 }}',
+            desc: '{{ $product.description ?? '' }}'
+         }">
+
+        <h2 class="text-xl font-bold mb-6 border-b pb-2">
+            {{ $product.id ? 'Edit Product' : 'New Product' }}
+        </h2>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">Title</label>
+                <input type="text" data-bind-title class="w-full border p-2 rounded">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Price ($)</label>
+                <input type="number" data-bind-price class="w-full border p-2 rounded">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Description</label>
+                <textarea data-bind-desc class="w-full border p-2 rounded" rows="3"></textarea>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4">
+                <button class="px-4 py-2 border rounded text-gray-600"
+                        onclick="zenoNavigate('/products')">Cancel</button>
+                <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        onclick="saveProduct()">
+                    Save Product
+                </button>
+            </div>
+        </div>
+    </div>
+@endsection
