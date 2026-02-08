@@ -12,6 +12,9 @@ use serde::Serialize;
 use tokio::fs;
 use std::path::Path;
 use chrono::prelude::*;
+use sha2::{Sha256, Digest};
+use uuid::Uuid;
+use rand::Rng;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -248,6 +251,15 @@ impl Evaluator {
             Value::String(s.replace(&from, &to))
         })));
 
+        self.env.set("env_get".to_string(), Value::Builtin("env_get".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let key = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            match std::env::var(&key) {
+                Ok(val) => Value::String(val),
+                Err(_) => Value::Null
+            }
+        })));
+
         self.env.set("include".to_string(), Value::Builtin("include".to_string(), |args, mut env, pool| Box::pin(async move {
             if args.len() != 1 { return Value::Null; }
             let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -387,6 +399,29 @@ impl Evaluator {
                 return Value::Array(Arc::new(Mutex::new(keys)));
             }
             Value::Null
+        })));
+
+        self.env.set("hash_sha256".to_string(), Value::Builtin("hash_sha256".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let s = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let mut hasher = Sha256::new();
+            hasher.update(s);
+            let result = hasher.finalize();
+            Value::String(hex::encode(result))
+        })));
+
+        self.env.set("uuid_v4".to_string(), Value::Builtin("uuid_v4".to_string(), |_, _, _| Box::pin(async move {
+            Value::String(Uuid::new_v4().to_string())
+        })));
+
+        self.env.set("random_int".to_string(), Value::Builtin("random_int".to_string(), |args, _, _| Box::pin(async move {
+            let mut rng = rand::rng();
+            if args.len() == 2 {
+                if let (Value::Integer(min), Value::Integer(max)) = (&args[0], &args[1]) {
+                    return Value::Integer(rng.random_range(*min..*max));
+                }
+            }
+            Value::Integer(rng.random())
         })));
 
         self.env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args, _, _| Box::pin(async move {
@@ -602,6 +637,14 @@ impl Evaluator {
             let json_str = match &args[0] { Value::String(s) => s, _ => return Value::Null };
             match serde_json::from_str::<serde_json::Value>(json_str) {
                 Ok(v) => json_to_value(v),
+                Err(_) => Value::Null
+            }
+        })));
+
+        self.env.set("json_stringify".to_string(), Value::Builtin("json_stringify".to_string(), |args, _, _| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            match serde_json::to_string(&args[0]) {
+                Ok(s) => Value::String(s),
                 Err(_) => Value::Null
             }
         })));
