@@ -1,0 +1,53 @@
+@extends('views/layout.blade.zl')
+@section('content')
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Products</h2>
+        <button class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                onclick="zenoNavigate('/products/add')">
+            + Add Product
+        </button>
+    </div>
+
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-gray-100 border-b">
+                <tr>
+                    <th class="p-4 font-semibold text-gray-600">ID</th>
+                    <th class="p-4 font-semibold text-gray-600">Image</th>
+                    <th class="p-4 font-semibold text-gray-600">Title</th>
+                    <th class="p-4 font-semibold text-gray-600">Price</th>
+                    <th class="p-4 font-semibold text-gray-600">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                @foreach($products as $p)
+                <tr class="hover:bg-gray-50">
+                    <td class="p-4 text-gray-500">#{{ $p.id }}</td>
+                    <td class="p-4">
+                        <img src="{{ $p.thumbnail }}" class="w-10 h-10 object-cover rounded bg-gray-200">
+                    </td>
+                    <td class="p-4 font-medium">{{ $p.title }}</td>
+                    <td class="p-4 text-green-600 font-mono">$ {{ $p.price }}</td>
+                    <td class="p-4 space-x-2">
+                        <button class="text-blue-600 hover:underline text-sm"
+                                onclick="zenoNavigate('/products/edit/{{ $p.id }}')">
+                            Edit
+                        </button>
+                        <button class="text-red-600 hover:underline text-sm"
+                                onclick="if(confirm('Delete?')) deleteProduct({{ $p.id }})">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Simple Pagination -->
+    <div class="flex justify-center gap-2 mt-6">
+        <button class="px-3 py-1 border rounded bg-white" onclick="zenoNavigate('/products?skip=0')">1</button>
+        <button class="px-3 py-1 border rounded bg-white" onclick="zenoNavigate('/products?skip=10')">2</button>
+        <button class="px-3 py-1 border rounded bg-white" onclick="zenoNavigate('/products?skip=20')">3</button>
+    </div>
+@endsection

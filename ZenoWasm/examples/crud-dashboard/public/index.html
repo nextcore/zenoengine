@@ -8,328 +8,52 @@
 	<script src="https://cdn.tailwindcss.com"></script>
 	<script>
 		const go = new Go();
-		WebAssembly.instantiateStreaming(fetch("zeno.wasm"), go.importObject).then((result) => {
-			go.run(result.instance);
+
+		// List of files to fetch
+		const files = [
+			'routes.zl',
+			'views/layout.blade.zl',
+			'views/login.blade.zl',
+			'views/products/index.blade.zl',
+			'views/products/form.blade.zl'
+		];
+
+		async function init() {
+			// 1. Load WASM
+			const wasmResult = await WebAssembly.instantiateStreaming(fetch("zeno.wasm"), go.importObject);
+			go.run(wasmResult.instance);
 			console.log("Zeno Engine Loaded");
 
-			// ============================
-			// TEMPLATES
-			// ============================
-
-			zenoRegisterTemplate("layout", `
-				<div class="min-h-screen bg-gray-50 flex"
-				     data-signals="{user: {}}">
-
-					<!-- Sidebar -->
-					<aside class="w-64 bg-slate-800 text-white flex flex-col hidden md:flex">
-						<div class="p-4 text-xl font-bold border-b border-slate-700">
-							🛍️ ZenoShop
-						</div>
-						<nav class="flex-grow p-4 space-y-2">
-							<a href="/products" class="block px-4 py-2 rounded hover:bg-slate-700"
-							   onclick="event.preventDefault(); zenoNavigate('/products')">
-								📦 Products
-							</a>
-							<a href="/orders" class="block px-4 py-2 rounded hover:bg-slate-700 text-gray-400 cursor-not-allowed">
-								📄 Orders (Soon)
-							</a>
-						</nav>
-						<div class="p-4 border-t border-slate-700">
-							<button onclick="zenoNavigate('/do-logout')" class="text-red-400 hover:text-red-300 text-sm">
-								Logout
-							</button>
-						</div>
-					</aside>
-
-					<!-- Content -->
-					<div class="flex-grow flex flex-col h-screen overflow-hidden">
-						<header class="bg-white shadow p-4 flex justify-between items-center md:hidden">
-							<span class="font-bold">ZenoShop</span>
-							<button onclick="zenoNavigate('/do-logout')" class="text-sm text-red-600">Logout</button>
-						</header>
-
-						<main class="flex-grow p-6 overflow-auto">
-							@yield('content')
-						</main>
-					</div>
-				</div>
-			`);
-
-			zenoRegisterTemplate("login", `
-				<div class="min-h-screen bg-indigo-100 flex items-center justify-center p-4">
-					<div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-md"
-					     data-signals="{username: 'emilys', password: 'emilyspass'}">
-
-						<h1 class="text-2xl font-bold text-center mb-6 text-gray-800">Login Admin</h1>
-
-						<div class="space-y-4">
-							<div>
-								<label class="block text-sm font-medium text-gray-700">Username</label>
-								<input type="text" data-bind-username
-								       class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
-							</div>
-							<div>
-								<label class="block text-sm font-medium text-gray-700">Password</label>
-								<input type="password" data-bind-password
-								       class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
-							</div>
-
-							<button class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition"
-							        onclick="doLogin()">
-								Sign In
-							</button>
-						</div>
-
-						<p class="text-xs text-center mt-6 text-gray-500">
-							Demo User: emilys / emilyspass (DummyJSON)
-						</p>
-					</div>
-				</div>
-			`);
-
-			zenoRegisterTemplate("products_list", `
-				@extends('layout')
-				@section('content')
-					<div class="flex justify-between items-center mb-6">
-						<h2 class="text-2xl font-bold text-gray-800">Products</h2>
-						<button class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-						        onclick="zenoNavigate('/products/add')">
-							+ Add Product
-						</button>
-					</div>
-
-					<div class="bg-white rounded-lg shadow overflow-hidden">
-						<table class="w-full text-left border-collapse">
-							<thead class="bg-gray-100 border-b">
-								<tr>
-									<th class="p-4 font-semibold text-gray-600">ID</th>
-									<th class="p-4 font-semibold text-gray-600">Image</th>
-									<th class="p-4 font-semibold text-gray-600">Title</th>
-									<th class="p-4 font-semibold text-gray-600">Price</th>
-									<th class="p-4 font-semibold text-gray-600">Actions</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-200">
-								@foreach($products as $p)
-								<tr class="hover:bg-gray-50">
-									<td class="p-4 text-gray-500">#{{ $p.id }}</td>
-									<td class="p-4">
-										<img src="{{ $p.thumbnail }}" class="w-10 h-10 object-cover rounded bg-gray-200">
-									</td>
-									<td class="p-4 font-medium">{{ $p.title }}</td>
-									<td class="p-4 text-green-600 font-mono">$ {{ $p.price }}</td>
-									<td class="p-4 space-x-2">
-										<button class="text-blue-600 hover:underline text-sm"
-										        onclick="zenoNavigate('/products/edit/{{ $p.id }}')">
-											Edit
-										</button>
-										<button class="text-red-600 hover:underline text-sm"
-										        onclick="if(confirm('Delete?')) deleteProduct({{ $p.id }})">
-											Delete
-										</button>
-									</td>
-								</tr>
-								@endforeach
-							</tbody>
-						</table>
-					</div>
-
-					<!-- Simple Pagination -->
-					<div class="flex justify-center gap-2 mt-6">
-						<button class="px-3 py-1 border rounded bg-white" onclick="zenoNavigate('/products?skip=0')">1</button>
-						<button class="px-3 py-1 border rounded bg-white" onclick="zenoNavigate('/products?skip=10')">2</button>
-						<button class="px-3 py-1 border rounded bg-white" onclick="zenoNavigate('/products?skip=20')">3</button>
-					</div>
-				@endsection
-			`);
-
-			zenoRegisterTemplate("product_form", `
-				@extends('layout')
-				@section('content')
-					<div class="max-w-2xl mx-auto bg-white rounded-lg shadow p-6"
-					     data-signals="{
-							id: '{{ $product.id ?? '' }}',
-							title: '{{ $product.title ?? '' }}',
-							price: '{{ $product.price ?? 0 }}',
-							desc: '{{ $product.description ?? '' }}'
-						 }">
-
-						<h2 class="text-xl font-bold mb-6 border-b pb-2">
-							{{ $product.id ? 'Edit Product' : 'New Product' }}
-						</h2>
-
-						<div class="space-y-4">
-							<div>
-								<label class="block text-sm font-medium mb-1">Title</label>
-								<input type="text" data-bind-title class="w-full border p-2 rounded">
-							</div>
-							<div>
-								<label class="block text-sm font-medium mb-1">Price ($)</label>
-								<input type="number" data-bind-price class="w-full border p-2 rounded">
-							</div>
-							<div>
-								<label class="block text-sm font-medium mb-1">Description</label>
-								<textarea data-bind-desc class="w-full border p-2 rounded" rows="3"></textarea>
-							</div>
-
-							<div class="flex justify-end gap-3 pt-4">
-								<button class="px-4 py-2 border rounded text-gray-600"
-								        onclick="zenoNavigate('/products')">Cancel</button>
-								<button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-								        onclick="saveProduct()">
-									Save Product
-								</button>
-							</div>
-						</div>
-					</div>
-				@endsection
-			`);
-
-			// ============================
-			// ROUTER LOGIC
-			// ============================
-			zenoInitRouter(`
-				router.get: '/' {
-					do: {
-						# Check Auth first (manual middleware style)
-						auth.check: { as: $isAuth }
-						if: $isAuth {
-							then: { js.call: 'zenoNavigate' { args: ['/products'] } }
-							else: { js.call: 'zenoNavigate' { args: ['/login'] } }
-						}
-					}
+			// 2. Fetch and Register All Files
+			await Promise.all(files.map(async (path) => {
+				const resp = await fetch(path);
+				if (!resp.ok) {
+					console.error("Failed to load:", path);
+					return;
 				}
+				const content = await resp.text();
+				zenoRegisterTemplate(path, content); // Register file with its path as name
+				console.log("Registered:", path);
+			}));
 
-				router.get: '/login' { view: 'login' }
+			// 3. Initialize Router (using content of routes.zl)
+			// Since we registered it, we can fetch it back?
+			// Or we just fetch routes.zl again separately?
+			// Or we ask Zeno to execute a registered script?
+			// zenoInitRouter currently expects CONTENT string.
+			// Let's refetch content of routes.zl or store it temporarily in JS.
 
-				# --- Auth Actions ---
-				router.get: '/do-login-action' {
-					do: {
-						# 1. Fetch DummyJSON Login
-						js.get: 'window.getSignal("username")' { as: $u }
-						js.get: 'window.getSignal("password")' { as: $p }
+			// Simple approach: Fetch routes.zl content again or grab from memory if we saved it.
+			// Let's fetch routes.zl content explicitly for initRouter.
+			const routesResp = await fetch('routes.zl');
+			const routesContent = await routesResp.text();
 
-						http.fetch: 'https://dummyjson.com/auth/login' {
-							method: 'POST'
-							body: { username: $u, password: $p }
-							headers: { 'Content-Type': 'application/json' }
-							then: {
-								as: $res
-								if: $res.token {
-									then: {
-										auth.login: { token: $res.token, user: $res }
-										js.call: 'zenoNavigate' { args: ['/products'] }
-									}
-									else: {
-										js.call: 'alert' { args: ['Login Failed: ' + $res.message] }
-									}
-								}
-							}
-						}
-					}
-				}
+			zenoInitRouter(routesContent);
+		}
 
-				router.get: '/do-logout' {
-					do: {
-						auth.logout
-						js.call: 'zenoNavigate' { args: ['/login'] }
-					}
-				}
+		init().catch(console.error);
 
-				# --- Protected Routes ---
-				router.group: {
-					middleware: 'auth'
-					do: {
-						# 1. List Products
-						router.get: '/products' {
-							do: {
-								# TODO: Parse query string for pagination
-								http.fetch: 'https://dummyjson.com/products?limit=10' {
-									then: {
-										as: $data
-										# Pass data to view
-										scope.set: { products: $data.products }
-										view: 'products_list'
-									}
-								}
-							}
-						}
-
-						# 2. Add Form
-						router.get: '/products/add' {
-							do: {
-								scope.set: { product: {} } # Empty
-								view: 'product_form'
-							}
-						}
-
-						# 3. Edit Form
-						router.get: '/products/edit/:id' {
-							do: {
-								http.fetch: 'https://dummyjson.com/products/' + $id {
-									then: {
-										as: $p
-										scope.set: { product: $p }
-										view: 'product_form'
-									}
-								}
-							}
-						}
-
-						# 4. Save Action
-						router.get: '/do-save-product' {
-							do: {
-								js.get: 'window.getSignal("id")' { as: $id }
-								js.get: 'window.getSignal("title")' { as: $title }
-
-								if: $id {
-									then: {
-										# Update
-										http.fetch: 'https://dummyjson.com/products/' + $id {
-											method: 'PUT'
-											body: { title: $title }
-											then: {
-												js.call: 'alert' { args: ['Updated: ' + $title] }
-												js.call: 'zenoNavigate' { args: ['/products'] }
-											}
-										}
-									}
-									else: {
-										# Create
-										http.fetch: 'https://dummyjson.com/products/add' {
-											method: 'POST'
-											body: { title: $title }
-											then: {
-												js.call: 'alert' { args: ['Created!'] }
-												js.call: 'zenoNavigate' { args: ['/products'] }
-											}
-										}
-									}
-								}
-							}
-						}
-
-						# 5. Delete Action
-						router.get: '/do-delete/:id' {
-							do: {
-								http.fetch: 'https://dummyjson.com/products/' + $id {
-									method: 'DELETE'
-									then: {
-										js.call: 'alert' { args: ['Deleted Product ' + $id] }
-										js.call: 'zenoNavigate' { args: ['/products'] }
-									}
-								}
-							}
-						}
-					}
-				}
-			`);
-
-		}).catch((err) => {
-			console.error(err);
-		});
-
-		// --- JS Adapters for Signals ---
+		// --- JS Adapters for Signals & Actions ---
 
 		function doLogin() {
 			zenoNavigate('/do-login-action');
@@ -351,6 +75,6 @@
 	</script>
 </head>
 <body class="bg-gray-100">
-	<div id="app">Loading Dashboard...</div>
+	<div id="app">Loading Application...</div>
 </body>
 </html>

@@ -1,0 +1,138 @@
+# ============================
+# ROUTER LOGIC (routes.zl)
+# ============================
+
+router.get: '/' {
+    do: {
+        # Check Auth first (manual middleware style)
+        auth.check: { as: $isAuth }
+        if: $isAuth {
+            then: { js.call: 'zenoNavigate' { args: ['/products'] } }
+            else: { js.call: 'zenoNavigate' { args: ['/login'] } }
+        }
+    }
+}
+
+router.get: '/login' { view: 'views/login.blade.zl' }
+
+# --- Auth Actions ---
+router.get: '/do-login-action' {
+    do: {
+        # 1. Fetch DummyJSON Login
+        js.get: 'window.getSignal("username")' { as: $u }
+        js.get: 'window.getSignal("password")' { as: $p }
+
+        http.fetch: 'https://dummyjson.com/auth/login' {
+            method: 'POST'
+            body: { username: $u, password: $p }
+            headers: { 'Content-Type': 'application/json' }
+            then: {
+                as: $res
+                if: $res.token {
+                    then: {
+                        auth.login: { token: $res.token, user: $res }
+                        js.call: 'zenoNavigate' { args: ['/products'] }
+                    }
+                    else: {
+                        js.call: 'alert' { args: ['Login Failed: ' + $res.message] }
+                    }
+                }
+            }
+        }
+    }
+}
+
+router.get: '/do-logout' {
+    do: {
+        auth.logout
+        js.call: 'zenoNavigate' { args: ['/login'] }
+    }
+}
+
+# --- Protected Routes ---
+router.group: {
+    middleware: 'auth'
+    do: {
+        # 1. List Products
+        router.get: '/products' {
+            do: {
+                # TODO: Parse query string for pagination
+                http.fetch: 'https://dummyjson.com/products?limit=10' {
+                    then: {
+                        as: $data
+                        # Pass data to view
+                        scope.set: { products: $data.products }
+                        view: 'views/products/index.blade.zl'
+                    }
+                }
+            }
+        }
+
+        # 2. Add Form
+        router.get: '/products/add' {
+            do: {
+                scope.set: { product: {} } # Empty
+                view: 'views/products/form.blade.zl'
+            }
+        }
+
+        # 3. Edit Form
+        router.get: '/products/edit/:id' {
+            do: {
+                http.fetch: 'https://dummyjson.com/products/' + $id {
+                    then: {
+                        as: $p
+                        scope.set: { product: $p }
+                        view: 'views/products/form.blade.zl'
+                    }
+                }
+            }
+        }
+
+        # 4. Save Action
+        router.get: '/do-save-product' {
+            do: {
+                js.get: 'window.getSignal("id")' { as: $id }
+                js.get: 'window.getSignal("title")' { as: $title }
+
+                if: $id {
+                    then: {
+                        # Update
+                        http.fetch: 'https://dummyjson.com/products/' + $id {
+                            method: 'PUT'
+                            body: { title: $title }
+                            then: {
+                                js.call: 'alert' { args: ['Updated: ' + $title] }
+                                js.call: 'zenoNavigate' { args: ['/products'] }
+                            }
+                        }
+                    }
+                    else: {
+                        # Create
+                        http.fetch: 'https://dummyjson.com/products/add' {
+                            method: 'POST'
+                            body: { title: $title }
+                            then: {
+                                js.call: 'alert' { args: ['Created!'] }
+                                js.call: 'zenoNavigate' { args: ['/products'] }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        # 5. Delete Action
+        router.get: '/do-delete/:id' {
+            do: {
+                http.fetch: 'https://dummyjson.com/products/' + $id {
+                    method: 'DELETE'
+                    then: {
+                        js.call: 'alert' { args: ['Deleted Product ' + $id] }
+                        js.call: 'zenoNavigate' { args: ['/products'] }
+                    }
+                }
+            }
+        }
+    }
+}
