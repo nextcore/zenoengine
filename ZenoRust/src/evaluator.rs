@@ -1,4 +1,4 @@
-use crate::parser::{Statement, Expression, Op};
+use crate::parser::{Statement, Expression, Op, Parser};
 use crate::template::{ZenoBladeParser, BladeNode};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -246,6 +246,22 @@ impl Evaluator {
             let from = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
             let to = match &args[2] { Value::String(s) => s.clone(), _ => return Value::Null };
             Value::String(s.replace(&from, &to))
+        })));
+
+        self.env.set("include".to_string(), Value::Builtin("include".to_string(), |args, mut env, pool| Box::pin(async move {
+            if args.len() != 1 { return Value::Null; }
+            let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+
+            if let Ok(content) = tokio::fs::read_to_string(&path_str).await {
+                let mut parser = Parser::new(&content);
+                let statements = parser.parse();
+
+                // Execute in current scope (env is cloned but shares the Store Arc<Mutex>)
+                let mut sub_evaluator = Evaluator::new(pool);
+                sub_evaluator.env = env; // Use the passed env which shares storage
+                sub_evaluator.eval(statements).await;
+            }
+            Value::Null
         })));
 
         self.env.set("coalesce".to_string(), Value::Builtin("coalesce".to_string(), |args, _, _| Box::pin(async move {

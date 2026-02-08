@@ -1,0 +1,6 @@
+fn hello_from_lib(name) {
+    return "Hello " + name + " from Lib!";
+}
+
+let lib_val = 42;
+print("Lib Loaded");
