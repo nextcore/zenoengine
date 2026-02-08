@@ -471,19 +471,49 @@ impl Evaluator {
         })));
 
         self.env.set("view".to_string(), Value::Builtin("view".to_string(), |args, _, pool| Box::pin(async move {
-            if args.len() != 2 { return Value::Null; }
-            let tpl = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
-            let data = args[1].clone();
+            if args.len() < 1 { return Value::Null; }
+            let tpl_input = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+
+            // Check if it's a file path (simple check: usually views are files)
+            // But here the input might be raw string (as per previous tests) or a file path.
+            // ZenoGo usually takes a file path or name.
+            // If it ends with .zl, load file.
+
+            let tpl = if tpl_input.ends_with(".zl") || tpl_input.contains("/") {
+                 match tokio::fs::read_to_string(&tpl_input).await {
+                     Ok(c) => c,
+                     Err(_) => tpl_input.clone() // Fallback to raw string
+                 }
+            } else {
+                tpl_input.clone()
+            };
+
             let mut renderer = Evaluator::new(pool);
-            if let Value::Map(map) = data {
-                let m = map.lock().unwrap();
-                for (k, v) in m.iter() {
-                    renderer.env.set(k.clone(), v.clone());
+            if args.len() > 1 {
+                let data = args[1].clone();
+                if let Value::Map(map) = data {
+                    let m = map.lock().unwrap();
+                    for (k, v) in m.iter() {
+                        renderer.env.set(k.clone(), v.clone());
+                    }
                 }
             }
+
             let mut parser = ZenoBladeParser::new(&tpl);
             let nodes = parser.parse();
-            let output = renderer.render_nodes(nodes).await;
+            let mut output = renderer.render_nodes(nodes).await;
+
+            // Handle @extends logic
+            // If __layout was set during render, we need to render the layout now.
+            if let Some(Value::String(layout_path)) = renderer.env.get("__layout") {
+                 if let Ok(layout_content) = tokio::fs::read_to_string(&layout_path).await {
+                     let mut layout_parser = ZenoBladeParser::new(&layout_content);
+                     let layout_nodes = layout_parser.parse();
+                     // Render layout with the same env (which now contains sections)
+                     output = renderer.render_nodes(layout_nodes).await;
+                 }
+            }
+
             Value::String(output)
         })));
 
@@ -676,6 +706,49 @@ impl Evaluator {
                              }
                         }
                     }
+                }
+                BladeNode::Include(path) => {
+                    // TODO: Ideally resolve path relative to views, but for now assuming direct path or handled by caller
+                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                        // Render included content with current env
+                        // We need to parse it first
+                        let mut parser = ZenoBladeParser::new(&content);
+                        let included_nodes = parser.parse();
+                        output.push_str(&self.render_nodes(included_nodes).await);
+                    }
+                }
+                BladeNode::Section(name, block) => {
+                    // Sections are captured, not rendered immediately if we are extending
+                    // But if we are just defining a section in a normal view (not extending), it might be ignored or rendered?
+                    // Usually @section defines content for a parent.
+                    // We need a way to store sections.
+                    let content = self.render_nodes(block).await;
+                    let section_key = format!("__section_{}", name);
+                    self.env.set(section_key, Value::String(content));
+                }
+                BladeNode::Yield(name) => {
+                    let section_key = format!("__section_{}", name);
+                    if let Some(Value::String(content)) = self.env.get(&section_key) {
+                        output.push_str(&content);
+                    }
+                }
+                BladeNode::Extends(path) => {
+                    // This is the tricky part.
+                    // 1. We must assume we have already parsed and executed the rest of the file (which contains @sections).
+                    // 2. Actually, when we encounter @extends, it usually means THIS file is a child.
+                    //    The parser returns a list of nodes.
+                    //    If we are processing nodes and hit Extends, we should probably stop rendering current output
+                    //    and instead switch to rendering the parent, but carrying over the sections we defined.
+
+                    // However, `render_nodes` processes sequentially.
+                    // Sections might be defined BEFORE or AFTER @extends.
+                    // Standard Blade often puts @extends at top.
+                    // If @extends is present, the "main" output of this file (outside sections) is usually discarded?
+
+                    // For simplicity: We store the layout path in env, and after rendering the current view,
+                    // if layout is set, we render the layout.
+
+                    self.env.set("__layout".to_string(), Value::String(path));
                 }
             }
         }

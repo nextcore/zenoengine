@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>@yield('title')</title>
+</head>
+<body>
+    <nav>
+        @include('views/layout_test/nav.blade.zl')
+    </nav>
+    <div class="content">
+        @yield('content')
+    </div>
+</body>
+</html>

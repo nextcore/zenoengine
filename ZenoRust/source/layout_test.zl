@@ -1,0 +1,2 @@
+let output = view("views/layout_test/child.blade.zl", {});
+print(output);

@@ -9,6 +9,10 @@ pub enum BladeNode {
     Interpolation(Expression), // {{ expr }}
     If(Expression, Vec<BladeNode>, Option<Vec<BladeNode>>), // @if(expr) ... @else ... @endif
     ForEach(Expression, String, Vec<BladeNode>), // @foreach(collection as item) ... @endforeach
+    Include(String), // @include('path')
+    Extends(String), // @extends('path')
+    Section(String, Vec<BladeNode>), // @section('name') ... @endsection
+    Yield(String), // @yield('name')
 }
 
 pub struct ZenoBladeParser<'a> {
@@ -44,7 +48,23 @@ impl<'a> ZenoBladeParser<'a> {
                 if let Some(node) = self.parse_foreach() {
                     nodes.push(node);
                 }
-            } else if self.peek_str("@else") || self.peek_str("@endif") || self.peek_str("@endforeach") {
+            } else if self.peek_str("@include") {
+                if let Some(node) = self.parse_include() {
+                    nodes.push(node);
+                }
+            } else if self.peek_str("@extends") {
+                if let Some(node) = self.parse_extends() {
+                    nodes.push(node);
+                }
+            } else if self.peek_str("@section") {
+                if let Some(node) = self.parse_section() {
+                    nodes.push(node);
+                }
+            } else if self.peek_str("@yield") {
+                if let Some(node) = self.parse_yield() {
+                    nodes.push(node);
+                }
+            } else if self.peek_str("@else") || self.peek_str("@endif") || self.peek_str("@endforeach") || self.peek_str("@endsection") {
                 if inside_block {
                     break;
                 } else {
@@ -52,7 +72,7 @@ impl<'a> ZenoBladeParser<'a> {
                 }
             } else {
                 if self.pos < self.input.len() {
-                     if !self.peek_str("{{") && !self.peek_str("@if") && !self.peek_str("@else") && !self.peek_str("@endif") && !self.peek_str("@foreach") && !self.peek_str("@endforeach") {
+                     if !self.peek_str("{{") && !self.peek_str("@") {
                          self.pos += 1;
                      }
                 }
@@ -64,7 +84,7 @@ impl<'a> ZenoBladeParser<'a> {
     fn parse_text(&mut self) -> Option<String> {
         let start = self.pos;
         while self.pos < self.input.len() {
-            if self.peek_str("{{") || self.peek_str("@if") || self.peek_str("@else") || self.peek_str("@endif") || self.peek_str("@foreach") || self.peek_str("@endforeach") {
+            if self.peek_str("{{") || self.peek_str("@") {
                 break;
             }
             self.pos += 1;
@@ -173,6 +193,65 @@ impl<'a> ZenoBladeParser<'a> {
                      }
                  }
              }
+        }
+        None
+    }
+
+    fn parse_include(&mut self) -> Option<BladeNode> {
+        self.pos += 8; // @include
+        let path = self.parse_string_arg()?;
+        Some(BladeNode::Include(path))
+    }
+
+    fn parse_extends(&mut self) -> Option<BladeNode> {
+        self.pos += 8; // @extends
+        let path = self.parse_string_arg()?;
+        Some(BladeNode::Extends(path))
+    }
+
+    fn parse_yield(&mut self) -> Option<BladeNode> {
+        self.pos += 6; // @yield
+        let name = self.parse_string_arg()?;
+        Some(BladeNode::Yield(name))
+    }
+
+    fn parse_section(&mut self) -> Option<BladeNode> {
+        self.pos += 8; // @section
+        let name = self.parse_string_arg()?;
+
+        let block = self.parse_nodes(true);
+
+        if self.peek_str("@endsection") {
+            self.pos += 11;
+        }
+        Some(BladeNode::Section(name, block))
+    }
+
+    fn parse_string_arg(&mut self) -> Option<String> {
+        if let Some(start) = self.input[self.pos..].find('(') {
+            self.pos += start + 1;
+            // Handle quotes
+            let remainder = &self.input[self.pos..];
+            if remainder.starts_with('\'') {
+                if let Some(end) = remainder[1..].find('\'') {
+                    let s = remainder[1..1+end].to_string();
+                    self.pos += end + 2; // skip ' and '
+                    // skip closing paren if present
+                    if self.pos < self.input.len() && self.input[self.pos..].starts_with(')') {
+                        self.pos += 1;
+                    }
+                    return Some(s);
+                }
+            } else if remainder.starts_with('"') {
+                if let Some(end) = remainder[1..].find('"') {
+                    let s = remainder[1..1+end].to_string();
+                    self.pos += end + 2;
+                    if self.pos < self.input.len() && self.input[self.pos..].starts_with(')') {
+                        self.pos += 1;
+                    }
+                    return Some(s);
+                }
+            }
         }
         None
     }
