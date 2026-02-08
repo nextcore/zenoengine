@@ -14,6 +14,7 @@ pub enum Expression {
     Index(Box<Expression>, Box<Expression>), // Target, Index
     BinaryOp(Box<Expression>, Op, Box<Expression>),
     Call(Box<Expression>, Vec<Expression>), // FuncName, Args
+    Function(Vec<String>, Box<Statement>), // Params, Body (Anonymous)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -261,6 +262,24 @@ impl<'a> Parser<'a> {
             Some(Ok(Token::LParen)) => {
                 let expr = self.parse_expression(0)?;
                 match self.lexer.next() { Some(Ok(Token::RParen)) => expr, _ => return None }
+            }
+            Some(Ok(Token::Fn)) => {
+                match self.lexer.next() { Some(Ok(Token::LParen)) => {}, _ => return None }
+                let mut params = Vec::new();
+                if let Some(Ok(Token::RParen)) = self.lexer.peek() {
+                    self.lexer.next();
+                } else {
+                    loop {
+                        match self.lexer.next() { Some(Ok(Token::Identifier(s))) => params.push(s), _ => return None };
+                        match self.lexer.peek() {
+                            Some(Ok(Token::Comma)) => { self.lexer.next(); },
+                            Some(Ok(Token::RParen)) => { self.lexer.next(); break; },
+                            _ => return None
+                        }
+                    }
+                }
+                let body = self.parse_block()?;
+                Expression::Function(params, Box::new(body))
             }
             _ => return None,
         };

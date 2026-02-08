@@ -1,37 +1,43 @@
 // Initialize DB
 db_execute("CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, completed INTEGER)", []);
 
-// Router
-let method = request["method"];
-let path = request["path"];
+print("Incoming Request: " + request["method"] + " " + request["path"]);
 
-print("Handling " + method + " " + path);
-
-if (path == "/api/todos") {
-    if (method == "GET") {
-        let rows = db_query("SELECT * FROM todos", []);
-        print("Rows fetched: " + str(rows));
-        response_json(rows);
-    } else if (method == "POST") {
-        // Parse Body
-        let body_str = request["body"];
-        let data = json_parse(body_str);
-
-        if (data == null) {
-            response_status(400);
-            response_json({"error": "Invalid JSON"});
-        } else {
-            let title = data["title"];
-            db_execute("INSERT INTO todos (title, completed) VALUES (?, ?)", [title, false]);
-            response_status(201);
-            response_json({"status": "created", "title": title});
-        }
-    } else {
-        response_status(405);
-    }
-} else if (path == "/api/health") {
+// Helper route
+router_get("/api/health", fn() {
     response_json({"status": "healthy"});
-} else {
+});
+
+// Todo List API
+router_get("/api/todos", fn() {
+    let rows = db_query("SELECT * FROM todos", []);
+    response_json(rows);
+});
+
+router_post("/api/todos", fn() {
+    let body_str = request["body"];
+    let data = json_parse(body_str);
+
+    if (data == null) {
+        response_status(400);
+        response_json({"error": "Invalid JSON"});
+    } else {
+        let title = data["title"];
+        db_execute("INSERT INTO todos (title, completed) VALUES (?, ?)", [title, 0]);
+        response_status(201);
+        response_json({"status": "created", "title": title});
+    }
+});
+
+// Fallback 404
+// Check if any route handled it?
+// We need a way to know if router matched.
+// `router_get` updates `_route_handled`.
+// Accessing built-in env var from script?
+// `_route_handled` is in Env. But script can only access what `eval_expression` resolves.
+// Identifier logic: `self.env.get(name)`. So `_route_handled` IS accessible if I use that name!
+
+if (_route_handled == false) {
     response_status(404);
-    response_json({"error": "Not Found"});
+    response_json({"error": "Not Found", "path": request["path"]});
 }

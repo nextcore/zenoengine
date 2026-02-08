@@ -51,7 +51,7 @@ impl Serialize for Value {
                 }
                 map_ser.end()
             },
-            _ => serializer.serialize_none(), // Functions etc serialize to null
+            _ => serializer.serialize_none(),
         }
     }
 }
@@ -201,12 +201,13 @@ impl Evaluator {
         self.env.set("request".to_string(), Value::Map(Arc::new(Mutex::new(req_map))));
         self.env.set("_response_body".to_string(), Value::Null);
         self.env.set("_response_status".to_string(), Value::Null);
+        // Track if a route has been handled
+        self.env.set("_route_handled".to_string(), Value::Boolean(false));
     }
 
     fn register_builtins(&mut self) {
-        // ... (Builtins omitted to save space, but logically same as before)
-        // I must ensure I don't lose them!
-        // Re-pasting standard builtins logic.
+        // ... (Standard Built-ins)
+        // I will preserve existing builtins and add router_get/post.
 
         self.env.set("len".to_string(), Value::Builtin("len".to_string(), |args, _, _| Box::pin(async move {
             if args.len() != 1 { return Value::Null; }
@@ -258,7 +259,10 @@ impl Evaluator {
         })));
 
         self.env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, _, pool| Box::pin(async move {
-            if pool.is_none() { return Value::Null; }
+            if pool.is_none() {
+                eprintln!("DB Error: No database pool configured");
+                return Value::Null;
+            }
             let pool = pool.unwrap();
             if args.len() < 1 { return Value::Null; }
             let sql = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -286,7 +290,10 @@ impl Evaluator {
         })));
 
         self.env.set("db_query".to_string(), Value::Builtin("db_query".to_string(), |args, _, pool| Box::pin(async move {
-            if pool.is_none() { return Value::Null; }
+            if pool.is_none() {
+                eprintln!("DB Error: No database pool configured");
+                return Value::Null;
+            }
             let pool = pool.unwrap();
             if args.len() < 1 { return Value::Null; }
             let sql = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -416,6 +423,82 @@ impl Evaluator {
                 Ok(v) => json_to_value(v),
                 Err(_) => Value::Null
             }
+        })));
+
+        // NEW: Router Helpers
+        self.env.set("router_get".to_string(), Value::Builtin("router_get".to_string(), |args, mut env, pool| Box::pin(async move {
+            if args.len() != 2 { return Value::Null; }
+            let path = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let handler = args[1].clone();
+
+            let request_val = env.get("request");
+            let route_handled = env.get("_route_handled");
+
+            // Check if already handled
+            if let Some(Value::Boolean(true)) = route_handled {
+                return Value::Null;
+            }
+
+            let mut match_found = false;
+            if let Some(Value::Map(req_map)) = request_val {
+                let (method, current_path) = {
+                    let req = req_map.lock().unwrap();
+                    (
+                        req.get("method").cloned().unwrap_or(Value::Null),
+                        req.get("path").cloned().unwrap_or(Value::Null)
+                    )
+                };
+
+                if method == Value::String("GET".to_string()) && current_path == Value::String(path) {
+                    match_found = true;
+                }
+            }
+
+            if match_found {
+                env.update("_route_handled", Value::Boolean(true));
+                if let Value::Function(_, body, closure_env) = handler {
+                    let mut sub_evaluator = Evaluator::new(pool);
+                    sub_evaluator.env = Env::new_with_outer(closure_env);
+                    sub_evaluator.eval_statement(body).await;
+                }
+            }
+            Value::Null
+        })));
+
+        self.env.set("router_post".to_string(), Value::Builtin("router_post".to_string(), |args, mut env, pool| Box::pin(async move {
+            if args.len() != 2 { return Value::Null; }
+            let path = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+            let handler = args[1].clone();
+
+            let request_val = env.get("request");
+            let route_handled = env.get("_route_handled");
+
+            if let Some(Value::Boolean(true)) = route_handled { return Value::Null; }
+
+            let mut match_found = false;
+            if let Some(Value::Map(req_map)) = request_val {
+                let (method, current_path) = {
+                    let req = req_map.lock().unwrap();
+                    (
+                        req.get("method").cloned().unwrap_or(Value::Null),
+                        req.get("path").cloned().unwrap_or(Value::Null)
+                    )
+                };
+
+                if method == Value::String("POST".to_string()) && current_path == Value::String(path) {
+                    match_found = true;
+                }
+            }
+
+            if match_found {
+                env.update("_route_handled", Value::Boolean(true));
+                if let Value::Function(_, body, closure_env) = handler {
+                    let mut sub_evaluator = Evaluator::new(pool);
+                    sub_evaluator.env = Env::new_with_outer(closure_env);
+                    sub_evaluator.eval_statement(body).await;
+                }
+            }
+            Value::Null
         })));
     }
 
@@ -615,6 +698,9 @@ impl Evaluator {
                     evaluated_args.push(self.eval_expression(arg).await?);
                 }
                 self.apply_function(func, evaluated_args).await
+            }
+            Expression::Function(params, body) => {
+                Some(Value::Function(params.clone(), *body.clone(), self.env.clone()))
             }
         }
     }
