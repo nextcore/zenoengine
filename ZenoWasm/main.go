@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"zeno-wasm/adapter"
+	"zeno-wasm/embed"
 	"zeno/pkg/engine"
 )
 
@@ -28,10 +29,35 @@ func main() {
 	js.Global().Set("zenoRender", js.FuncOf(render))
 	js.Global().Set("zenoRenderString", js.FuncOf(renderString))
 
+	// Inject Datastar
+	injectDatastar()
+
 	fmt.Println("ZenoWasm Initialized 🚀")
 
 	// Prevent exit
 	select {}
+}
+
+func injectDatastar() {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return // Not in browser env
+	}
+
+	// Check if already loaded
+	// Simple check: see if window.datastar exists or similar, or just check for our script id
+	if !js.Global().Get("Datastar").IsUndefined() {
+		return
+	}
+
+	head := doc.Call("querySelector", "head")
+	script := doc.Call("createElement", "script")
+	script.Set("type", "module")
+	script.Set("textContent", embed.DatastarSource)
+	script.Set("id", "datastar-embedded")
+
+	head.Call("appendChild", script)
+	fmt.Println("Datastar library injected successfully.")
 }
 
 func registerTemplate(this js.Value, args []js.Value) interface{} {

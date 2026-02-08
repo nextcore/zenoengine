@@ -2,52 +2,56 @@
 <html>
 <head>
 	<meta charset="utf-8">
+	<title>ZenoWasm + Datastar Demo</title>
 	<script src="wasm_exec.js"></script>
 	<script>
 		const go = new Go();
 		WebAssembly.instantiateStreaming(fetch("zeno.wasm"), go.importObject).then((result) => {
 			go.run(result.instance);
 
-			// Test Zeno
 			console.log("Zeno Engine Loaded");
 
-			// 1. Register a Template
-			zenoRegisterTemplate("home", `
-				<div class="p-4 bg-gray-100 rounded">
-					<h1 class="text-2xl font-bold">Hello, {{ $name }}!</h1>
-					<p>Welcome to ZenoWasm.</p>
+			// 1. Register Template with Datastar Attributes
+			zenoRegisterTemplate("counter", `
+				<div class="p-8 border rounded-lg shadow-md max-w-md mx-auto mt-10 bg-white"
+				     data-signals="{count: {{ $count }}}">
 
-					@if($count > 0)
-						<p>You have {{ $count }} notifications.</p>
-					@else
-						<p>No new notifications.</p>
-					@endif
+					<h2 class="text-2xl font-bold mb-4">Zeno + Datastar Counter</h2>
 
-					<ul>
-					@foreach($items as $item)
-						<li>Item: {{ $item }}</li>
-					@endforeach
-					</ul>
+					<div class="text-4xl font-mono text-center my-6" data-text="$count">
+						{{ $count }}
+					</div>
+
+					<div class="flex gap-4 justify-center">
+						<button class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+						        data-on-click="$count--">
+							Decrease
+						</button>
+
+						<button class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+						        data-on-click="$count++">
+							Increase
+						</button>
+					</div>
+
+					<p class="mt-4 text-gray-600 text-sm text-center">
+						Logic handled by Zeno Blade. State handled by Datastar.
+					</p>
 				</div>
 			`);
 
-			// 2. Render it
-			const data = {
-				name: "User",
-				count: 5,
-				items: ["Apple", "Banana", "Cherry"]
-			};
-
-			const html = zenoRender("home", JSON.stringify(data));
-			document.getElementById("app").innerHTML = html;
+			// 2. Initial Render
+			// We pass initial state to Zeno to render the first HTML frame
+			const initialHtml = zenoRender("counter", { count: 10 });
+			document.getElementById("app").innerHTML = initialHtml;
 
 		}).catch((err) => {
 			console.error(err);
 		});
 	</script>
+	<script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-	<h1>ZenoWasm SPA Demo</h1>
-	<div id="app">Loading WASM...</div>
+<body class="bg-gray-50">
+	<div id="app" class="p-10">Loading ZenoWasm...</div>
 </body>
 </html>
