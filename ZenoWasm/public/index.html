@@ -21,6 +21,7 @@
 							<div class="space-x-4 flex items-center">
 								<a href="/" class="hover:underline">Home</a>
 								<a href="/counter" class="hover:underline">Counter</a>
+								<a href="/interop" class="hover:underline">JS Interop</a>
 								<a href="/dashboard" class="hover:underline font-semibold text-yellow-300">Dashboard (Protected)</a>
 
 								<button class="px-3 py-1 text-sm bg-white text-indigo-600 rounded"
@@ -91,6 +92,48 @@
 				@endsection
 			`);
 
+			zenoRegisterTemplate("interop", `
+				@extends('layout')
+				@section('content')
+					<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+						<h2 class="text-2xl font-bold mb-4">JS Interop Demo</h2>
+						<p class="mb-4">Zeno can talk to JavaScript directly!</p>
+
+						<div class="space-y-4">
+							<div class="p-4 border rounded bg-gray-50">
+								<h3 class="font-bold">1. Call JS Alert</h3>
+								<p class="text-sm text-gray-500 mb-2">Code: <code>js.call: 'alert' { args: ['Hello!'] }</code></p>
+								<button class="px-4 py-2 bg-purple-600 text-white rounded"
+								        onclick="zenoNavigate('/run-alert')">
+									Trigger Alert
+								</button>
+							</div>
+
+							<div class="p-4 border rounded bg-gray-50">
+								<h3 class="font-bold">2. Change Page Title</h3>
+								<p class="text-sm text-gray-500 mb-2">Code: <code>js.set: 'document.title' { val: 'New Title' }</code></p>
+								<button class="px-4 py-2 bg-green-600 text-white rounded"
+								        onclick="zenoNavigate('/run-title')">
+									Change Title
+								</button>
+							</div>
+
+							<div class="p-4 border rounded bg-gray-50">
+								<h3 class="font-bold">3. Read Window Size</h3>
+								<p class="text-sm text-gray-500 mb-2">Code: <code>js.get: 'window.innerWidth' { as: $w }</code></p>
+								<button class="px-4 py-2 bg-blue-600 text-white rounded"
+								        onclick="zenoNavigate('/run-read-window')">
+									Read Size
+								</button>
+								@if($window_width)
+									<p class="mt-2 font-mono text-blue-600">Detected Width: {{ $window_width }}px</p>
+								@endif
+							</div>
+						</div>
+					</div>
+				@endsection
+			`);
+
 			zenoRegisterTemplate("dashboard", `
 				@extends('layout')
 				@section('content')
@@ -123,7 +166,30 @@
 			zenoInitRouter(`
 				router.get: '/' { view: 'home' }
 				router.get: '/counter' { view: 'counter' }
+				router.get: '/interop' { view: 'interop' }
 				router.get: '/login' { view: 'login' }
+
+				# Interop Actions (return to view after action)
+				router.get: '/run-alert' {
+					do: {
+						js.call: 'alert' { args: ['Hello from Zeno!'] }
+						view: 'interop'
+					}
+				}
+
+				router.get: '/run-title' {
+					do: {
+						js.set: 'document.title' { value: 'Zeno is Awesome!' }
+						view: 'interop'
+					}
+				}
+
+				router.get: '/run-read-window' {
+					do: {
+						js.get: 'window.innerWidth' { as: $window_width }
+						view: 'interop'
+					}
+				}
 
 				# Protected Routes
 				router.group: {

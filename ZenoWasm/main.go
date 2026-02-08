@@ -24,6 +24,7 @@ func main() {
 	adapter.RegisterLogicSlots(eng)
 	adapter.RegisterBladeSlots(eng)
 	adapter.RegisterRouterSlots(eng)
+	adapter.RegisterJSSlots(eng)
 
 	// Expose functions to JS
 	js.Global().Set("zenoRegisterTemplate", js.FuncOf(registerTemplate))
