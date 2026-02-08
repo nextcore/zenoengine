@@ -1,46 +1,80 @@
-# Zeno Money (Mobile App Example)
+# Contoh Aplikasi: Konversi Mata Uang 💸
 
-Contoh aplikasi Konversi Mata Uang menggunakan **ZenoWasm** yang dibungkus menjadi APK Android menggunakan **Capacitor**.
+Contoh aplikasi **ZenoWasm** sederhana untuk menghitung konversi kurs (USD <-> IDR) secara realtime. Aplikasi ini mendemonstrasikan:
+1.  **Reaktivitas**: Input dua arah (Datastar).
+2.  **Logic**: Perhitungan uang presisi tinggi (`money.calc`).
+3.  **Network**: Fetch data API kurs (`http.fetch`).
+4.  **Mobile Ready**: Bisa dibungkus jadi APK Android dengan **Capacitor**.
 
-## Prasyarat
+---
+
+## 🚀 Cara Menjalankan (Tanpa Install Go)
+
+Anda hanya perlu mendownload engine ZenoWasm yang sudah jadi.
+
+### 1. Siapkan Folder
+Pastikan Anda berada di dalam folder `currency-converter`.
+
+### 2. Download Engine
+Unduh 2 file inti ke dalam folder `public/`:
+
+*   **zeno.wasm** (Engine): [Download Disini](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/zeno.wasm.gz)
+    *   *Catatan: File ini terkompresi (.gz). Harap ekstrak menjadi `zeno.wasm`.*
+*   **wasm_exec.js** (Loader): [Download Disini](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/wasm_exec.js)
+
+**Cara Cepat via Terminal (Linux/Mac/Git Bash):**
+```bash
+cd public
+curl -L -O https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/zeno.wasm.gz
+curl -L -O https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/wasm_exec.js
+gzip -d zeno.wasm.gz
+```
+
+### 3. Jalankan Server
+Jalankan web server statis di folder `public/`.
+
+```bash
+# Menggunakan Python
+python3 -m http.server -d public 8080
+
+# Atau Node.js (http-server)
+npx http-server public
+```
+
+Buka browser di `http://localhost:8080`.
+
+---
+
+## 📱 Cara Membuat APK Android (Opsional)
+
+Jika Anda ingin mengubah website ini menjadi aplikasi Android native.
+
+### Prasyarat
 - Node.js & NPM
-- Go 1.21+
-- Android Studio (untuk build APK)
+- Android Studio
 
-## Cara Build (Web)
-
-1.  Jalankan build script untuk mengkompilasi engine WASM:
-    ```bash
-    ./build_example.sh
-    ```
-2.  Buka `public/index.html` di browser (via local server) untuk testing.
-
-## Cara Build (Android APK)
-
-1.  Instal dependensi Capacitor:
+### Langkah-Langkah
+1.  **Instal Capacitor**:
     ```bash
     npm install
     ```
 
-2.  Inisialisasi Android project:
+2.  **Setup Android**:
     ```bash
     npx cap add android
     ```
 
-3.  Sinkronisasi file web ke native:
-    ```bash
-    npx cap sync
-    ```
-
-4.  Buka di Android Studio & Run:
-    ```bash
-    npx cap open android
-    ```
-    Atau build langsung:
+3.  **Jalankan di Emulator/HP**:
     ```bash
     npx cap run android
     ```
 
-## Struktur
-- `public/`: Berisi web assets (`index.html`, `zeno.wasm`, `wasm_exec.js`).
-- `capacitor.config.json`: Konfigurasi ID aplikasi dan nama.
+---
+
+## 🛠️ Build Manual (Untuk Developer Go)
+Jika Anda ingin mengkompilasi ulang engine dari source code (misal: habis edit `main.go`).
+
+```bash
+# Dari root repo
+GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o ZenoWasm/examples/currency-converter/public/zeno.wasm ZenoWasm/main.go
+```
