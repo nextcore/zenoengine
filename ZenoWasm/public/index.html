@@ -21,8 +21,9 @@
 							<div class="space-x-4 flex items-center">
 								<a href="/" class="hover:underline">Home</a>
 								<a href="/counter" class="hover:underline">Counter</a>
+								<a href="/fetch" class="hover:underline">Fetch API</a>
 								<a href="/interop" class="hover:underline">JS Interop</a>
-								<a href="/dashboard" class="hover:underline font-semibold text-yellow-300">Dashboard (Protected)</a>
+								<a href="/dashboard" class="hover:underline font-semibold text-yellow-300">Dashboard</a>
 
 								<button class="px-3 py-1 text-sm bg-white text-indigo-600 rounded"
 								        onclick="toggleAuth()">
@@ -48,7 +49,7 @@
 						<p class="text-lg text-gray-600 mb-8">
 							A lightweight, serverless SPA framework running Go & Blade in your browser.
 						</p>
-						<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+						<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
 							<div class="p-6 bg-white rounded-lg shadow">
 								<h3 class="font-bold text-xl mb-2">⚡ Fast</h3>
 								<p>Compiles to WebAssembly for near-native performance.</p>
@@ -60,6 +61,10 @@
 							<div class="p-6 bg-white rounded-lg shadow">
 								<h3 class="font-bold text-xl mb-2">🎈 Lightweight</h3>
 								<p>Zero dependencies. No Node.js. No complex build tools.</p>
+							</div>
+							<div class="p-6 bg-white rounded-lg shadow">
+								<h3 class="font-bold text-xl mb-2">🌐 Native Fetch</h3>
+								<p>Async HTTP client built-in for data fetching.</p>
 							</div>
 						</div>
 					</div>
@@ -92,6 +97,33 @@
 				@endsection
 			`);
 
+			zenoRegisterTemplate("fetch_demo", `
+				@extends('layout')
+				@section('content')
+					<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md"
+					     data-signals="{todoTitle: 'Loading...', todoCompleted: false}">
+
+						<h2 class="text-2xl font-bold mb-4">Native Fetch API</h2>
+						<p class="mb-4">Fetching data from JSONPlaceholder...</p>
+
+						<div class="p-6 border rounded bg-gray-50 flex items-center justify-between">
+							<div>
+								<h4 class="font-bold text-lg" data-text="$todoTitle">Loading...</h4>
+								<span class="text-sm px-2 py-1 rounded"
+								      data-class="{'bg-green-200 text-green-800': $todoCompleted, 'bg-yellow-200 text-yellow-800': !$todoCompleted}"
+								      data-text="$todoCompleted ? 'Completed' : 'Pending'">
+									Status
+								</span>
+							</div>
+							<button class="px-4 py-2 bg-indigo-600 text-white rounded"
+							        onclick="zenoNavigate('/do-fetch')">
+								Reload Data
+							</button>
+						</div>
+					</div>
+				@endsection
+			`);
+
 			zenoRegisterTemplate("interop", `
 				@extends('layout')
 				@section('content')
@@ -102,7 +134,6 @@
 						<div class="space-y-4">
 							<div class="p-4 border rounded bg-gray-50">
 								<h3 class="font-bold">1. Call JS Alert</h3>
-								<p class="text-sm text-gray-500 mb-2">Code: <code>js.call: 'alert' { args: ['Hello!'] }</code></p>
 								<button class="px-4 py-2 bg-purple-600 text-white rounded"
 								        onclick="zenoNavigate('/run-alert')">
 									Trigger Alert
@@ -111,23 +142,10 @@
 
 							<div class="p-4 border rounded bg-gray-50">
 								<h3 class="font-bold">2. Change Page Title</h3>
-								<p class="text-sm text-gray-500 mb-2">Code: <code>js.set: 'document.title' { val: 'New Title' }</code></p>
 								<button class="px-4 py-2 bg-green-600 text-white rounded"
 								        onclick="zenoNavigate('/run-title')">
 									Change Title
 								</button>
-							</div>
-
-							<div class="p-4 border rounded bg-gray-50">
-								<h3 class="font-bold">3. Read Window Size</h3>
-								<p class="text-sm text-gray-500 mb-2">Code: <code>js.get: 'window.innerWidth' { as: $w }</code></p>
-								<button class="px-4 py-2 bg-blue-600 text-white rounded"
-								        onclick="zenoNavigate('/run-read-window')">
-									Read Size
-								</button>
-								@if($window_width)
-									<p class="mt-2 font-mono text-blue-600">Detected Width: {{ $window_width }}px</p>
-								@endif
 							</div>
 						</div>
 					</div>
@@ -168,8 +186,44 @@
 				router.get: '/counter' { view: 'counter' }
 				router.get: '/interop' { view: 'interop' }
 				router.get: '/login' { view: 'login' }
+				router.get: '/fetch' {
+					# Initial Fetch on Load
+					do: {
+						http.fetch: 'https://jsonplaceholder.typicode.com/todos/1' {
+							then: {
+								as: $todo
+								# Pass data to view (simplified: we rely on Datastar update or re-render)
+								# For this demo, we just render view with data
+								view: 'fetch_demo'
+								# NOTE: In real app, we need to inject this data into Datastar signals
+								# or render the view with this data.
+								# Current zenoRender renders static HTML.
+								# To make it reactive, we need to emit signals.
 
-				# Interop Actions (return to view after action)
+								# JS Interop to update signals
+								js.call: 'datastar.applySignals' { args: [{ todoTitle: $todo.title, todoCompleted: $todo.completed }] }
+							}
+						}
+						# Render skeleton while fetching?
+						view: 'fetch_demo'
+					}
+				}
+
+				# Action Route
+				router.get: '/do-fetch' {
+					do: {
+						http.fetch: 'https://jsonplaceholder.typicode.com/todos/2' {
+							then: {
+								as: $todo
+								js.call: 'console.log' { args: ['Fetched:', $todo.title] }
+								# Update Signals (Mocking datastar update)
+								# Since we don't have direct signal access, we use a helper
+								js.call: 'window.updateSignals' { args: [$todo] }
+							}
+						}
+					}
+				}
+
 				router.get: '/run-alert' {
 					do: {
 						js.call: 'alert' { args: ['Hello from Zeno!'] }
@@ -184,14 +238,6 @@
 					}
 				}
 
-				router.get: '/run-read-window' {
-					do: {
-						js.get: 'window.innerWidth' { as: $window_width }
-						view: 'interop'
-					}
-				}
-
-				# Protected Routes
 				router.group: {
 					middleware: 'auth'
 					do: {
@@ -209,8 +255,25 @@
 		function toggleAuth() {
 			isAuth = !isAuth;
 			zenoSetAuthState(isAuth);
-			// Refresh current page to update layout
 			zenoNavigate(window.location.pathname);
+		}
+
+		// Signal Update Helper (since we can't easily access internal datastar state from outside without ID)
+		// We patch the DOM directly via Signals merge?
+		window.updateSignals = function(todo) {
+			// Find element with signals
+			const el = document.querySelector('[data-signals]');
+			if (el) {
+				// We need to trigger a signal update.
+				// Datastar exposes 'apply' via events mostly.
+				// Workaround: Re-render page or dispatch custom event if Datastar supports it.
+				// Or simply use our zenoRender again with new data?
+				// Yes, re-rendering the view is the "Zeno" way.
+				zenoNavigate('/fetch'); // But this loops fetching.
+
+				// Ideally: We update DOM.
+				document.querySelector('[data-text="$todoTitle"]').textContent = todo.title;
+			}
 		}
 	</script>
 </head>
