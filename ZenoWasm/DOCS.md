@@ -2,57 +2,51 @@
 
 **ZenoWasm** adalah framework **Single Page Application (SPA)** unik yang memungkinkan Anda menjalankan logika backend **ZenoLang** dan templating **Blade** langsung di dalam browser menggunakan **WebAssembly (WASM)**.
 
-Ini berarti Anda bisa membangun aplikasi web yang dinamis, reaktif, dan offline-ready tanpa perlu berpindah konteks ke JavaScript framework yang kompleks (seperti React/Vue/Angular), sambil tetap menggunakan sintaks yang familiar bagi developer backend (Go/PHP/Laravel).
-
 ---
 
 ## 🏁 Memulai (Getting Started)
 
 ### Cara Cepat (Download Binary) ⚡
 
-Anda **TIDAK PERLU** menginstal Go atau melakukan build manual untuk menggunakan ZenoWasm. Cukup download binary engine yang sudah kami sediakan.
+Anda **TIDAK PERLU** menginstal Go atau melakukan build manual.
 
 1.  **Download Engine**:
-    *   Unduh file `zeno.wasm.gz` dari [repository resmi](https://github.com/nextcore/zenoengine/blob/main/ZenoWasm/public/zeno.wasm.gz).
-    *   Ekstrak file tersebut (gunakan WinRAR/7-Zip atau command `gzip -d zeno.wasm.gz`) menjadi `zeno.wasm`.
+    *   Unduh file `zeno.wasm.gz` (Gzip ~3.5MB) atau `zeno.wasm.br` (Brotli ~2.9MB) dari [repository resmi](https://github.com/nextcore/zenoengine/blob/main/ZenoWasm/public/).
+    *   Unduh file [wasm_exec.js](https://github.com/nextcore/zenoengine/raw/main/ZenoWasm/public/wasm_exec.js).
+    *   Simpan keduanya di folder `public/`.
 
-2.  **Download Loader**:
-    *   Unduh file [wasm_exec.js](https://github.com/nextcore/zenoengine/blob/main/ZenoWasm/public/wasm_exec.js).
+2.  **Jalankan Server (Wajib Mendukung Kompresi)**:
+    Kami sangat menyarankan menggunakan **Caddy** karena otomatis menyajikan file `.br` atau `.gz` ke browser tanpa perlu ekstraksi manual.
 
-3.  **Buat index.html**:
-    *   Buat file `index.html` dan muat kedua file di atas. (Lihat contoh di bawah).
+    *Buat file `Caddyfile` di root project:*
+    ```caddy
+    :8080
+    root * public
+    file_server
+    encode gzip zstd br
+    ```
 
-### Cara Manual (Build from Source) 🛠️
-*Hanya jika Anda ingin memodifikasi engine core atau menambahkan slot kustom.*
-
-Prasyarat: **Go 1.21+**.
-
-```bash
-cd ZenoWasm
-./build.sh
-# Hasil build ada di public/zeno.wasm
-```
+    *Jalankan:*
+    ```bash
+    caddy run
+    ```
+    Buka `http://localhost:8080`.
 
 ---
 
 ## 2. Struktur Proyek
-Untuk menjalankan aplikasi, Anda hanya butuh 3 file statis di folder `public`:
 
 ```text
-public/
-├── index.html      # Titik masuk aplikasi (HTML + JS Loader)
-├── zeno.wasm       # Engine Zeno (Binary yang sudah didownload)
-└── wasm_exec.js    # Go WASM Loader
+my-app/
+├── Caddyfile       # Konfigurasi Server
+├── public/
+│   ├── index.html  # Titik masuk
+│   ├── zeno.wasm.br # Engine (Brotli Compressed)
+│   └── wasm_exec.js
 ```
 
-### 3. Menjalankan Server Dev
-Anda bisa menggunakan server statis apa saja (Python, Nginx, Caddy, VS Code Live Server).
-
-```bash
-# Contoh dengan Python
-python3 -m http.server -d public 8080
-```
-Buka browser di `http://localhost:8080`.
+### 3. Mengapa Brotli?
+Format **Brotli (`.br`)** memberikan kompresi lebih baik (sekitar 15-20% lebih kecil dari Gzip). Dengan ukuran file < 3MB, aplikasi ZenoWasm dimuat hampir instan di jaringan modern.
 
 ---
 
@@ -377,8 +371,7 @@ js.log: 'Pesan debug'
 
 ## 🚀 Tips Performa
 
-1.  **Gunakan Layout**: Jangan render ulang seluruh halaman jika hanya konten yang berubah. Gunakan `@extends`.
-2.  **Datastar untuk Interaksi**: Jangan gunakan `zenoNavigate` untuk interaksi kecil (seperti counter atau toggle). Gunakan Datastar `data-signals` karena jauh lebih cepat (hanya update DOM node terkait).
-3.  **Lazy Load Data**: Render kerangka halaman (skeleton) dulu, lalu panggil `http.fetch` di dalam rute untuk mengisi data.
+1.  **Gunakan Caddy**: Selalu gunakan server yang mendukung kompresi (Brotli/Gzip) agar user tidak perlu mendownload file 15MB penuh.
+2.  **Lazy Load Data**: Render kerangka halaman (skeleton) dulu, lalu panggil `http.fetch` di dalam rute untuk mengisi data.
 
 Selamat berkarya dengan **ZenoWasm**! 🎉

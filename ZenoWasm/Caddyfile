@@ -1,0 +1,15 @@
+:8080
+
+root * public
+file_server
+encode gzip zstd br
+
+header / {
+	# Cache static assets for 1 year
+	Cache-Control "public, max-age=31536000"
+}
+
+header /index.html {
+	# Don't cache HTML entrypoint
+	Cache-Control "no-cache"
+}
