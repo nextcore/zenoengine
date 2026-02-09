@@ -43,60 +43,44 @@ impl ZenoQueryBuilder {
         self.offset = Some(offset);
     }
 
-    // Constructs a sqlx::QueryBuilder which handles driver-specific syntax (e.g. $1 vs ?)
-    pub fn build_query<'a>(&'a self) -> QueryBuilder<'a, Any> {
-        let mut qb = QueryBuilder::new("SELECT ");
+    pub fn to_sql_and_params(&self) -> (String, Vec<Value>) {
+        let mut sql = String::from("SELECT ");
+        sql.push_str(&self.select.join(", "));
+        sql.push_str(" FROM ");
+        sql.push_str(&self.table);
 
-        // Fields
-        qb.push(self.select.join(", "));
+        let mut params = Vec::new();
 
-        // From
-        qb.push(" FROM ");
-        qb.push(&self.table);
-
-        // Where
         if !self.wheres.is_empty() {
-            qb.push(" WHERE ");
+            sql.push_str(" WHERE ");
             for (i, (col, op, val)) in self.wheres.iter().enumerate() {
-                if i > 0 {
-                    qb.push(" AND ");
-                }
-                qb.push(col);
-                qb.push(" ");
-                qb.push(op);
-                qb.push(" ");
-                // Bind value based on type
-                match val {
-                    Value::Integer(v) => { qb.push_bind(*v); },
-                    Value::String(v) => { qb.push_bind(v.clone()); },
-                    Value::Boolean(v) => { qb.push_bind(*v); },
-                    Value::Null => { qb.push_bind(None::<String>); },
-                    _ => { qb.push_bind(val.to_string()); },
-                }
+                if i > 0 { sql.push_str(" AND "); }
+                sql.push_str(col);
+                sql.push_str(" ");
+                sql.push_str(op);
+                sql.push_str(" ?");
+                params.push(val.clone());
             }
         }
 
-        // Order
         if !self.order_by.is_empty() {
-            qb.push(" ORDER BY ");
+            sql.push_str(" ORDER BY ");
             let orders: Vec<String> = self.order_by.iter()
                 .map(|(c, d)| format!("{} {}", c, d))
                 .collect();
-            qb.push(orders.join(", "));
+            sql.push_str(&orders.join(", "));
         }
 
-        // Limit
         if let Some(l) = self.limit {
-            qb.push(" LIMIT ");
-            qb.push_bind(l);
+            sql.push_str(" LIMIT ?");
+            params.push(Value::Integer(l));
         }
 
-        // Offset
         if let Some(o) = self.offset {
-            qb.push(" OFFSET ");
-            qb.push_bind(o);
+            sql.push_str(" OFFSET ?");
+            params.push(Value::Integer(o));
         }
 
-        qb
+        (sql, params)
     }
 }

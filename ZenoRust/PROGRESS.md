@@ -45,7 +45,7 @@ ZenoRust is now a production-ready replacement for the core ZenoEngine (Go), cap
 
 ### 🚧 Pending Features (For 100% Parity)
 1.  **Specialized Libs:**
-    *   Image processing, Mail sending, and Excel generation slots are not yet ported.
+    *   Mail sending and Excel generation slots are not yet ported. (Image processing is done).
 
 ## Next Steps Recommendations
-1.  **Specialized Libs:** Implement image/mail slots or provide them via the Sidecar Plugin system.
+1.  **Specialized Libs:** Implement mail/excel slots or provide them via the Sidecar Plugin system.

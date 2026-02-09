@@ -9,6 +9,7 @@ use std::pin::Pin;
 use reqwest::{Method, header::{HeaderMap, HeaderName, HeaderValue}};
 use std::str::FromStr;
 use tokio::fs;
+use image::GenericImageView;
 use std::path::Path;
 use chrono::prelude::*;
 use sha2::{Sha256, Digest};
@@ -659,6 +660,38 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    // --- IMAGE ---
+    env.set("image_resize".to_string(), Value::Builtin("image_resize".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 4 { return Value::Boolean(false); }
+        // input_path, width, height, output_path
+        let input_path = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+        let width = match &args[1] { Value::Integer(i) => *i as u32, _ => return Value::Boolean(false) };
+        let height = match &args[2] { Value::Integer(i) => *i as u32, _ => return Value::Boolean(false) };
+        let output_path = match &args[3] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
+
+        // Process in blocking thread to avoid stalling async runtime
+        let result = tokio::task::spawn_blocking(move || {
+            match image::open(&input_path) {
+                Ok(img) => {
+                    let resized = img.resize(width, height, image::imageops::FilterType::Lanczos3);
+                    match resized.save(&output_path) {
+                        Ok(_) => true,
+                        Err(e) => {
+                            eprintln!("Image Save Error: {}", e);
+                            false
+                        }
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Image Open Error: {}", e);
+                    false
+                }
+            }
+        }).await;
+
+        Value::Boolean(result.unwrap_or(false))
+    })));
+
     // --- DB BUILDER ---
     env.set("db_table".to_string(), Value::Builtin("db_table".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
@@ -719,12 +752,21 @@ pub fn register(env: &mut Env) {
         if args.len() != 1 { return Value::Null; }
         if let Value::QueryBuilder(b) = &args[0] {
             if let Some(pool) = pool {
-                // We must drop the lock before awaiting to avoid Send error for MutexGuard
-                let query = {
-                    let guard = b.lock().unwrap();
-                    let mut qb = guard.build_query(); // Returns sqlx::QueryBuilder
-                    qb.build() // Returns sqlx::query::Query which owns the bound values
-                };
+                // To avoid lifetime issues with QueryBuilder referencing the MutexGuard,
+                // we reconstruct the query string and arguments.
+                // Or simply hold the query string and params from a helper method.
+                let (sql, params) = b.lock().unwrap().to_sql_and_params();
+
+                let mut query = sqlx::query(&sql);
+                for p in params {
+                    match p {
+                        Value::String(s) => query = query.bind(s),
+                        Value::Integer(i) => query = query.bind(i),
+                        Value::Boolean(b) => query = query.bind(b),
+                        Value::Null => query = query.bind(None::<String>),
+                        _ => query = query.bind(p.to_string()),
+                    }
+                }
 
                 match query.fetch_all(&pool).await {
                     Ok(rows) => {
