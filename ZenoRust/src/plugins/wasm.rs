@@ -57,14 +57,22 @@ impl WasmManager {
         } else {
              Module::from_file(&self.engine, &path)?
         };
-        self.modules.lock().unwrap().insert(name, module);
-        Ok(())
+
+        if let Ok(mut modules) = self.modules.lock() {
+            modules.insert(name, module);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Failed to acquire module lock"))
+        }
     }
 
     pub async fn call(&self, plugin_name: &str, func_name: &str, params: Value) -> Result<Value, String> {
         let module = {
-            let modules = self.modules.lock().unwrap();
-            modules.get(plugin_name).cloned().ok_or("Plugin not found")?
+            if let Ok(modules) = self.modules.lock() {
+                modules.get(plugin_name).cloned().ok_or("Plugin not found")?
+            } else {
+                return Err("Failed to acquire module lock".to_string());
+            }
         };
 
         let wasi = WasiCtxBuilder::new().inherit_stdio().build();

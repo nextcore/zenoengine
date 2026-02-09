@@ -109,12 +109,19 @@ async fn start_server(pool: Option<AnyPool>) {
         .with_state(state);
 
     let addr: SocketAddr = addr_str.parse().expect("Invalid address");
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => {
+            if let Err(e) = axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await
+            {
+                tracing::error!("Server error: {}", e);
+            }
+        },
+        Err(e) => {
+            tracing::error!("Failed to bind to address {}: {}", addr, e);
+        }
+    }
 }
 
 async fn shutdown_signal() {

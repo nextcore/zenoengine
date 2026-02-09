@@ -228,11 +228,11 @@ pub fn register(env: &mut Env) {
 
     // --- DB ---
     env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, _, pool| Box::pin(async move {
-        if pool.is_none() {
+        let pool = if let Some(p) = pool { p } else {
             eprintln!("DB Error: No database pool configured");
             return Value::Null;
-        }
-        let pool = pool.unwrap();
+        };
+
         if args.len() < 1 { return Value::Null; }
         let sql = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
         let mut query = sqlx::query(&sql);
@@ -259,11 +259,11 @@ pub fn register(env: &mut Env) {
     })));
 
     env.set("db_query".to_string(), Value::Builtin("db_query".to_string(), |args, _, pool| Box::pin(async move {
-        if pool.is_none() {
+        let pool = if let Some(p) = pool { p } else {
             eprintln!("DB Error: No database pool configured");
             return Value::Null;
-        }
-        let pool = pool.unwrap();
+        };
+
         if args.len() < 1 { return Value::Null; }
         let sql = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
         let mut query = sqlx::query(&sql);
@@ -487,8 +487,11 @@ pub fn register(env: &mut Env) {
         if args.len() != 1 { return Value::Boolean(false); }
         let s = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
         // Simple regex for email
-        let re = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
-        Value::Boolean(re.is_match(&s))
+        if let Ok(re) = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$") {
+            Value::Boolean(re.is_match(&s))
+        } else {
+            Value::Boolean(false)
+        }
     })));
 
     env.set("is_numeric".to_string(), Value::Builtin("is_numeric".to_string(), |args, _, _| Box::pin(async move {
@@ -605,12 +608,8 @@ pub fn register(env: &mut Env) {
         if args.len() != 3 { return Value::Null; }
         let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
         let method = match &args[1] { Value::String(s) => s.clone(), _ => return Value::Null };
-        // params handling: convert Value to serde_json::Value
-        // For simple test, we pass args[2] assuming it is a Map or String
         let params_val = args[2].clone();
 
-        // Helper to convert Value -> serde_json::Value
-        // We rely on Serialize implementation of Value
         let params_json = serde_json::to_value(&params_val).unwrap_or(serde_json::Value::Null);
 
         let manager = get_sidecar_manager();
