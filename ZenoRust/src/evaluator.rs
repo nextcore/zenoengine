@@ -135,8 +135,10 @@ impl Env {
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
-        if let Some(val) = self.store.lock().unwrap().get(name) {
-            return Some(val.clone());
+        if let Ok(store) = self.store.lock() {
+            if let Some(val) = store.get(name) {
+                return Some(val.clone());
+            }
         }
         if let Some(ref outer) = self.outer {
             return outer.get(name);
@@ -145,15 +147,18 @@ impl Env {
     }
 
     pub fn set(&mut self, name: String, val: Value) {
-        self.store.lock().unwrap().insert(name, val);
+        if let Ok(mut store) = self.store.lock() {
+            store.insert(name, val);
+        }
     }
 
     pub fn update(&mut self, name: &str, val: Value) -> bool {
          {
-             let mut store = self.store.lock().unwrap();
-             if store.contains_key(name) {
-                 store.insert(name.to_string(), val);
-                 return true;
+             if let Ok(mut store) = self.store.lock() {
+                 if store.contains_key(name) {
+                     store.insert(name.to_string(), val);
+                     return true;
+                 }
              }
          }
          if let Some(ref mut outer) = self.outer {
