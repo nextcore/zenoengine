@@ -19,6 +19,7 @@ use base64::prelude::*;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use crate::plugins::sidecar::SidecarManager;
 use crate::plugins::wasm::WasmManager;
+use crate::db_builder::ZenoQueryBuilder;
 use std::sync::OnceLock;
 
 // Global Sidecar Manager (Lazy Init)
@@ -34,6 +35,21 @@ fn get_wasm_manager() -> Arc<WasmManager> {
 }
 
 type BuiltinFn = fn(Vec<Value>, Env, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>;
+
+// Helper to map DB row to Zeno Value::Map
+fn row_to_map(row: sqlx::any::AnyRow) -> Value {
+    let mut map = HashMap::new();
+    for col in row.columns() {
+        let name = col.name();
+        // Try to decode as i64 (ints), String (text), or bool. Fallback to Null.
+        let val = if let Ok(v) = row.try_get::<i64, _>(name) { Value::Integer(v) }
+        else if let Ok(v) = row.try_get::<String, _>(name) { Value::String(v) }
+        else if let Ok(v) = row.try_get::<bool, _>(name) { Value::Boolean(v) }
+        else { Value::Null };
+        map.insert(name.to_string(), val);
+    }
+    Value::Map(Arc::new(Mutex::new(map)))
+}
 
 pub fn register(env: &mut Env) {
     // --- CORE ---
@@ -267,19 +283,7 @@ pub fn register(env: &mut Env) {
             Ok(rows) => {
                 let mut result_rows = Vec::new();
                 for row in rows {
-                    let mut map = HashMap::new();
-                    for col in row.columns() {
-                        let name = col.name();
-                        // try_get is strict with types in AnyRow if not using raw
-                        // But for SQLite/Any, type mapping can be tricky.
-                        // We try int first (covers boolean in sqlite), then string.
-                        let val = if let Ok(v) = row.try_get::<i64, _>(name) { Value::Integer(v) }
-                        else if let Ok(v) = row.try_get::<String, _>(name) { Value::String(v) }
-                        else if let Ok(v) = row.try_get::<bool, _>(name) { Value::Boolean(v) }
-                        else { Value::Null };
-                        map.insert(name.to_string(), val);
-                    }
-                    result_rows.push(Value::Map(Arc::new(Mutex::new(map))));
+                    result_rows.push(row_to_map(row));
                 }
                 Value::Array(Arc::new(Mutex::new(result_rows)))
             },
@@ -653,6 +657,93 @@ pub fn register(env: &mut Env) {
                 Value::Null
             }
         }
+    })));
+
+    // --- DB BUILDER ---
+    env.set("db_table".to_string(), Value::Builtin("db_table".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 1 { return Value::Null; }
+        let table = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+
+        let builder = ZenoQueryBuilder::new(table);
+        Value::QueryBuilder(Arc::new(Mutex::new(builder)))
+    })));
+
+    env.set("qb_select".to_string(), Value::Builtin("qb_select".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() < 2 { return Value::Null; }
+        if let Value::QueryBuilder(b) = &args[0] {
+            let mut fields = Vec::new();
+            // Handle variadic or array? Let's assume array or single string for now.
+            // But built-in args is Vec<Value>.
+            // Let's assume args[1] is Array or we collect args[1..]
+
+            if let Value::Array(arr) = &args[1] {
+                let vec = arr.lock().unwrap();
+                for v in vec.iter() {
+                    if let Value::String(s) = v { fields.push(s.clone()); }
+                }
+            } else if let Value::String(s) = &args[1] {
+                fields.push(s.clone());
+            }
+
+            b.lock().unwrap().select(fields);
+            return args[0].clone(); // Return builder for chaining
+        }
+        Value::Null
+    })));
+
+    env.set("qb_where".to_string(), Value::Builtin("qb_where".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 4 { return Value::Null; }
+        // builder, col, op, val
+        if let Value::QueryBuilder(b) = &args[0] {
+            let col = match &args[1] { Value::String(s) => s.clone(), _ => return args[0].clone() };
+            let op = match &args[2] { Value::String(s) => s.clone(), _ => return args[0].clone() };
+            let val = args[3].clone();
+
+            b.lock().unwrap().where_clause(col, op, val);
+            return args[0].clone();
+        }
+        Value::Null
+    })));
+
+    env.set("qb_limit".to_string(), Value::Builtin("qb_limit".to_string(), |args, _, _| Box::pin(async move {
+        if args.len() != 2 { return Value::Null; }
+        if let Value::QueryBuilder(b) = &args[0] {
+            let limit = match &args[1] { Value::Integer(i) => *i, _ => return args[0].clone() };
+            b.lock().unwrap().limit(limit);
+            return args[0].clone();
+        }
+        Value::Null
+    })));
+
+    env.set("qb_get".to_string(), Value::Builtin("qb_get".to_string(), |args, _, pool| Box::pin(async move {
+        if args.len() != 1 { return Value::Null; }
+        if let Value::QueryBuilder(b) = &args[0] {
+            if let Some(pool) = pool {
+                // We must drop the lock before awaiting to avoid Send error for MutexGuard
+                let query = {
+                    let guard = b.lock().unwrap();
+                    let mut qb = guard.build_query(); // Returns sqlx::QueryBuilder
+                    qb.build() // Returns sqlx::query::Query which owns the bound values
+                };
+
+                match query.fetch_all(&pool).await {
+                    Ok(rows) => {
+                        let mut results = Vec::new();
+                        for row in rows {
+                            results.push(row_to_map(row));
+                        }
+                        return Value::Array(Arc::new(Mutex::new(results)));
+                    },
+                    Err(e) => {
+                        eprintln!("DB Error: {}", e);
+                        return Value::Null;
+                    }
+                }
+            } else {
+                eprintln!("DB Error: No pool connection");
+            }
+        }
+        Value::Null
     })));
 
     // --- ROUTER ---
