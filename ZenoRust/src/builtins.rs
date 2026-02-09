@@ -72,6 +72,78 @@ pub fn register(env: &mut Env) {
         Value::Null
     })));
 
+    env.set("eval".to_string(), Value::Builtin("eval".to_string(), |args, mut env, pool| Box::pin(async move {
+        if args.len() != 1 { return Value::Null; }
+        let code = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+
+        use crate::parser::Parser;
+        let mut parser = Parser::new(&code);
+        let statements = parser.parse();
+
+        let mut sub_evaluator = Evaluator::new(pool);
+        // Share environment to allow side effects (defining vars/functions)
+        sub_evaluator.env = env;
+        sub_evaluator.eval(statements).await;
+
+        Value::Null
+    })));
+
+    env.set("call_function".to_string(), Value::Builtin("call_function".to_string(), |args, mut env, pool| Box::pin(async move {
+        if args.len() < 1 { return Value::Null; }
+        let func_name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
+
+        // Retrieve function from env
+        let func = if let Some(f) = env.get(&func_name) {
+            f
+        } else {
+            eprintln!("Runtime Error: Function '{}' not found in call_function", func_name);
+            return Value::Null;
+        };
+
+        // Prepare args (skip the first argument which is the function name)
+        let call_args = args[1..].to_vec();
+
+        // Execute function logic (mimic apply_function in evaluator)
+        // Since built-ins don't have access to private `apply_function` of evaluator, we have to replicate dispatch.
+        // OR we can make `apply_function` public static or similar.
+        // For now, simpler to replicate the dispatch logic here or construct a Call expression?
+        // Constructing expression is hard because we are inside async execution.
+        // Let's implement dispatch directly.
+
+        match func {
+            Value::Function(params, body, closure_env) => {
+                if call_args.len() != params.len() {
+                    eprintln!("Runtime Error: Function expected {} args, got {}", params.len(), call_args.len());
+                    return Value::Null;
+                }
+                let mut extended_env = Env::new_with_outer(closure_env);
+                for (param_name, arg_val) in params.iter().zip(call_args) {
+                    extended_env.set(param_name.clone(), arg_val);
+                }
+
+                // We need an evaluator instance to run the body statement
+                let mut sub_evaluator = Evaluator::new(pool);
+                sub_evaluator.env = extended_env;
+
+                // eval_statement returns Option<Value> where Value is a ReturnValue wrapper if return was hit.
+                // We need to unwrap the return value if present.
+                let result = sub_evaluator.eval_statement(body).await;
+                if let Some(Value::ReturnValue(val)) = result {
+                    *val
+                } else {
+                    Value::Null
+                }
+            },
+            Value::Builtin(_, func_ptr) => {
+                func_ptr(call_args, env, pool).await
+            },
+            _ => {
+                eprintln!("Runtime Error: '{}' is not a function", func_name);
+                Value::Null
+            }
+        }
+    })));
+
     // --- STRING ---
     env.set("upper".to_string(), Value::Builtin("upper".to_string(), |args, _, _| Box::pin(async move {
          if args.len() != 1 { return Value::Null; }

@@ -23,6 +23,7 @@ ZenoRust is now a production-ready replacement for the core ZenoEngine (Go), cap
 | **Crypto/Security** | ✅ 100% | SHA256, UUID, Random, Base64, Hex, **Bcrypt**. | |
 | **Utilities** | ✅ 100% | String Utils, Regex (`match`, `replace`), Time, Env, Coalesce. | |
 | **Validation** | ✅ 100% | Email, Numeric. | |
+| **Metaprogramming**| ✅ 100% | `eval`, `call_function`, `include`. | Dynamic code execution & reflection. |
 | **Ecosystem** | ✅ 100% | Sidecar (JSON-RPC), WASM (String ABI + WASI). | Full data passing support. |
 
 ## Detailed Breakdown
