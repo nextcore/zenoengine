@@ -19,6 +19,11 @@ pub enum Value {
     ReturnValue(Box<Value>),
     Array(Arc<Mutex<Vec<Value>>>),
     Map(Arc<Mutex<HashMap<String, Value>>>),
+    // Wrapper for Rust Objects (like QueryBuilder)
+    // We use Arc<Mutex<Any>> but need Any + Send + Sync.
+    // Since we know the types we want, let's make a specific variant for now or use a trait object.
+    // For simplicity, let's add specific variant for QueryBuilder.
+    QueryBuilder(Arc<Mutex<crate::db_builder::ZenoQueryBuilder>>),
 }
 
 impl Serialize for Value {
@@ -102,7 +107,8 @@ impl std::fmt::Display for Value {
                 let mut entries: Vec<String> = m.iter().map(|(k, v)| format!("\"{}\": {}", k, v)).collect();
                 entries.sort();
                 write!(f, "{{{}}}", entries.join(", "))
-            }
+            },
+            Value::QueryBuilder(_) => write!(f, "<QueryBuilder>"),
         }
     }
 }
