@@ -94,3 +94,9 @@ ZenoLang in ZenoRust supports:
 - **File Write Protection:** In production (`APP_ENV!=development`), writing to `.zl`, `.env`, or `.go` files is blocked.
 - **SQL Injection:** Always use parameterized queries (`?` or `$1`) with `db_query`.
 - **Middleware:** `BLOCKED_IPS` env var can block malicious actors. `Security Headers` are set by default.
+
+## Feature Status
+See [PROGRESS.md](PROGRESS.md) for a detailed breakdown.
+
+## Migration Guide
+If you are coming from the Go version of ZenoEngine, please read [MIGRATION.md](MIGRATION.md) for a syntax comparison and porting guide.
