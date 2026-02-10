@@ -119,7 +119,7 @@ The tutorial database (`tutorial_max.db`) will be created automatically on first
 
 Open your browser and navigate to:
 ```
-http://localhost:8080/tutorial/max
+http://localhost:3000/tutorial/max
 ```
 
 ---

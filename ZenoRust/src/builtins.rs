@@ -1,14 +1,18 @@
 use crate::evaluator::{Value, Env};
 use crate::template::ZenoBladeParser;
 use crate::evaluator::Evaluator;
+#[cfg(feature = "db")]
 use sqlx::{AnyPool, Row, Column, TypeInfo};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+#[cfg(feature = "http")]
 use reqwest::{Method, header::{HeaderMap, HeaderName, HeaderValue}};
 use std::str::FromStr;
+#[cfg(feature = "server")]
 use tokio::fs;
+#[cfg(all(feature = "multithreaded", not(target_arch = "wasm32")))]
 use image::GenericImageView;
 use std::path::Path;
 use chrono::prelude::*;
@@ -18,26 +22,39 @@ use rand::Rng; // For .random()
 use regex::Regex;
 use base64::prelude::*;
 use bcrypt::{hash, verify, DEFAULT_COST};
+#[cfg(feature = "server")]
 use crate::plugins::sidecar::SidecarManager;
+#[cfg(feature = "server")]
 use crate::plugins::wasm::WasmManager;
+#[cfg(feature = "db")]
 use crate::db_builder::ZenoQueryBuilder;
 use std::sync::OnceLock;
 
+#[cfg(feature = "server")]
 // Global Sidecar Manager (Lazy Init)
 static SIDECAR_MANAGER: OnceLock<Arc<SidecarManager>> = OnceLock::new();
+#[cfg(feature = "server")]
 static WASM_MANAGER: OnceLock<Arc<WasmManager>> = OnceLock::new();
 
+#[cfg(feature = "server")]
 fn get_sidecar_manager() -> Arc<SidecarManager> {
     SIDECAR_MANAGER.get_or_init(|| Arc::new(SidecarManager::new())).clone()
 }
 
+#[cfg(feature = "server")]
 fn get_wasm_manager() -> Arc<WasmManager> {
     WASM_MANAGER.get_or_init(|| Arc::new(WasmManager::new().expect("Failed to init WASM"))).clone()
 }
 
-type BuiltinFn = fn(Vec<Value>, Env, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>;
+#[cfg(feature = "db")]
+type DbPool = Option<AnyPool>;
+#[cfg(not(feature = "db"))]
+type DbPool = Option<()>;
+
+type BuiltinFn = fn(Vec<Value>, Env, DbPool) -> Pin<Box<dyn Future<Output = Value> + Send>>;
 
 // Helper to map DB row to Zeno Value::Map
+#[cfg(feature = "db")]
 fn row_to_map(row: sqlx::any::AnyRow) -> Value {
     let mut map = HashMap::new();
     for col in row.columns() {
@@ -64,6 +81,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "server")]
     env.set("sleep".to_string(), Value::Builtin("sleep".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
         if let Value::Integer(ms) = args[0] {
@@ -214,6 +232,7 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- HTTP ---
+    #[cfg(feature = "http")]
     env.set("http_get".to_string(), Value::Builtin("http_get".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
         let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -223,6 +242,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "http")]
     env.set("http_post".to_string(), Value::Builtin("http_post".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 2 { return Value::Null; }
         let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -234,6 +254,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "http")]
     env.set("fetch".to_string(), Value::Builtin("fetch".to_string(), |args, _, _| Box::pin(async move {
         if args.len() < 1 { return Value::Null; }
         let url = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -299,6 +320,7 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- DB ---
+    #[cfg(feature = "db")]
     env.set("db_execute".to_string(), Value::Builtin("db_execute".to_string(), |args, _, pool| Box::pin(async move {
         let pool = if let Some(p) = pool { p } else {
             eprintln!("DB Error: No database pool configured");
@@ -330,6 +352,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "db")]
     env.set("db_query".to_string(), Value::Builtin("db_query".to_string(), |args, _, pool| Box::pin(async move {
         let pool = if let Some(p) = pool { p } else {
             eprintln!("DB Error: No database pool configured");
@@ -368,18 +391,23 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- TEMPLATE ---
+    // --- TEMPLATE ---
     env.set("view".to_string(), Value::Builtin("view".to_string(), |args, _, pool| Box::pin(async move {
         if args.len() < 1 { return Value::Null; }
         let tpl_input = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
 
-        let tpl = if tpl_input.ends_with(".zl") || tpl_input.contains("/") {
-             match tokio::fs::read_to_string(&tpl_input).await {
-                 Ok(c) => c,
-                 Err(_) => tpl_input.clone()
-             }
-        } else {
-            tpl_input.clone()
-        };
+        #[allow(unused_assignments)]
+        let mut tpl = tpl_input.clone();
+
+        #[cfg(feature = "server")]
+        {
+            if tpl_input.ends_with(".zl") || tpl_input.contains("/") {
+                 match tokio::fs::read_to_string(&tpl_input).await {
+                     Ok(c) => tpl = c,
+                     Err(_) => {}
+                 }
+            }
+        }
 
         let mut renderer = Evaluator::new(pool);
         if args.len() > 1 {
@@ -397,10 +425,18 @@ pub fn register(env: &mut Env) {
         let mut output = renderer.render_nodes(nodes).await;
 
         if let Some(Value::String(layout_path)) = renderer.env.get("__layout") {
-             if let Ok(layout_content) = tokio::fs::read_to_string(&layout_path).await {
-                 let mut layout_parser = ZenoBladeParser::new(&layout_content);
-                 let layout_nodes = layout_parser.parse();
-                 output = renderer.render_nodes(layout_nodes).await;
+             #[cfg(feature = "server")]
+             {
+                 if let Ok(layout_content) = tokio::fs::read_to_string(&layout_path).await {
+                     let mut layout_parser = ZenoBladeParser::new(&layout_content);
+                     let layout_nodes = layout_parser.parse();
+                     output = renderer.render_nodes(layout_nodes).await;
+                 }
+             }
+             #[cfg(not(feature = "server"))]
+             {
+                 // In WASM, we might need a registry to lookup layout by name
+                 // For now, no-op or assume layout content is passed? (Logic gap here, but safe for compile)
              }
         }
 
@@ -408,6 +444,8 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- FILESYSTEM ---
+    // --- FILESYSTEM ---
+    #[cfg(feature = "server")]
     env.set("file_read".to_string(), Value::Builtin("file_read".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
         let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -417,6 +455,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "server")]
     env.set("file_write".to_string(), Value::Builtin("file_write".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 2 { return Value::Null; }
         let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -441,6 +480,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "server")]
     env.set("file_delete".to_string(), Value::Builtin("file_delete".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
         let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -450,6 +490,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "server")]
     env.set("dir_create".to_string(), Value::Builtin("dir_create".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
         let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -625,13 +666,13 @@ pub fn register(env: &mut Env) {
     })));
 
     env.set("random_int".to_string(), Value::Builtin("random_int".to_string(), |args, _, _| Box::pin(async move {
-        let mut rng = rand::rng();
+        let mut rng = rand::thread_rng();
         if args.len() == 2 {
             if let (Value::Integer(min), Value::Integer(max)) = (&args[0], &args[1]) {
-                return Value::Integer(rng.random_range(*min..*max));
+                return Value::Integer(rng.gen_range(*min..*max));
             }
         }
-        Value::Integer(rng.random())
+        Value::Integer(rng.r#gen())
     })));
 
     env.set("coalesce".to_string(), Value::Builtin("coalesce".to_string(), |args, _, _| Box::pin(async move {
@@ -647,6 +688,7 @@ pub fn register(env: &mut Env) {
         if args.len() != 1 { return Value::Null; }
         let path_str = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
 
+        #[cfg(feature = "server")]
         if let Ok(content) = tokio::fs::read_to_string(&path_str).await {
             use crate::parser::Parser;
             let mut parser = Parser::new(&content);
@@ -660,6 +702,7 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- PLUGINS (Sidecar) ---
+    #[cfg(feature = "server")]
     env.set("plugin_load_sidecar".to_string(), Value::Builtin("plugin_load_sidecar".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 3 { return Value::Boolean(false); }
         let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
@@ -676,6 +719,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "server")]
     env.set("plugin_call".to_string(), Value::Builtin("plugin_call".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 3 { return Value::Null; }
         let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -695,6 +739,7 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- WASM ---
+    #[cfg(feature = "server")]
     env.set("wasm_load".to_string(), Value::Builtin("wasm_load".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 2 { return Value::Boolean(false); }
         let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Boolean(false) };
@@ -710,6 +755,7 @@ pub fn register(env: &mut Env) {
         }
     })));
 
+    #[cfg(feature = "server")]
     env.set("wasm_call".to_string(), Value::Builtin("wasm_call".to_string(), |args, _, _| Box::pin(async move {
         if args.len() < 2 { return Value::Null; }
         let name = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -732,6 +778,7 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- IMAGE ---
+    #[cfg(all(feature = "multithreaded", not(target_arch = "wasm32")))]
     env.set("image_resize".to_string(), Value::Builtin("image_resize".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 4 { return Value::Boolean(false); }
         // input_path, width, height, output_path
@@ -764,6 +811,7 @@ pub fn register(env: &mut Env) {
     })));
 
     // --- DB BUILDER ---
+    #[cfg(feature = "db")]
     env.set("db_table".to_string(), Value::Builtin("db_table".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
         let table = match &args[0] { Value::String(s) => s.clone(), _ => return Value::Null };
@@ -772,6 +820,7 @@ pub fn register(env: &mut Env) {
         Value::QueryBuilder(Arc::new(Mutex::new(builder)))
     })));
 
+    #[cfg(feature = "db")]
     env.set("qb_select".to_string(), Value::Builtin("qb_select".to_string(), |args, _, _| Box::pin(async move {
         if args.len() < 2 { return Value::Null; }
         if let Value::QueryBuilder(b) = &args[0] {
@@ -795,6 +844,7 @@ pub fn register(env: &mut Env) {
         Value::Null
     })));
 
+    #[cfg(feature = "db")]
     env.set("qb_where".to_string(), Value::Builtin("qb_where".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 4 { return Value::Null; }
         // builder, col, op, val
@@ -809,6 +859,7 @@ pub fn register(env: &mut Env) {
         Value::Null
     })));
 
+    #[cfg(feature = "db")]
     env.set("qb_limit".to_string(), Value::Builtin("qb_limit".to_string(), |args, _, _| Box::pin(async move {
         if args.len() != 2 { return Value::Null; }
         if let Value::QueryBuilder(b) = &args[0] {
@@ -819,6 +870,7 @@ pub fn register(env: &mut Env) {
         Value::Null
     })));
 
+    #[cfg(feature = "db")]
     env.set("qb_get".to_string(), Value::Builtin("qb_get".to_string(), |args, _, pool| Box::pin(async move {
         if args.len() != 1 { return Value::Null; }
         if let Value::QueryBuilder(b) = &args[0] {

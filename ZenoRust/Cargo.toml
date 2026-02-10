@@ -11,15 +11,15 @@ anyhow = "1.0.101"
 async-recursion = "1.1.1"
 axum = { version = "0.8.8", optional = true }
 base64 = "0.22.1"
-bcrypt = "0.18.0"
+bcrypt = "0.15.0"
 chrono = "0.4.43"
 dotenvy = "0.15.7"
 futures = "0.3.31"
 getrandom = { version = "0.2", features = ["js"] }
 hex = "0.4.3"
-image = "0.25.9"
+image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif"] }
 logos = "0.16.1"
-rand = { version = "0.9.2", features = ["std", "std_rng"] }
+rand = { version = "0.8.5", features = ["std", "std_rng"] }
 regex = "1.12.3"
 reqwest = { version = "0.13.1", features = ["json", "blocking"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -28,17 +28,18 @@ sha2 = "0.10.9"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "mysql", "postgres", "any"], optional = true }
 tokio = { version = "1.49.0", features = ["full", "process"], optional = true }
 tower = "0.5.3"
-tower-http = { version = "0.6.8", features = ["trace", "cors", "fs"] }
+tower-http = { version = "0.6.8", features = ["trace", "cors"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-uuid = { version = "1.20.0", features = ["v4", "fast-rng"] }
+uuid = { version = "1.20.0", features = ["v4", "fast-rng", "js"] }
 wasm-bindgen = "0.2.108"
 wasm-bindgen-futures = "0.4.58"
-wasmtime = "18.0.2"
-wasmtime-wasi = "18.0.2"
+wasmtime = { version = "18.0.2", optional = true }
+wasmtime-wasi = { version = "18.0.2", optional = true }
 
 [features]
-default = ["server", "db", "http"]
-server = ["dep:axum", "dep:tokio"]
+default = ["server", "db", "http", "multithreaded"]
+server = ["dep:axum", "dep:tokio", "dep:wasmtime", "dep:wasmtime-wasi", "tower-http/fs"]
 db = ["dep:sqlx"]
 http = ["dep:reqwest"]
+multithreaded = ["image/rayon"]

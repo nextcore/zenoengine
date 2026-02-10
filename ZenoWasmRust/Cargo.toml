@@ -1,0 +1,17 @@
+[package]
+name = "zeno-wasm-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Path dependency to ZenoRust
+# strict_wasm features would be ideal if implemented, for now disable defaults
+ZenoRust = { path = "../ZenoRust", default-features = false }

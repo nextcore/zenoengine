@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/home/max/Documents/PROJ/github/zenoengine/ZenoWasmRust/target/wasm32-unknown-unknown/debug/build/mime_guess-9fce3fd4356507b7/out/mime_types_generated.rs

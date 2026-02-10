@@ -5,7 +5,12 @@ use std::sync::{Arc, Mutex};
 use async_recursion::async_recursion;
 use std::future::Future;
 use std::pin::Pin;
+#[cfg(feature = "db")]
 use sqlx::AnyPool;
+#[cfg(feature = "db")]
+type DbPool = Option<AnyPool>;
+#[cfg(not(feature = "db"))]
+type DbPool = Option<()>;
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
@@ -15,7 +20,7 @@ pub enum Value {
     Boolean(bool),
     Null,
     Function(Vec<String>, Statement, Env),
-    Builtin(String, fn(Vec<Value>, Env, Option<AnyPool>) -> Pin<Box<dyn Future<Output = Value> + Send>>),
+    Builtin(String, fn(Vec<Value>, Env, DbPool) -> Pin<Box<dyn Future<Output = Value> + Send>>),
     ReturnValue(Box<Value>),
     Array(Arc<Mutex<Vec<Value>>>),
     Map(Arc<Mutex<HashMap<String, Value>>>),
@@ -23,6 +28,7 @@ pub enum Value {
     // We use Arc<Mutex<Any>> but need Any + Send + Sync.
     // Since we know the types we want, let's make a specific variant for now or use a trait object.
     // For simplicity, let's add specific variant for QueryBuilder.
+    #[cfg(feature = "db")]
     QueryBuilder(Arc<Mutex<crate::db_builder::ZenoQueryBuilder>>),
 }
 
@@ -108,6 +114,7 @@ impl std::fmt::Display for Value {
                 entries.sort();
                 write!(f, "{{{}}}", entries.join(", "))
             },
+    #[cfg(feature = "db")]
             Value::QueryBuilder(_) => write!(f, "<QueryBuilder>"),
         }
     }
@@ -171,11 +178,11 @@ impl Env {
 pub struct Evaluator {
     pub env: Env,
     output: String,
-    db_pool: Option<AnyPool>,
+    db_pool: DbPool,
 }
 
 impl Evaluator {
-    pub fn new(db_pool: Option<AnyPool>) -> Self {
+    pub fn new(db_pool: DbPool) -> Self {
         let mut evaluator = Self {
             env: Env::new(),
             output: String::new(),
@@ -260,6 +267,7 @@ impl Evaluator {
                 }
                 BladeNode::Include(path) => {
                     // TODO: Ideally resolve path relative to views, but for now assuming direct path or handled by caller
+                    #[cfg(feature = "server")]
                     if let Ok(content) = tokio::fs::read_to_string(&path).await {
                         // Render included content with current env
                         // We need to parse it first
