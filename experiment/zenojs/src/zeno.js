@@ -4,10 +4,15 @@ import { compile } from './compiler.js';
 
 export class Zeno {
     static _components = {};
+    static _layouts = {}; // Layouts registry
 
-    // Register component globally
     static component(name, definition) {
         this._components[name] = definition;
+    }
+
+    // Register layout (which is just a component/template used as layout)
+    static layout(name, definition) {
+        this._layouts[name] = definition;
     }
 
     static create(options) {
@@ -15,70 +20,47 @@ export class Zeno {
     }
 
     constructor(options) {
-        // Reactive State
         this.data = reactive(options.data ? options.data() : {});
         this.methods = options.methods || {};
         this.template = options.template || '';
-        this.props = options.props || []; // Props array: ['title', 'type']
-
-        // Pass parent slots or default
+        this.props = options.props || [];
         this.slots = options.slots || {};
+        this.sections = options.sections || {}; // For Layouts
 
-        // Store element ref
         this.el = null;
 
-        // Runtime Helpers for Blade Directives
         this.data.$helpers = {
             classNames: (arg) => {
                 let classes = [];
-                if (typeof arg === 'string') {
-                    classes.push(arg);
-                } else if (Array.isArray(arg)) {
+                if (typeof arg === 'string') classes.push(arg);
+                else if (Array.isArray(arg)) {
                     arg.forEach(a => {
                         if (typeof a === 'string') classes.push(a);
                         else if (typeof a === 'object') {
-                            for (const k in a) {
-                                if (a[k]) classes.push(k);
-                            }
+                            for (const k in a) if (a[k]) classes.push(k);
                         }
                     });
                 } else if (typeof arg === 'object') {
-                    for (const k in arg) {
-                        if (arg[k]) classes.push(k);
-                    }
+                    for (const k in arg) if (arg[k]) classes.push(k);
                 }
                 return classes.join(' ');
             },
             styleNames: (arg) => {
                 let styles = [];
                 if (typeof arg === 'object') {
-                    for (const k in arg) {
-                         if (arg[k]) styles.push(`${k}: ${arg[k]}`);
-                    }
+                    for (const k in arg) if (arg[k]) styles.push(`${k}: ${arg[k]}`);
                 }
                 return styles.join('; ');
             }
         };
 
-        // Helper: $slots for checking if slot exists
         this.data.$slots = {};
-        for (const k in this.slots) {
-            this.data.$slots[k] = true; // Just existence check
-        }
-        // Slot renderer helper (injects slot content)
-        // Usage in component: {{ $slot('header') }} or {{ $slot() }} for default
-        this.data.$slot = (name = 'default') => {
-            if (this.slots[name]) {
-                // Execute the slot render function
-                // The slot function is bound to PARENT scope (closure),
-                // but we might want to pass props? usually slots just render parent content.
-                // However, in string-based rendering, if we call it, it returns HTML string.
-                return this.slots[name]();
-            }
-            return '';
-        };
+        for (const k in this.slots) this.data.$slots[k] = true;
+        this.data.$slot = (name = 'default') => this.slots[name] ? this.slots[name]() : '';
 
-        // Render Function
+        // Sections Helper for Layouts
+        this.data.$sections = this.sections;
+
         if (options.render) {
             this.renderFn = options.render;
         } else {
@@ -91,59 +73,71 @@ export class Zeno {
             }
         }
 
-        // Bind methods
         for (const key in this.methods) {
             this.methods[key] = this.methods[key].bind(this.data);
         }
 
-        // Bind renderComponent to instance context so it can access Zeno.components
         this.renderComponent = this.renderComponent.bind(this);
+        this.renderLayout = this.renderLayout.bind(this);
     }
 
-    // Internal method called by compiled code: _out += this.renderComponent('alert', {type: 'error'}, {default: ...})
     renderComponent(name, props, slots) {
         const def = Zeno._components[name];
         if (!def) {
             console.warn(`Component '${name}' not found.`);
-            return `<div style="border:1px solid red">Component ${name} not found</div>`;
+            return `[Component ${name} not found]`;
         }
 
-        // Create component instance
-        // We need to merge props into data
-        // But data() is a factory function.
-        // We modify the factory? Or the result?
-
         const dataFactory = def.data || (() => ({}));
-
-        // Wrap data factory to inject props
         const componentData = dataFactory();
-
-        // Inject props
-        // In Vue, props are separate from data, but accessible via `this`.
-        // Here, for simplicity, we merge props into data (so {{ type }} works directly).
-        // Props take precedence or data? Usually props override data init.
         Object.assign(componentData, props);
 
         const instance = new Zeno({
             data: () => componentData,
             methods: def.methods,
             template: def.template,
-            render: def.render, // Pre-compiled render function
+            render: def.render,
             props: def.props,
             slots: slots
         });
-
-        // Render to string (synchronously)
-        // Note: This creates a new reactive instance every render?
-        // Yes, this is inefficient "Re-create World" strategy for this experiment.
-        // In a real VDOM, we would diff/patch/update existing instance.
-        // Here, we just produce HTML string.
 
         try {
             return instance.renderFn.call(instance.data);
         } catch (e) {
             console.error(`Error rendering component ${name}:`, e);
             return `Error: ${e.message}`;
+        }
+    }
+
+    renderLayout(name, sections) {
+        // Layout is just a component but we inject sections instead of slots (or map sections to slots?)
+        // In this implementation, layout template uses @yield('name') which compiles to `this.$sections['name']()`
+
+        const def = Zeno._layouts[name];
+        if (!def) {
+            console.warn(`Layout '${name}' not found.`);
+            return `[Layout ${name} not found]`;
+        }
+
+        // Layout usually doesn't have props from child, but shares data?
+        // In Laravel, layout shares global data.
+        // Here, we create a new instance for layout.
+
+        const dataFactory = def.data || (() => ({}));
+        const layoutData = dataFactory();
+
+        const instance = new Zeno({
+            data: () => layoutData,
+            methods: def.methods,
+            template: def.template,
+            render: def.render,
+            sections: sections // Pass sections!
+        });
+
+        try {
+            return instance.renderFn.call(instance.data);
+        } catch (e) {
+            return `Error rendering layout ${name}: ${e.message}`;
         }
     }
 
@@ -160,16 +154,12 @@ export class Zeno {
     }
 
     render() {
+        // Inject runtime helpers
+        this.data.renderComponent = this.renderComponent;
+        this.data.renderLayout = this.renderLayout;
+
         let html = '';
         try {
-            // We need to expose renderComponent on data scope too?
-            // "with(this)" in renderFn uses `this` which is `this.data` usually?
-            // Wait, in `zeno.js` render(), we call `renderFn.call(this.data)`.
-            // So `this` inside render function is `this.data`.
-            // `this.data` does NOT have `renderComponent`.
-            // We must attach it!
-            this.data.renderComponent = this.renderComponent;
-
             html = this.renderFn.call(this.data);
         } catch (e) {
             console.error("Render Error:", e);
@@ -180,26 +170,16 @@ export class Zeno {
             this.el.innerHTML = html;
             this.bindEvents();
         }
-        return html; // For recursive calls
+        return html;
     }
 
     bindEvents() {
         if (!this.el) return;
-
         const elements = this.el.querySelectorAll('[data-z-click]');
         elements.forEach(el => {
             const handlerName = el.getAttribute('data-z-click');
-            // Check if handler is in methods
             if (this.methods[handlerName]) {
-                el.addEventListener('click', (e) => {
-                    this.methods[handlerName](e);
-                });
-            } else {
-                 if (handlerName.includes('(')) {
-                     console.warn(`Complex event handlers like '${handlerName}' are not fully supported in ZenoJS yet.`);
-                 } else {
-                     console.warn(`Method '${handlerName}' not found.`);
-                 }
+                el.addEventListener('click', (e) => this.methods[handlerName](e));
             }
             el.removeAttribute('data-z-click');
         });
