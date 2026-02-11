@@ -9,7 +9,7 @@ export class Zeno {
     static _layouts = {};
     static _services = {};
     static _views = {};
-    static _plugins = []; // Router, etc
+    static _plugins = [];
 
     static use(plugin) {
         this._plugins.push(plugin);
@@ -99,9 +99,12 @@ export class Zeno {
 
         this.data.$services = Zeno._services;
 
-        // Inject Plugins (e.g. $router)
+        // Inject Plugins
         if (Zeno.prototype.$router) {
             this.data.$router = Zeno.prototype.$router;
+        }
+        if (Zeno.prototype.$store) {
+            this.data.$store = Zeno.prototype.$store;
         }
 
         if (options.render) {
@@ -135,7 +138,6 @@ export class Zeno {
         return this.renderDynamic(def, props, slots);
     }
 
-    // Helper to render a component definition directly
     renderDynamic(def, props = {}, slots = {}) {
         const dataFactory = def.data || (() => ({}));
         const componentData = dataFactory();
@@ -232,7 +234,7 @@ export class Zeno {
         this.data.renderComponent = this.renderComponent;
         this.data.renderLayout = this.renderLayout;
         this.data.renderInclude = this.renderInclude;
-        this.data.renderDynamic = this.renderDynamic; // Expose for RouterView
+        this.data.renderDynamic = this.renderDynamic;
 
         let html = '';
         try {

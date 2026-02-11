@@ -2,6 +2,14 @@
 export default {
     data() {
         return { title: 'Home Page' };
+    },
+    methods: {
+        inc() {
+            this.$store.dispatch('increment');
+        },
+        login() {
+            this.$store.dispatch('login', 'Zeno User');
+        }
     }
 }
 </script>
@@ -9,9 +17,14 @@ export default {
 <template>
     <div class="page">
         <h1>{{ title }}</h1>
-        <p>Welcome to ZenoJS SPA!</p>
-        <a href="/about">Go to About</a>
+        <p>Global Counter: {{ $store.state.counter }}</p>
+        <p>Double: {{ $store.getters.doubleCounter }}</p>
+        <p>User: {{ $store.state.user.name }}</p>
 
-        <x-alert type="success" message="This is the Home Page"></x-alert>
+        <button @click="inc">Increment Global</button>
+        <button @click="login">Login</button>
+
+        <br><br>
+        <a href="/about">Go to About (Check State Persistence)</a>
     </div>
 </template>
