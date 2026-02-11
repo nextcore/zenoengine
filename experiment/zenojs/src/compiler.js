@@ -12,10 +12,26 @@
  */
 export function compile(template) {
     let code = "let _out = '';\n";
+    // Setup helpers
+    code += "const _helpers = this.$helpers || {};\n";
+
     code += "with(this) {\n"; // Use 'with' to scope data properties (e.g. {{ message }} instead of {{ data.message }})
 
     let cursor = 0;
     const len = template.length;
+
+    // Helper to find balanced parens
+    function findBalancedParen(str, start) {
+        let depth = 0;
+        for (let i = start; i < str.length; i++) {
+            if (str[i] === '(') depth++;
+            if (str[i] === ')') {
+                depth--;
+                if (depth === 0) return i;
+            }
+        }
+        return -1;
+    }
 
     while (cursor < len) {
         // Find next tag start (@ or {{)
@@ -63,7 +79,6 @@ export function compile(template) {
                 code += `if (${cond}) {\n`;
                 cursor = closeParen + 1;
             } else {
-                // Invalid syntax, treat as text
                 code += `_out += '@if';\n`;
                 cursor += 3;
             }
@@ -87,9 +102,93 @@ export function compile(template) {
             code += `}\n`;
             cursor += 6;
         }
+        else if (template.startsWith('@unless', cursor)) {
+            // Unless: @unless(cond) -> if (!cond)
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const cond = template.slice(openParen + 1, closeParen);
+                code += `if (!(${cond})) {\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 7;
+            }
+        }
+        else if (template.startsWith('@endunless', cursor)) {
+            code += `}\n`;
+            cursor += 10;
+        }
+        else if (template.startsWith('@isset', cursor)) {
+            // Isset: @isset(var) -> if (typeof var !== 'undefined' && var !== null)
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const v = template.slice(openParen + 1, closeParen);
+                code += `if (typeof ${v} !== 'undefined' && ${v} !== null) {\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 6;
+            }
+        }
+        else if (template.startsWith('@endisset', cursor)) {
+            code += `}\n`;
+            cursor += 9;
+        }
+        else if (template.startsWith('@empty', cursor)) {
+            // Empty: @empty(var) -> if (!var || (Array.isArray(var) && var.length === 0))
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const v = template.slice(openParen + 1, closeParen);
+                code += `if (!${v} || (Array.isArray(${v}) && ${v}.length === 0)) {\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 6;
+            }
+        }
+        else if (template.startsWith('@endempty', cursor)) {
+            code += `}\n`;
+            cursor += 9;
+        }
+        else if (template.startsWith('@switch', cursor)) {
+            // Switch: @switch(val)
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const val = template.slice(openParen + 1, closeParen);
+                code += `switch (${val}) {\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 7;
+            }
+        }
+        else if (template.startsWith('@case', cursor)) {
+            // Case: @case(val)
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const val = template.slice(openParen + 1, closeParen);
+                code += `case ${val}:\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 5;
+            }
+        }
+        else if (template.startsWith('@break', cursor)) {
+            code += `break;\n`;
+            cursor += 6;
+        }
+        else if (template.startsWith('@default', cursor)) {
+            code += `default:\n`;
+            cursor += 8;
+        }
+        else if (template.startsWith('@endswitch', cursor)) {
+            code += `}\n`;
+            cursor += 10;
+        }
         else if (template.startsWith('@foreach', cursor)) {
             // Foreach: @foreach(items as item)
-            // We need to parse "items as item"
+            // Enhanced Loop: injecting $loop variable
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
 
@@ -97,11 +196,24 @@ export function compile(template) {
                 const raw = template.slice(openParen + 1, closeParen);
                 const [list, item] = raw.split(/\s+as\s+/).map(s => s.trim());
 
-                // Using standard JS for loop or map?
-                // For loop is easier to append to string buffer.
-                // We need to support index too? @foreach($list as $key => $val)?
-                // Simple version: for (let item of list)
-                code += `for (let ${item} of ${list}) {\n`;
+                // Generate loop code
+                code += `
+                let _loopIndex = 0;
+                const _loopList = ${list} || [];
+                const _loopCount = _loopList.length;
+                for (let ${item} of _loopList) {
+                    const loop = {
+                        index: _loopIndex,
+                        iteration: _loopIndex + 1,
+                        remaining: _loopCount - (_loopIndex + 1),
+                        count: _loopCount,
+                        first: _loopIndex === 0,
+                        last: _loopIndex === _loopCount - 1,
+                        even: (_loopIndex + 1) % 2 === 0,
+                        odd: (_loopIndex + 1) % 2 !== 0,
+                        depth: 1 // TODO: nested loop depth tracking
+                    };
+                `;
 
                 cursor = closeParen + 1;
             } else {
@@ -109,52 +221,113 @@ export function compile(template) {
             }
         }
         else if (template.startsWith('@endforeach', cursor)) {
-            code += `}\n`;
+            code += `
+                _loopIndex++;
+            }\n`;
             cursor += 11;
         }
+        else if (template.startsWith('@json', cursor)) {
+            // @json(data) -> JSON.stringify(data)
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const data = template.slice(openParen + 1, closeParen);
+                code += `_out += JSON.stringify(${data});\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 5;
+            }
+        }
+        else if (template.startsWith('@class', cursor)) {
+            // @class(['p-4', 'bg-red' => hasError])
+            // We need a helper function for this complex logic.
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const args = template.slice(openParen + 1, closeParen);
+                // We emit class="..." attribute
+                code += `_out += 'class="' + _helpers.classNames(${args}) + '"';\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 6;
+            }
+        }
+        else if (template.startsWith('@style', cursor)) {
+            // @style(['color: red' => hasError])
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const args = template.slice(openParen + 1, closeParen);
+                code += `_out += 'style="' + _helpers.styleNames(${args}) + '"';\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 6;
+            }
+        }
+        else if (template.startsWith('@checked', cursor)) {
+            // @checked(cond) -> if(cond) out += 'checked="checked"'
+            const openParen = template.indexOf('(', cursor);
+            const closeParen = findBalancedParen(template, openParen);
+            if (openParen !== -1 && closeParen !== -1) {
+                const cond = template.slice(openParen + 1, closeParen);
+                code += `if (${cond}) { _out += 'checked="checked"'; }\n`;
+                cursor = closeParen + 1;
+            } else {
+                cursor += 8;
+            }
+        }
+        else if (template.startsWith('@selected', cursor)) {
+             const openParen = template.indexOf('(', cursor);
+             const closeParen = findBalancedParen(template, openParen);
+             if (openParen !== -1 && closeParen !== -1) {
+                 const cond = template.slice(openParen + 1, closeParen);
+                 code += `if (${cond}) { _out += 'selected="selected"'; }\n`;
+                 cursor = closeParen + 1;
+             } else {
+                 cursor += 9;
+             }
+        }
+        else if (template.startsWith('@disabled', cursor)) {
+             const openParen = template.indexOf('(', cursor);
+             const closeParen = findBalancedParen(template, openParen);
+             if (openParen !== -1 && closeParen !== -1) {
+                 const cond = template.slice(openParen + 1, closeParen);
+                 code += `if (${cond}) { _out += 'disabled="disabled"'; }\n`;
+                 cursor = closeParen + 1;
+             } else {
+                 cursor += 9;
+             }
+        }
+        else if (template.startsWith('@readonly', cursor)) {
+             const openParen = template.indexOf('(', cursor);
+             const closeParen = findBalancedParen(template, openParen);
+             if (openParen !== -1 && closeParen !== -1) {
+                 const cond = template.slice(openParen + 1, closeParen);
+                 code += `if (${cond}) { _out += 'readonly="readonly"'; }\n`;
+                 cursor = closeParen + 1;
+             } else {
+                 cursor += 9;
+             }
+        }
+        else if (template.startsWith('@required', cursor)) {
+             const openParen = template.indexOf('(', cursor);
+             const closeParen = findBalancedParen(template, openParen);
+             if (openParen !== -1 && closeParen !== -1) {
+                 const cond = template.slice(openParen + 1, closeParen);
+                 code += `if (${cond}) { _out += 'required="required"'; }\n`;
+                 cursor = closeParen + 1;
+             } else {
+                 cursor += 9;
+             }
+        }
         else if (template.startsWith('@click', cursor)) {
-            // This usually appears inside HTML attributes, handled differently in standard parsers.
-            // BUT here we are generating HTML string.
-            // HTML string doesn't support binding functions directly.
-            // We need a strategy.
-            // 1. Generate unique ID for element.
-            // 2. Add event listener after render.
-            // OR
-            // 3. Use inline 'onclick' calling global handler? (Bad practice)
-            //
-            // BETTER APPROACH:
-            // Since we are building a string, we can't easily attach events.
-            // The "Compiler" should ideally produce DOM nodes or VDOM.
-            //
-            // ALTERNATIVE:
-            // We produce HTML with special markers data-z-click="methodName".
-            // Then after setting innerHTML, we scan for these attributes and bind events.
-
-            // To do this, we need to detect if we are inside a tag?
-            // "Compiling to String" has this limitation.
-            // Let's assume the user writes standard HTML: <button @click="fn">
-            // Our regex replacement in `zeno.js` did this.
-            // The compiler needs to preserve this or transform it.
-            // Let's output it as a custom attribute `data-z-click`?
-
-            // If we encounter `@click="fn"` in the stream:
-            // It will be parsed as text because it doesn't start with @ at the block level?
-            // Wait, my scanner searches for `@`.
-            // So `<button @click` -> `@click` is found.
-
-            // We need to parse the attribute value.
-            // Expecting: ="method" or ="method()"
-            // Let's assume standard attribute syntax.
-            // We'll replace `@click="foo"` with `data-z-click="foo"` in the output string.
-
-            // Look ahead for ="..."
+            // @click="method" -> data-z-click="method"
             const match = template.slice(cursor).match(/^@click=["'](.*?)["']/);
             if (match) {
                 const handler = match[1];
                 code += `_out += 'data-z-click="${handler}"';\n`;
                 cursor += match[0].length;
             } else {
-                // Just text
                  code += `_out += '@click';\n`;
                  cursor += 6;
             }
@@ -174,16 +347,4 @@ export function compile(template) {
 
 function escapeBackticks(str) {
     return str.replace(/`/g, '\\`').replace(/\$/g, '\\$'); // Escape backticks and template literal interpolation
-}
-
-function findBalancedParen(str, start) {
-    let depth = 0;
-    for (let i = start; i < str.length; i++) {
-        if (str[i] === '(') depth++;
-        if (str[i] === ')') {
-            depth--;
-            if (depth === 0) return i;
-        }
-    }
-    return -1;
 }
