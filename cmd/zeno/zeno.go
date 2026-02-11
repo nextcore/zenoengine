@@ -27,11 +27,11 @@ import (
 
 	"golang.org/x/crypto/acme/autocert"
 
-	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/microsoft/go-mssqldb"
 
 	"zeno/pkg/livereload"
 )
