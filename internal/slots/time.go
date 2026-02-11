@@ -37,7 +37,8 @@ func RegisterTimeSlots(eng *engine.Engine) {
 			hasAs := false
 			for _, c := range node.Children {
 				if c.Name == "as" {
-					hasAs = true; break
+					hasAs = true
+					break
 				}
 			}
 			if !hasAs {
@@ -218,6 +219,40 @@ func RegisterTimeSlots(eng *engine.Engine) {
 			"add":      {Description: "Alias untuk duration"},
 			"as":       {Description: "Variabel penyimpan hasil"},
 		},
+	})
+
+	// 5. TIME.SLEEP
+	eng.Register("time.sleep", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		durationStr := ""
+		if node.Value != nil {
+			durationStr = coerce.ToString(resolveValue(node.Value, scope))
+		}
+
+		for _, c := range node.Children {
+			if c.Name == "duration" {
+				durationStr = coerce.ToString(parseNodeValue(c, scope))
+			}
+		}
+
+		if durationStr == "" {
+			return fmt.Errorf("time.sleep: duration is required")
+		}
+
+		d, err := time.ParseDuration(durationStr)
+		if err != nil {
+			return fmt.Errorf("time.sleep: invalid duration '%s'", durationStr)
+		}
+
+		// Check for context cancellation during sleep
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(d):
+			return nil
+		}
+	}, engine.SlotMeta{
+		Description: "Pause execution for a duration.",
+		Example:     "time.sleep: '1s'",
 	})
 }
 

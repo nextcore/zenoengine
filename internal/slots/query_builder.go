@@ -483,9 +483,9 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		Description: "Add a WHERE filter to the query.",
 		Example:     "db.where\n  col: id\n  val: $user_id",
 		Inputs: map[string]engine.InputMeta{
-			"col": {Description: "Column name", Required: true},
+			"col": {Description: "Column name", Required: false},
 			"op":  {Description: "Operator (Default: '=')", Required: false},
-			"val": {Description: "Filter value", Required: true},
+			"val": {Description: "Filter value", Required: false},
 		},
 	})
 

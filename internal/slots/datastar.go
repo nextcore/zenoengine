@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 	"zeno/pkg/engine"
 	"zeno/pkg/utils/coerce"
@@ -25,6 +26,16 @@ func RegisterDatastarSlots(eng *engine.Engine) {
 			return fmt.Errorf("datastar.stream: not in http context")
 		}
 
+		// Set Headers Explicitly
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Transfer-Encoding", "chunked")
+
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+
 		sse := datastar.NewSSE(w, r)
 
 		// Store sse in scope
@@ -33,6 +44,12 @@ func RegisterDatastarSlots(eng *engine.Engine) {
 		// Execute children
 		for _, child := range node.Children {
 			if err := eng.Execute(ctx, child, scope); err != nil {
+				// Ignore context cancellation/timeout (client disconnect or HTTP timeout)
+				if err == context.Canceled || err == context.DeadlineExceeded ||
+					strings.Contains(err.Error(), "context deadline exceeded") ||
+					strings.Contains(err.Error(), "context canceled") {
+					return nil
+				}
 				return err
 			}
 		}

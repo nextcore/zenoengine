@@ -11,7 +11,7 @@
         <div class="stat-card">
             <div class="stat-icon">📋</div>
             <div class="stat-content">
-                <h3>{{ $total_tasks }}</h3>
+                <h3 id="total_tasks">{{ $total_tasks }}</h3>
                 <p>Total Tasks</p>
             </div>
         </div>
@@ -19,7 +19,7 @@
         <div class="stat-card stat-success">
             <div class="stat-icon">✅</div>
             <div class="stat-content">
-                <h3>{{ $completed_tasks }}</h3>
+                <h3 id="completed_tasks">{{ $completed_tasks }}</h3>
                 <p>Completed</p>
             </div>
         </div>
@@ -27,7 +27,7 @@
         <div class="stat-card stat-warning">
             <div class="stat-icon">⏳</div>
             <div class="stat-content">
-                <h3>{{ $in_progress_tasks }}</h3>
+                <h3 id="in_progress_tasks">{{ $in_progress_tasks }}</h3>
                 <p>In Progress</p>
             </div>
         </div>
@@ -35,7 +35,7 @@
         <div class="stat-card stat-info">
             <div class="stat-icon">⏸️</div>
             <div class="stat-content">
-                <h3>{{ $pending_tasks }}</h3>
+                <h3 id="pending_tasks">{{ $pending_tasks }}</h3>
                 <p>Pending</p>
             </div>
         </div>
@@ -43,7 +43,7 @@
         <div class="stat-card">
             <div class="stat-icon">👥</div>
             <div class="stat-content">
-                <h3>{{ $total_teams }}</h3>
+                <h3 id="total_teams">{{ $total_teams }}</h3>
                 <p>Teams</p>
             </div>
         </div>
@@ -51,7 +51,7 @@
         <div class="stat-card">
             <div class="stat-icon">👤</div>
             <div class="stat-content">
-                <h3>{{ $total_users }}</h3>
+                <h3 id="total_users">{{ $total_users }}</h3>
                 <p>Users</p>
             </div>
         </div>
@@ -96,4 +96,43 @@
         </div>
     </div>
 </div>
+
+<script>
+// Native SSE implementation
+const eventSource = new EventSource('/tutorial/max/dashboard/stream');
+
+eventSource.addEventListener('stats', function(e) {
+    const data = JSON.parse(e.data);
+    
+    // Update stats
+    if (data.total_tasks !== undefined) {
+        document.getElementById('total_tasks').textContent = data.total_tasks;
+    }
+    if (data.completed_tasks !== undefined) {
+        document.getElementById('completed_tasks').textContent = data.completed_tasks;
+    }
+    if (data.in_progress_tasks !== undefined) {
+        document.getElementById('in_progress_tasks').textContent = data.in_progress_tasks;
+    }
+    if (data.pending_tasks !== undefined) {
+        document.getElementById('pending_tasks').textContent = data.pending_tasks;
+    }
+    if (data.total_teams !== undefined) {
+        document.getElementById('total_teams').textContent = data.total_teams;
+    }
+    if (data.total_users !== undefined) {
+        document.getElementById('total_users').textContent = data.total_users;
+    }
+});
+
+eventSource.onerror = function(e) {
+    console.error('SSE Error:', e);
+    // Reconnect automatically handled by EventSource
+};
+
+// Clean up on page unload
+window.addEventListener('beforeunload', function() {
+    eventSource.close();
+});
+</script>
 @endsection
