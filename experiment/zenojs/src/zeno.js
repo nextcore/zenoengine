@@ -2,17 +2,29 @@
 import { reactive, effect } from './reactivity.js';
 import { compile } from './compiler.js';
 
+// Global Stack Container (shared across render pass)
+let globalStacks = {};
+
 export class Zeno {
     static _components = {};
-    static _layouts = {}; // Layouts registry
+    static _layouts = {};
+    static _services = {};
+    static _views = {}; // For @include
 
     static component(name, definition) {
         this._components[name] = definition;
     }
 
-    // Register layout (which is just a component/template used as layout)
     static layout(name, definition) {
         this._layouts[name] = definition;
+    }
+
+    static service(name, instance) {
+        this._services[name] = instance;
+    }
+
+    static view(name, template) {
+        this._views[name] = template;
     }
 
     static create(options) {
@@ -25,7 +37,20 @@ export class Zeno {
         this.template = options.template || '';
         this.props = options.props || [];
         this.slots = options.slots || {};
-        this.sections = options.sections || {}; // For Layouts
+        this.sections = options.sections || {};
+
+        const rawAttrs = options.attributes || {};
+        this.data.$attributes = {
+            ...rawAttrs,
+            merge: (defaults) => {
+                const merged = { ...defaults, ...rawAttrs };
+                if (defaults.class && rawAttrs.class) {
+                    merged.class = `${defaults.class} ${rawAttrs.class}`;
+                }
+                return new AttributeBag(merged);
+            },
+            toString: () => new AttributeBag(rawAttrs).toString()
+        };
 
         this.el = null;
 
@@ -57,9 +82,19 @@ export class Zeno {
         this.data.$slots = {};
         for (const k in this.slots) this.data.$slots[k] = true;
         this.data.$slot = (name = 'default') => this.slots[name] ? this.slots[name]() : '';
-
-        // Sections Helper for Layouts
         this.data.$sections = this.sections;
+
+        // Stack Helpers
+        this.data.$push = (name, content) => {
+            if (!globalStacks[name]) globalStacks[name] = [];
+            globalStacks[name].push(content);
+        };
+        this.data.$stack = (name) => {
+            return globalStacks[name] ? globalStacks[name].join('') : '';
+        };
+
+        // Services Helper
+        this.data.$services = Zeno._services;
 
         if (options.render) {
             this.renderFn = options.render;
@@ -79,6 +114,7 @@ export class Zeno {
 
         this.renderComponent = this.renderComponent.bind(this);
         this.renderLayout = this.renderLayout.bind(this);
+        this.renderInclude = this.renderInclude.bind(this);
     }
 
     renderComponent(name, props, slots) {
@@ -90,7 +126,20 @@ export class Zeno {
 
         const dataFactory = def.data || (() => ({}));
         const componentData = dataFactory();
-        Object.assign(componentData, props);
+
+        const declaredProps = def.props || [];
+        const passedProps = {};
+        const passedAttrs = {};
+
+        for (const key in props) {
+            if (declaredProps.includes(key)) {
+                passedProps[key] = props[key];
+            } else {
+                passedAttrs[key] = props[key];
+            }
+        }
+
+        Object.assign(componentData, passedProps);
 
         const instance = new Zeno({
             data: () => componentData,
@@ -98,6 +147,7 @@ export class Zeno {
             template: def.template,
             render: def.render,
             props: def.props,
+            attributes: passedAttrs,
             slots: slots
         });
 
@@ -110,18 +160,11 @@ export class Zeno {
     }
 
     renderLayout(name, sections) {
-        // Layout is just a component but we inject sections instead of slots (or map sections to slots?)
-        // In this implementation, layout template uses @yield('name') which compiles to `this.$sections['name']()`
-
         const def = Zeno._layouts[name];
         if (!def) {
             console.warn(`Layout '${name}' not found.`);
             return `[Layout ${name} not found]`;
         }
-
-        // Layout usually doesn't have props from child, but shares data?
-        // In Laravel, layout shares global data.
-        // Here, we create a new instance for layout.
 
         const dataFactory = def.data || (() => ({}));
         const layoutData = dataFactory();
@@ -131,13 +174,39 @@ export class Zeno {
             methods: def.methods,
             template: def.template,
             render: def.render,
-            sections: sections // Pass sections!
+            sections: sections
         });
 
         try {
             return instance.renderFn.call(instance.data);
         } catch (e) {
             return `Error rendering layout ${name}: ${e.message}`;
+        }
+    }
+
+    renderInclude(name, data) {
+        const tpl = Zeno._views[name];
+        if (!tpl) {
+             return `[View ${name} not found]`;
+        }
+
+        // Merge data with current data?
+        // Usually include inherits scope + passed data.
+        // We can create a new instance with merged data.
+
+        const mergedData = { ...this.data, ...data }; // Flatten proxy?
+        // Actually this.data is proxy.
+        // We want new instance to have access to helpers too.
+
+        const instance = new Zeno({
+            data: () => mergedData,
+            template: tpl
+        });
+
+        try {
+            return instance.renderFn.call(instance.data);
+        } catch (e) {
+            return `Error including ${name}: ${e.message}`;
         }
     }
 
@@ -154,9 +223,12 @@ export class Zeno {
     }
 
     render() {
-        // Inject runtime helpers
+        // Reset global stacks on root render
+        globalStacks = {};
+
         this.data.renderComponent = this.renderComponent;
         this.data.renderLayout = this.renderLayout;
+        this.data.renderInclude = this.renderInclude;
 
         let html = '';
         try {
@@ -183,5 +255,22 @@ export class Zeno {
             }
             el.removeAttribute('data-z-click');
         });
+    }
+}
+
+class AttributeBag {
+    constructor(attrs) {
+        this.attrs = attrs;
+    }
+
+    toString() {
+        return Object.entries(this.attrs)
+            .map(([k, v]) => {
+                if (v === true) return k;
+                if (v === false || v === null || v === undefined) return '';
+                return `${k}="${v}"`;
+            })
+            .filter(s => s)
+            .join(' ');
     }
 }

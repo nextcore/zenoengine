@@ -5,23 +5,17 @@ import { parse } from './parser.js';
 export function compile(template) {
     const ast = parse(template);
 
-    // Check for @extends
-    // Ideally, @extends should be the first thing or at root level.
-    // If @extends exists, we need to wrap the whole thing.
-
     // Scan AST for extends directive
     let layoutName = null;
-    let sections = {}; // { name: AST_Node_List }
-
-    // We need to traverse root children to find @extends and @section
-    // BUT only at root level usually.
+    let sections = {};
+    let pushes = {};
 
     const rootChildren = ast.children;
     const filteredChildren = [];
 
     for (const node of rootChildren) {
         if (node.type === 'Directive' && node.name === 'extends') {
-            layoutName = node.args.replace(/['"]/g, ''); // strip quotes
+            layoutName = node.args.replace(/['"]/g, '');
         }
         else if (node.type === 'Directive' && node.name === 'section') {
             const sectionName = node.args.replace(/['"]/g, '');
@@ -32,21 +26,22 @@ export function compile(template) {
         }
     }
 
-    // Code Gen
     let code = "let _out = '';\n";
     code += "const _helpers = this.$helpers || {};\n";
     code += "const _renderComponent = this.renderComponent || (() => '');\n";
     code += "const _renderLayout = this.renderLayout || (() => '');\n";
+    code += "const _renderInclude = this.renderInclude || (() => '');\n";
+
+    // Inject Service Helper
+    // We access global services via this.$services
 
     code += "with(this) {\n";
 
     if (layoutName) {
-        // Layout Mode
-        // We compile sections into functions passed to layout
-
-        // Default content (outside sections) - usually ignored in Blade if extends?
-        // Actually, everything outside @section is ignored if @extends is present.
-        // But for safety let's assume strict Blade: only @section matters.
+        const sideEffects = filteredChildren.filter(n => n.type === 'Directive' && (n.name === 'push' || n.name === 'inject'));
+        for (const effect of sideEffects) {
+             code += codegen(effect);
+        }
 
         let sectionsCode = '{';
         for (const [name, children] of Object.entries(sections)) {
@@ -58,7 +53,6 @@ export function compile(template) {
         code += `_out += _renderLayout('${layoutName}', ${sectionsCode});\n`;
 
     } else {
-        // Normal Mode
         code += codegen({ type: 'Root', children: rootChildren });
     }
 
@@ -97,8 +91,8 @@ function codegen(node) {
         else if (name === 'else') {
              code += `} else {\n${childrenCode}\n`;
         }
-        else if (name === 'endif' || name === 'endunless' || name === 'endisset' || name === 'endempty' || name === 'endswitch' || name === 'endforeach' || name === 'endsection') {
-             // Closing tags are handled by parent block structure in AST
+        else if (['endif', 'endunless', 'endisset', 'endempty', 'endswitch', 'endforeach', 'endsection', 'endpush'].includes(name)) {
+             // Closed
         }
         else if (name === 'unless') {
              code += `if (!(${args})) {\n${childrenCode}\n}\n`;
@@ -160,28 +154,45 @@ function codegen(node) {
              code += `_out += 'data-z-click="${handler}"';\n`;
         }
         else if (name === 'yield') {
-             // @yield('name')
-             // In layout mode, this outputs the section content passed from child
-             // The compiled layout function will receive `sections` object.
-             // But here we are in `with(this)`.
-             // We need to inject `sections` into scope or `_renderLayout` logic.
-             // Wait, `yield` is used IN THE LAYOUT.
-             // When compiling layout, we need to access passed sections.
-             // The runtime `renderLayout` will wrap the layout render call.
-             // It should pass `sections` in `this` or as arg?
-             // Let's assume `this.$sections` exists.
              const sectionName = args.replace(/['"]/g, '');
              code += `if (this.$sections && this.$sections['${sectionName}']) { _out += this.$sections['${sectionName}'](); }\n`;
         }
         else if (name === 'section') {
-             // @section inside a normal view (not extending) is just a block?
-             // Or output immediately?
-             // Blade outputs immediately if not extending.
-             // But if extending, it's captured.
-             // Logic above handled @extends check.
-             // If we are here, it means NO @extends was found (or we are recursing inside something else).
-             // If no extends, @section usually outputs its content.
              code += childrenCode;
+        }
+        else if (name === 'push') {
+             const stackName = args.replace(/['"]/g, '');
+             code += `
+             {
+                 let _pushOut = '';
+                 this.$push('${stackName}', (() => { let _out=''; ${childrenCode} return _out; })());
+             }
+             \n`;
+        }
+        else if (name === 'stack') {
+             const stackName = args.replace(/['"]/g, '');
+             code += `_out += this.$stack('${stackName}');\n`;
+        }
+        else if (name === 'include') {
+             code += `_out += _renderInclude(${args});\n`;
+        }
+        else if (name === 'inject') {
+             // @inject('varName', 'ServiceName')
+             // Compiles to: const varName = this.$services['ServiceName'];
+             // BUT we are inside `with(this)`, so declaring `const varName` puts it in block scope.
+             // We want it accessible in children.
+             // `var` hoists to function scope.
+             // Or assign to `this`?
+
+             // Parse args: 'user', 'App.Services.UserService'
+             const [varName, serviceName] = args.split(',').map(s => s.trim().replace(/['"]/g, ''));
+
+             // We can't easily modify `this` (proxy).
+             // But we can declare a variable that is used by subsequent code in this block.
+             // `var user = ...` works in `with` block?
+             // Yes, `var` ignores block scope.
+
+             code += `var ${varName} = this.$services['${serviceName}'];\n`;
         }
         else {
              code += `_out += '@${name}';\n`;
