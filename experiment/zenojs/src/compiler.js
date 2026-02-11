@@ -14,6 +14,7 @@ export function compile(template) {
     let code = "let _out = '';\n";
     // Setup helpers
     code += "const _helpers = this.$helpers || {};\n";
+    code += "const _renderComponent = this.renderComponent || (() => '');\n";
 
     code += "with(this) {\n"; // Use 'with' to scope data properties (e.g. {{ message }} instead of {{ data.message }})
 
@@ -34,8 +35,8 @@ export function compile(template) {
     }
 
     while (cursor < len) {
-        // Find next tag start (@ or {{)
-        const nextTag = template.slice(cursor).search(/@|\{\{/);
+        // Find next tag start (@ or {{ or <x-)
+        const nextTag = template.slice(cursor).search(/@|\{\{|<x-/);
 
         if (nextTag === -1) {
             // No more tags, append remaining text
@@ -68,6 +69,109 @@ export function compile(template) {
             code += `_out += ${expr};\n`;
 
             cursor = end + 2;
+        }
+        else if (template.startsWith('<x-', cursor)) {
+            // Component: <x-alert type="error">Body</x-alert>
+            // Need to parse attributes and body.
+            // Finding the closing tag is hard with nested components without a parser.
+            // Using a simple stack-based approach or recursive regex might work for well-formed HTML.
+
+            // 1. Parse Tag Name
+            const tagStart = cursor;
+            let tagNameEnd = template.indexOf(' ', tagStart);
+            const tagClose = template.indexOf('>', tagStart);
+
+            if (tagNameEnd === -1 || tagNameEnd > tagClose) tagNameEnd = tagClose;
+
+            const rawTagName = template.slice(tagStart + 1, tagNameEnd); // x-alert
+            const componentName = rawTagName.substring(2); // alert
+
+            // 2. Parse Attributes
+            const attrStr = template.slice(tagNameEnd, tagClose);
+            const attrs = parseAttributes(attrStr);
+
+            // 3. Check Self-Closing
+            const isSelfClosing = template[tagClose - 1] === '/';
+
+            if (isSelfClosing) {
+                // Generate render call
+                code += `_out += _renderComponent('${componentName}', {${attrs}}, {});\n`;
+                cursor = tagClose + 1;
+            } else {
+                // 4. Parse Body (Slots)
+                // Find matching closing tag </x-alert>
+                const closingTag = `</${rawTagName}>`;
+                const bodyStart = tagClose + 1;
+
+                // Naive search for closing tag (doesn't handle nesting of same tag perfectly but works for simple cases)
+                // Better: simple counter
+                let depth = 1;
+                let scan = bodyStart;
+                let bodyEnd = -1;
+
+                while (scan < len) {
+                    if (template.startsWith(`<${rawTagName}`, scan)) {
+                        depth++;
+                        scan += rawTagName.length + 1;
+                    } else if (template.startsWith(closingTag, scan)) {
+                        depth--;
+                        if (depth === 0) {
+                            bodyEnd = scan;
+                            break;
+                        }
+                        scan += closingTag.length;
+                    } else {
+                        scan++;
+                    }
+                }
+
+                if (bodyEnd === -1) {
+                    // Unclosed component, treat as text
+                     code += `_out += '<x-${componentName}';\n`;
+                     cursor = tagNameEnd;
+                     continue;
+                }
+
+                const bodyContent = template.slice(bodyStart, bodyEnd);
+
+                // 5. Parse Slots inside Body
+                // If body contains <x-slot name="header">...</x-slot>, extract them.
+                // Otherwise treat whole body as 'default' slot.
+
+                // Helper to extract slots from string
+                // We'll generate an object: { default: () => `...`, header: () => `...` }
+
+                // Simplification: We assume slots are top-level children of the component body.
+                // We won't parse recursively right now, just regex/split.
+
+                const slotMap = parseSlots(bodyContent);
+                let slotsCode = '{';
+                for (const [name, content] of Object.entries(slotMap)) {
+                    // Recursive compile for slot content!
+                    // Slot content must be evaluated in PARENT scope (here).
+                    // So we compile it into a sub-function or IIFE that returns string.
+                    // But `compile` returns code for a function body.
+                    // We can wrap it: `"${name}": () => { let _out=''; with(this){ ${compile(content)} } return _out; },`
+
+                    // Crucial: Slots need access to PARENT scope variables.
+                    // "with(this)" inside the arrow function should work if `this` is preserved?
+                    // Arrow function preserves `this`. Yes.
+
+                    // However, `compile` adds `let _out = '';` and `with(this)`.
+                    // We can reuse `compile` but strip the wrapper if needed, or just let it be fully self-contained.
+                    // The `compile` function output starts with `let _out...` and ends with `return _out`.
+                    // Perfect for a function body.
+
+                    const compiledSlot = compile(content);
+                    // Indent for readability (optional)
+                    slotsCode += `\n"${name}": (() => {\n${compiledSlot}\n}),`;
+                }
+                slotsCode += '}';
+
+                code += `_out += _renderComponent('${componentName}', {${attrs}}, ${slotsCode});\n`;
+
+                cursor = bodyEnd + closingTag.length;
+            }
         }
         else if (template.startsWith('@if', cursor)) {
             // If: @if(cond)
@@ -103,7 +207,6 @@ export function compile(template) {
             cursor += 6;
         }
         else if (template.startsWith('@unless', cursor)) {
-            // Unless: @unless(cond) -> if (!cond)
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -119,7 +222,6 @@ export function compile(template) {
             cursor += 10;
         }
         else if (template.startsWith('@isset', cursor)) {
-            // Isset: @isset(var) -> if (typeof var !== 'undefined' && var !== null)
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -135,7 +237,6 @@ export function compile(template) {
             cursor += 9;
         }
         else if (template.startsWith('@empty', cursor)) {
-            // Empty: @empty(var) -> if (!var || (Array.isArray(var) && var.length === 0))
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -151,7 +252,6 @@ export function compile(template) {
             cursor += 9;
         }
         else if (template.startsWith('@switch', cursor)) {
-            // Switch: @switch(val)
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -163,7 +263,6 @@ export function compile(template) {
             }
         }
         else if (template.startsWith('@case', cursor)) {
-            // Case: @case(val)
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -188,7 +287,6 @@ export function compile(template) {
         }
         else if (template.startsWith('@foreach', cursor)) {
             // Foreach: @foreach(items as item)
-            // Enhanced Loop: injecting $loop variable
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
 
@@ -196,7 +294,6 @@ export function compile(template) {
                 const raw = template.slice(openParen + 1, closeParen);
                 const [list, item] = raw.split(/\s+as\s+/).map(s => s.trim());
 
-                // Generate loop code
                 code += `
                 let _loopIndex = 0;
                 const _loopList = ${list} || [];
@@ -211,7 +308,7 @@ export function compile(template) {
                         last: _loopIndex === _loopCount - 1,
                         even: (_loopIndex + 1) % 2 === 0,
                         odd: (_loopIndex + 1) % 2 !== 0,
-                        depth: 1 // TODO: nested loop depth tracking
+                        depth: 1
                     };
                 `;
 
@@ -227,7 +324,6 @@ export function compile(template) {
             cursor += 11;
         }
         else if (template.startsWith('@json', cursor)) {
-            // @json(data) -> JSON.stringify(data)
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -239,13 +335,10 @@ export function compile(template) {
             }
         }
         else if (template.startsWith('@class', cursor)) {
-            // @class(['p-4', 'bg-red' => hasError])
-            // We need a helper function for this complex logic.
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
                 const args = template.slice(openParen + 1, closeParen);
-                // We emit class="..." attribute
                 code += `_out += 'class="' + _helpers.classNames(${args}) + '"';\n`;
                 cursor = closeParen + 1;
             } else {
@@ -253,7 +346,6 @@ export function compile(template) {
             }
         }
         else if (template.startsWith('@style', cursor)) {
-            // @style(['color: red' => hasError])
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -265,7 +357,6 @@ export function compile(template) {
             }
         }
         else if (template.startsWith('@checked', cursor)) {
-            // @checked(cond) -> if(cond) out += 'checked="checked"'
             const openParen = template.indexOf('(', cursor);
             const closeParen = findBalancedParen(template, openParen);
             if (openParen !== -1 && closeParen !== -1) {
@@ -321,7 +412,6 @@ export function compile(template) {
              }
         }
         else if (template.startsWith('@click', cursor)) {
-            // @click="method" -> data-z-click="method"
             const match = template.slice(cursor).match(/^@click=["'](.*?)["']/);
             if (match) {
                 const handler = match[1];
@@ -333,18 +423,89 @@ export function compile(template) {
             }
         }
         else {
-             // Unknown directive, treat as text
              code += `_out += '@';\n`;
              cursor += 1;
         }
     }
 
-    code += "}\n"; // close with
+    code += "}\n";
     code += "return _out;";
 
     return code;
 }
 
 function escapeBackticks(str) {
-    return str.replace(/`/g, '\\`').replace(/\$/g, '\\$'); // Escape backticks and template literal interpolation
+    return str.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
+
+// Parses string like: type="error" :count="10"
+function parseAttributes(str) {
+    const attrs = [];
+    const regex = /(:)?([a-zA-Z0-9_-]+)=["'](.*?)["']/g;
+    let match;
+    while ((match = regex.exec(str)) !== null) {
+        const isDynamic = !!match[1];
+        const key = match[2];
+        const val = match[3];
+
+        if (isDynamic) {
+            // Key is 'count', Val is expression '10'
+            attrs.push(`"${key}": ${val}`);
+        } else {
+            // Key is 'type', Val is string 'error'
+            attrs.push(`"${key}": "${val}"`);
+        }
+    }
+    return attrs.join(', ');
+}
+
+// Splits body into slots based on <x-slot name="..."> tags
+// Returns { default: "content", header: "content" }
+function parseSlots(body) {
+    const slots = {};
+    let defaultContent = "";
+
+    // Find all <x-slot ...>...</x-slot>
+    // Remove them from body, what remains is default slot.
+
+    let cursor = 0;
+    const len = body.length;
+    let lastEnd = 0;
+
+    // Simple regex for top-level slots?
+    // Nested slots are hard with regex.
+    // For now, let's assume no nested <x-slot> inside <x-slot>.
+
+    const slotStartRegex = /<x-slot\s+name=["'](.*?)["']>/g;
+    let match;
+
+    while ((match = slotStartRegex.exec(body)) !== null) {
+        // Found start
+        const slotName = match[1];
+        const startIdx = match.index;
+        const innerStart = startIdx + match[0].length;
+
+        // Find closing </x-slot>
+        const endIdx = body.indexOf('</x-slot>', innerStart);
+        if (endIdx === -1) break; // Error
+
+        // Append previous content to default
+        defaultContent += body.slice(lastEnd, startIdx);
+
+        // Extract slot content
+        slots[slotName] = body.slice(innerStart, endIdx);
+
+        lastEnd = endIdx + 9; // length of </x-slot>
+
+        // Advance regex index
+        slotStartRegex.lastIndex = lastEnd;
+    }
+
+    defaultContent += body.slice(lastEnd);
+
+    if (defaultContent.trim()) {
+        slots['default'] = defaultContent;
+    }
+
+    return slots;
 }

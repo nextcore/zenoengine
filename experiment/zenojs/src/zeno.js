@@ -3,6 +3,13 @@ import { reactive, effect } from './reactivity.js';
 import { compile } from './compiler.js';
 
 export class Zeno {
+    static _components = {};
+
+    // Register component globally
+    static component(name, definition) {
+        this._components[name] = definition;
+    }
+
     static create(options) {
         return new Zeno(options);
     }
@@ -12,18 +19,17 @@ export class Zeno {
         this.data = reactive(options.data ? options.data() : {});
         this.methods = options.methods || {};
         this.template = options.template || '';
+        this.props = options.props || []; // Props array: ['title', 'type']
+
+        // Pass parent slots or default
+        this.slots = options.slots || {};
+
+        // Store element ref
         this.el = null;
 
         // Runtime Helpers for Blade Directives
         this.data.$helpers = {
             classNames: (arg) => {
-                // Supports string, array, or object
-                // @class(['p-4', 'bg-red' => hasError])
-                // In JS, 'bg-red' => hasError is not valid syntax inside array literals unless parsed differently.
-                // But if user writes @class({'p-4': true, 'bg-red': hasError}) it works.
-                // Blade's array syntax ['k' => v] is PHP.
-                // In ZenoJS, we should encourage JS object syntax { 'k': v } or standard array.
-
                 let classes = [];
                 if (typeof arg === 'string') {
                     classes.push(arg);
@@ -44,7 +50,6 @@ export class Zeno {
                 return classes.join(' ');
             },
             styleNames: (arg) => {
-                // @style({ 'color': 'red', 'font-size': size + 'px' })
                 let styles = [];
                 if (typeof arg === 'object') {
                     for (const k in arg) {
@@ -53,6 +58,24 @@ export class Zeno {
                 }
                 return styles.join('; ');
             }
+        };
+
+        // Helper: $slots for checking if slot exists
+        this.data.$slots = {};
+        for (const k in this.slots) {
+            this.data.$slots[k] = true; // Just existence check
+        }
+        // Slot renderer helper (injects slot content)
+        // Usage in component: {{ $slot('header') }} or {{ $slot() }} for default
+        this.data.$slot = (name = 'default') => {
+            if (this.slots[name]) {
+                // Execute the slot render function
+                // The slot function is bound to PARENT scope (closure),
+                // but we might want to pass props? usually slots just render parent content.
+                // However, in string-based rendering, if we call it, it returns HTML string.
+                return this.slots[name]();
+            }
+            return '';
         };
 
         // Render Function
@@ -72,6 +95,56 @@ export class Zeno {
         for (const key in this.methods) {
             this.methods[key] = this.methods[key].bind(this.data);
         }
+
+        // Bind renderComponent to instance context so it can access Zeno.components
+        this.renderComponent = this.renderComponent.bind(this);
+    }
+
+    // Internal method called by compiled code: _out += this.renderComponent('alert', {type: 'error'}, {default: ...})
+    renderComponent(name, props, slots) {
+        const def = Zeno._components[name];
+        if (!def) {
+            console.warn(`Component '${name}' not found.`);
+            return `<div style="border:1px solid red">Component ${name} not found</div>`;
+        }
+
+        // Create component instance
+        // We need to merge props into data
+        // But data() is a factory function.
+        // We modify the factory? Or the result?
+
+        const dataFactory = def.data || (() => ({}));
+
+        // Wrap data factory to inject props
+        const componentData = dataFactory();
+
+        // Inject props
+        // In Vue, props are separate from data, but accessible via `this`.
+        // Here, for simplicity, we merge props into data (so {{ type }} works directly).
+        // Props take precedence or data? Usually props override data init.
+        Object.assign(componentData, props);
+
+        const instance = new Zeno({
+            data: () => componentData,
+            methods: def.methods,
+            template: def.template,
+            render: def.render, // Pre-compiled render function
+            props: def.props,
+            slots: slots
+        });
+
+        // Render to string (synchronously)
+        // Note: This creates a new reactive instance every render?
+        // Yes, this is inefficient "Re-create World" strategy for this experiment.
+        // In a real VDOM, we would diff/patch/update existing instance.
+        // Here, we just produce HTML string.
+
+        try {
+            return instance.renderFn.call(instance.data);
+        } catch (e) {
+            console.error(`Error rendering component ${name}:`, e);
+            return `Error: ${e.message}`;
+        }
     }
 
     mount(selector) {
@@ -89,59 +162,41 @@ export class Zeno {
     render() {
         let html = '';
         try {
+            // We need to expose renderComponent on data scope too?
+            // "with(this)" in renderFn uses `this` which is `this.data` usually?
+            // Wait, in `zeno.js` render(), we call `renderFn.call(this.data)`.
+            // So `this` inside render function is `this.data`.
+            // `this.data` does NOT have `renderComponent`.
+            // We must attach it!
+            this.data.renderComponent = this.renderComponent;
+
             html = this.renderFn.call(this.data);
         } catch (e) {
             console.error("Render Error:", e);
             html = `<div style="color:red">Render Error: ${e.message}</div>`;
         }
 
-        this.el.innerHTML = html;
-        this.bindEvents();
+        if (this.el) {
+            this.el.innerHTML = html;
+            this.bindEvents();
+        }
+        return html; // For recursive calls
     }
 
     bindEvents() {
+        if (!this.el) return;
+
         const elements = this.el.querySelectorAll('[data-z-click]');
         elements.forEach(el => {
             const handlerName = el.getAttribute('data-z-click');
-            // Remove parens if present (e.g. toggle(todo))
-            // This is a naive implementation.
-            // Ideally we parse the handler expression.
-
-            // If it's a simple method name:
+            // Check if handler is in methods
             if (this.methods[handlerName]) {
                 el.addEventListener('click', (e) => {
                     this.methods[handlerName](e);
                 });
             } else {
-                // It might be a call expression: toggle(todo)
-                // We need to evaluate it in context of data
-                // BUT we don't have access to the local scope variables (like 'todo' from foreach) here!
-                // 'todo' existed only during render time loop.
-                // This is the fundamental challenge of "HTML String" rendering vs VDOM with Closures.
-                // In VDOM, the onClick handler captures the 'todo' variable closure.
-                // In HTML String, that context is lost.
-
-                // SOLUTION for ZenoJS (HTML String approach):
-                // We must serialize the arguments into the DOM, or rely on index.
-                // E.g. data-z-args="[1]"
-                // Or simply: Warn user that arguments in @click are not fully supported yet in this string-based version,
-                // OR implement a global registry of handlers (like `window.__zeno_handlers[id]`).
-
-                // For this MVP, let's stick to simple method binding.
-                // Complex args are out of scope for this step unless we refactor to VDOM/Registry.
-                // Wait, our previous demo used `toggle(todo)`. Did it work?
-                // No, I didn't verify that specific part in Playwright!
-                // I verified "Add Todo" which called `addTodo` (no args).
-                // `toggle(todo)` likely failed silently or threw error in console.
-
-                // To support `toggle(todo)`, we would need:
-                // 1. Serialize `todo` to JSON in `data-z-arg`? (Expensive/Complex)
-                // 2. Use index `toggle(index)`.
-
-                // Let's rely on simple methods for now, or use a workaround.
-                // I will add a warning log.
                  if (handlerName.includes('(')) {
-                     console.warn(`Complex event handlers like '${handlerName}' are not fully supported in ZenoJS yet. Please use index or simple method names.`);
+                     console.warn(`Complex event handlers like '${handlerName}' are not fully supported in ZenoJS yet.`);
                  } else {
                      console.warn(`Method '${handlerName}' not found.`);
                  }

@@ -4,8 +4,8 @@ export default {
         return {
             count: 0,
             todos: [
-                { id: 1, text: 'Learn ZenoJS (Built)', done: true },
-                { id: 2, text: 'Use Vite Plugin', done: false }
+                { id: 1, text: 'Learn ZenoJS (Components)', done: true },
+                { id: 2, text: 'Use Slots', done: false }
             ],
             role: 'user',
             hasError: false
@@ -30,7 +30,6 @@ export default {
             }
         },
         toggle(id) {
-            // Find todo by ID
             const todo = this.todos.find(t => t.id === id);
             if (todo) todo.done = !todo.done;
         },
@@ -45,27 +44,27 @@ export default {
 </script>
 
 <template>
+    <x-alert type="success" :message="'Welcome to ZenoJS with Components!'"></x-alert>
+
     <div class="box" @class({'bg-red-100': hasError})>
-        <h1>ZenoJS Counter (SFC Mode)</h1>
+        <h1>ZenoJS Counter</h1>
         <p>Count is: <strong>{{ count }}</strong></p>
         <button @click="increment">+</button>
         <button @click="decrement">-</button>
 
         @unless(count <= 5)
-            <p style="color: red">Count is high!</p>
+            <x-alert type="error" :message="'Count is too high!'">
+                <p>Please reduce the count.</p>
+            </x-alert>
         @endunless
-
-        @switch(role)
-            @case('admin')
-                <p>Hello Admin!</p>
-            @break
-            @default
-                <p>Hello User!</p>
-        @endswitch
     </div>
 
-    <div class="box">
-        <h2>Todo List (@count(todos))</h2>
+    <x-card :title="'Todo List (' + todos.length + ')'">
+        <x-slot name="header">
+            <h3>My Tasks</h3>
+            <small>Custom Header Slot</small>
+        </x-slot>
+
         <ul>
             @foreach(todos as todo)
                 <li @class({'done': todo.done})>
@@ -73,7 +72,6 @@ export default {
                     <span style="{{ todo.done ? 'text-decoration: line-through' : '' }}">
                         {{ todo.text }}
                     </span>
-                    <!-- Pass ID instead of object reference -->
                     <button @click="toggle({{ todo.id }})">Toggle</button>
                     <button @click="remove({{ todo.id }})">X</button>
                 </li>
@@ -84,7 +82,9 @@ export default {
             <p>No todos yet!</p>
         @endempty
 
-        <input type="text" id="new-todo" placeholder="Add Todo">
-        <button @click="addTodo">Add</button>
-    </div>
+        <x-slot name="footer">
+            <input type="text" id="new-todo" placeholder="Add Todo">
+            <button @click="addTodo">Add</button>
+        </x-slot>
+    </x-card>
 </template>

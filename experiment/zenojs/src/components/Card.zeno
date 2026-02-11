@@ -1,0 +1,29 @@
+<script>
+export default {
+    props: ['title']
+}
+</script>
+
+<template>
+    <div class="card">
+        @if($slots.header)
+            <div class="card-header">
+                {{ $slot('header') }}
+            </div>
+        @elseif(title)
+            <div class="card-header">
+                <h3>{{ title }}</h3>
+            </div>
+        @endif
+
+        <div class="card-body">
+            {{ $slot('default') }}
+        </div>
+
+        @if($slots.footer)
+            <div class="card-footer">
+                {{ $slot('footer') }}
+            </div>
+        @endif
+    </div>
+</template>
