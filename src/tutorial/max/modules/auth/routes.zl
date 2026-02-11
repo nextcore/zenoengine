@@ -20,8 +20,10 @@ http.get: /tutorial/max/login {
         http.redirect: "/tutorial/max/dashboard"
       }
       else: {
+        session.get_flash: "error" { as: $error }
         view.blade: "tutorial/max/auth/login.blade.zl" {
           title: "Login - ZenoLang Demo"
+          error: $error
         }
       }
     }
@@ -51,9 +53,11 @@ http.post: /tutorial/max/auth/login {
     
     if: $errors_any {
       then: {
-        view.blade: "tutorial/max/auth/login.blade.zl" {
-          error: "Validation failed. Please check your inputs."
+        session.flash: {
+          key: "error"
+          val: "Validation failed. Please check your inputs."
         }
+        http.redirect: "/tutorial/max/login"
       }
       else: {
         // Attempt login
@@ -85,9 +89,11 @@ http.post: /tutorial/max/auth/login {
             http.redirect: "/tutorial/max/dashboard"
           }
           catch: {
-            view.blade: "tutorial/max/auth/login.blade.zl" {
-              error: "Invalid email or password"
+            session.flash: {
+              key: "error"
+              val: "Invalid email or password"
             }
+            http.redirect: "/tutorial/max/login"
           }
         }
       }

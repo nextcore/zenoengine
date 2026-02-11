@@ -41,6 +41,7 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 	slots.RegisterFunctionSlots(eng)
 	slots.RegisterMetaSlots(eng)
 	slots.RegisterDatastarSlots(eng)
+	slots.RegisterSessionSlots(eng)
 
 	// Register Plugin slots
 	slots.RegisterPluginSlots(eng, r, dbMgr)
