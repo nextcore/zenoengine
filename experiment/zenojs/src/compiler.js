@@ -32,9 +32,6 @@ export function compile(template) {
     code += "const _renderLayout = this.renderLayout || (() => '');\n";
     code += "const _renderInclude = this.renderInclude || (() => '');\n";
 
-    // Inject Service Helper
-    // We access global services via this.$services
-
     code += "with(this) {\n";
 
     if (layoutName) {
@@ -153,6 +150,12 @@ function codegen(node) {
              const handler = args.replace(/^["']|["']$/g, '');
              code += `_out += 'data-z-click="${handler}"';\n`;
         }
+        else if (name === 'model') {
+             // @model('var')
+             // Outputs: value="..." data-z-model="var"
+             const modelVar = args.replace(/^["']|["']$/g, '');
+             code += `_out += 'value="' + (${modelVar}) + '" data-z-model="${modelVar}"';\n`;
+        }
         else if (name === 'yield') {
              const sectionName = args.replace(/['"]/g, '');
              code += `if (this.$sections && this.$sections['${sectionName}']) { _out += this.$sections['${sectionName}'](); }\n`;
@@ -177,21 +180,7 @@ function codegen(node) {
              code += `_out += _renderInclude(${args});\n`;
         }
         else if (name === 'inject') {
-             // @inject('varName', 'ServiceName')
-             // Compiles to: const varName = this.$services['ServiceName'];
-             // BUT we are inside `with(this)`, so declaring `const varName` puts it in block scope.
-             // We want it accessible in children.
-             // `var` hoists to function scope.
-             // Or assign to `this`?
-
-             // Parse args: 'user', 'App.Services.UserService'
              const [varName, serviceName] = args.split(',').map(s => s.trim().replace(/['"]/g, ''));
-
-             // We can't easily modify `this` (proxy).
-             // But we can declare a variable that is used by subsequent code in this block.
-             // `var user = ...` works in `with` block?
-             // Yes, `var` ignores block scope.
-
              code += `var ${varName} = this.$services['${serviceName}'];\n`;
         }
         else {

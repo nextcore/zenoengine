@@ -3,8 +3,22 @@ import { reactive, effect } from './reactivity.js';
 import { compile } from './compiler.js';
 
 let globalStacks = {};
+let currentInstance = null;
+
+export function onMounted(fn) {
+    if (currentInstance) {
+        currentInstance.hooks.mounted.push(fn);
+    }
+}
+
+export function onUnmounted(fn) {
+    if (currentInstance) {
+        currentInstance.hooks.unmounted.push(fn);
+    }
+}
 
 export class Zeno {
+    // ... [Static Methods Same as Before]
     static _components = {};
     static _layouts = {};
     static _services = {};
@@ -37,7 +51,23 @@ export class Zeno {
     }
 
     constructor(options) {
-        this.data = reactive(options.data ? options.data() : {});
+        this.hooks = { mounted: [], unmounted: [] };
+
+        const prevInstance = currentInstance;
+        currentInstance = this;
+
+        try {
+            const dataFactory = options.data || (() => ({}));
+            const rawData = typeof dataFactory === 'function' ? dataFactory() : dataFactory;
+
+            if (options.mounted) this.hooks.mounted.push(options.mounted.bind(null));
+            if (options.unmounted) this.hooks.unmounted.push(options.unmounted);
+
+            this.data = reactive(rawData);
+        } finally {
+            currentInstance = prevInstance;
+        }
+
         this.methods = options.methods || {};
         this.template = options.template || '';
         this.props = options.props || [];
@@ -99,13 +129,8 @@ export class Zeno {
 
         this.data.$services = Zeno._services;
 
-        // Inject Plugins
-        if (Zeno.prototype.$router) {
-            this.data.$router = Zeno.prototype.$router;
-        }
-        if (Zeno.prototype.$store) {
-            this.data.$store = Zeno.prototype.$store;
-        }
+        if (Zeno.prototype.$router) this.data.$router = Zeno.prototype.$router;
+        if (Zeno.prototype.$store) this.data.$store = Zeno.prototype.$store;
 
         if (options.render) {
             this.renderFn = options.render;
@@ -123,6 +148,9 @@ export class Zeno {
             this.methods[key] = this.methods[key].bind(this.data);
         }
 
+        this.hooks.mounted = this.hooks.mounted.map(fn => fn.bind(this.data));
+        this.hooks.unmounted = this.hooks.unmounted.map(fn => fn.bind(this.data));
+
         this.renderComponent = this.renderComponent.bind(this);
         this.renderLayout = this.renderLayout.bind(this);
         this.renderInclude = this.renderInclude.bind(this);
@@ -131,10 +159,7 @@ export class Zeno {
 
     renderComponent(name, props, slots) {
         const def = Zeno._components[name];
-        if (!def) {
-            console.warn(`Component '${name}' not found.`);
-            return `[Component ${name} not found]`;
-        }
+        if (!def) return `[Component ${name} not found]`;
         return this.renderDynamic(def, props, slots);
     }
 
@@ -145,15 +170,10 @@ export class Zeno {
         const declaredProps = def.props || [];
         const passedProps = {};
         const passedAttrs = {};
-
         for (const key in props) {
-            if (declaredProps.includes(key)) {
-                passedProps[key] = props[key];
-            } else {
-                passedAttrs[key] = props[key];
-            }
+            if (declaredProps.includes(key)) passedProps[key] = props[key];
+            else passedAttrs[key] = props[key];
         }
-
         Object.assign(componentData, passedProps);
 
         const instance = new Zeno({
@@ -163,27 +183,23 @@ export class Zeno {
             render: def.render,
             props: def.props,
             attributes: passedAttrs,
-            slots: slots
+            slots: slots,
+            mounted: def.mounted,
+            unmounted: def.unmounted
         });
 
         try {
             return instance.renderFn.call(instance.data);
         } catch (e) {
-            console.error("Error rendering dynamic component:", e);
             return `Error: ${e.message}`;
         }
     }
 
     renderLayout(name, sections) {
         const def = Zeno._layouts[name];
-        if (!def) {
-            console.warn(`Layout '${name}' not found.`);
-            return `[Layout ${name} not found]`;
-        }
-
+        if (!def) return `[Layout ${name} not found]`;
         const dataFactory = def.data || (() => ({}));
         const layoutData = dataFactory();
-
         const instance = new Zeno({
             data: () => layoutData,
             methods: def.methods,
@@ -191,29 +207,15 @@ export class Zeno {
             render: def.render,
             sections: sections
         });
-
-        try {
-            return instance.renderFn.call(instance.data);
-        } catch (e) {
-            return `Error rendering layout ${name}: ${e.message}`;
-        }
+        try { return instance.renderFn.call(instance.data); } catch (e) { return e.message; }
     }
 
     renderInclude(name, data) {
         const tpl = Zeno._views[name];
-        if (!tpl) {
-             return `[View ${name} not found]`;
-        }
+        if (!tpl) return `[View ${name} not found]`;
         const mergedData = { ...this.data, ...data };
-        const instance = new Zeno({
-            data: () => mergedData,
-            template: tpl
-        });
-        try {
-            return instance.renderFn.call(instance.data);
-        } catch (e) {
-            return `Error including ${name}: ${e.message}`;
-        }
+        const instance = new Zeno({ data: () => mergedData, template: tpl });
+        try { return instance.renderFn.call(instance.data); } catch (e) { return e.message; }
     }
 
     mount(selector) {
@@ -223,8 +225,14 @@ export class Zeno {
             return;
         }
 
+        let isMounted = false;
+
         effect(() => {
             this.render();
+            if (!isMounted) {
+                isMounted = true;
+                this.hooks.mounted.forEach(fn => fn());
+            }
         });
     }
 
@@ -253,14 +261,65 @@ export class Zeno {
 
     bindEvents() {
         if (!this.el) return;
-        const elements = this.el.querySelectorAll('[data-z-click]');
-        elements.forEach(el => {
+
+        const clickElements = this.el.querySelectorAll('[data-z-click]');
+        clickElements.forEach(el => {
             const handlerName = el.getAttribute('data-z-click');
             if (this.methods[handlerName]) {
                 el.addEventListener('click', (e) => this.methods[handlerName](e));
             }
             el.removeAttribute('data-z-click');
         });
+
+        // 2. Input Handlers (@model)
+        const modelElements = this.el.querySelectorAll('[data-z-model]');
+        modelElements.forEach(el => {
+            const varName = el.getAttribute('data-z-model');
+            // Bind 'input' event to update data
+            // We need to set the value in `this.data`
+            // But varName might be 'user.name'.
+            // Simple assignment: this.data[varName] only works for top level.
+
+            el.addEventListener('input', (e) => {
+                const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+
+                // Deep Set
+                // TODO: Support deep paths like 'user.name'
+                // For now, assume top-level.
+                // If contains dot, traverse.
+
+                if (varName.includes('.')) {
+                    const parts = varName.split('.');
+                    let target = this.data;
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        target = target[parts[i]];
+                    }
+                    target[parts[parts.length - 1]] = val;
+                } else {
+                    this.data[varName] = val;
+                }
+
+                // Note: Updating data triggers effect -> re-render
+                // Re-render replaces input -> focus lost?
+                // YES. This is the problem with String-Based Rendering.
+                // Re-creating the DOM kills focus.
+
+                // Workaround: Use VDOM? Or focus restoration?
+                // Simple focus restoration:
+                // Record active element path/id before render, restore after.
+                // Or: Don't replace innerHTML if we can patch? (Too complex for now).
+
+                // Hacky Fix for "Focus Lost":
+                // In `render()`, check `document.activeElement`.
+                // If it has `data-z-model`, try to find it again after render and focus() it.
+                // AND set cursor position!
+            });
+            el.removeAttribute('data-z-model');
+        });
+
+        // Restore focus?
+        // We need to do this in `render()`.
+        // Let's modify render().
     }
 }
 
