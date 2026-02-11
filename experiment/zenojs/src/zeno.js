@@ -14,8 +14,21 @@ export class Zeno {
         this.template = options.template || '';
         this.el = null;
 
-        // Compiled Render Function
-        this.renderFn = compile(this.template);
+        // Render Function
+        // If 'render' is provided (e.g., from Build-Time Compilation), use it.
+        // Otherwise, compile 'template' at runtime.
+        if (options.render) {
+            this.renderFn = options.render;
+        } else {
+            // Runtime Compilation
+            const code = compile(this.template);
+            try {
+                this.renderFn = new Function(code);
+            } catch (e) {
+                 console.error("Compilation Error:", e);
+                 this.renderFn = () => "Error compiling template";
+            }
+        }
 
         // Bind methods to data context
         for (const key in this.methods) {

@@ -6,9 +6,9 @@
 // then re-evaluate it on every change.
 
 /**
- * Compiles a ZenoBlade template string into a render function body.
+ * Compiles a ZenoBlade template string into a render function body (source code).
  * @param {string} template - The raw ZenoBlade template.
- * @returns {Function} - A function that takes `data` and returns an HTML string.
+ * @returns {string} - The JavaScript source code for the render function.
  */
 export function compile(template) {
     let code = "let _out = '';\n";
@@ -24,14 +24,18 @@ export function compile(template) {
         if (nextTag === -1) {
             // No more tags, append remaining text
             const text = template.slice(cursor);
-            code += `_out += \`${escapeBackticks(text)}\`;\n`;
+            if (text) {
+                code += `_out += \`${escapeBackticks(text)}\`;\n`;
+            }
             break;
         }
 
         // Append text before tag
         if (nextTag > 0) {
             const text = template.slice(cursor, cursor + nextTag);
-            code += `_out += \`${escapeBackticks(text)}\`;\n`;
+            if (text) {
+                code += `_out += \`${escapeBackticks(text)}\`;\n`;
+            }
         }
 
         cursor += nextTag;
@@ -165,14 +169,7 @@ export function compile(template) {
     code += "}\n"; // close with
     code += "return _out;";
 
-    // console.log("COMPILED CODE:", code);
-
-    try {
-        return new Function(code);
-    } catch (e) {
-        console.error("Compilation Error:", e);
-        return () => "Error compiling template";
-    }
+    return code;
 }
 
 function escapeBackticks(str) {
