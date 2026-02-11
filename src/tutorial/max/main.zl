@@ -60,7 +60,7 @@ include: src/tutorial/max/modules/teams/routes.zl
 // ==========================================
 include: src/tutorial/max/modules/realtime/notifications.zl
 include: src/tutorial/max/modules/realtime/dashboard.zl
-include: src/tutorial/max/modules/realtime/dashboard_stream.zl
+include: src/tutorial/max/modules/realtime/dashboard_stats.zl
 
 // ==========================================
 // 8. API ENDPOINTS
