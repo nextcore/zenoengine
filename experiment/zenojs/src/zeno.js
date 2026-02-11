@@ -2,14 +2,19 @@
 import { reactive, effect } from './reactivity.js';
 import { compile } from './compiler.js';
 
-// Global Stack Container (shared across render pass)
 let globalStacks = {};
 
 export class Zeno {
     static _components = {};
     static _layouts = {};
     static _services = {};
-    static _views = {}; // For @include
+    static _views = {};
+    static _plugins = []; // Router, etc
+
+    static use(plugin) {
+        this._plugins.push(plugin);
+        if (plugin.install) plugin.install(Zeno);
+    }
 
     static component(name, definition) {
         this._components[name] = definition;
@@ -84,7 +89,6 @@ export class Zeno {
         this.data.$slot = (name = 'default') => this.slots[name] ? this.slots[name]() : '';
         this.data.$sections = this.sections;
 
-        // Stack Helpers
         this.data.$push = (name, content) => {
             if (!globalStacks[name]) globalStacks[name] = [];
             globalStacks[name].push(content);
@@ -93,8 +97,12 @@ export class Zeno {
             return globalStacks[name] ? globalStacks[name].join('') : '';
         };
 
-        // Services Helper
         this.data.$services = Zeno._services;
+
+        // Inject Plugins (e.g. $router)
+        if (Zeno.prototype.$router) {
+            this.data.$router = Zeno.prototype.$router;
+        }
 
         if (options.render) {
             this.renderFn = options.render;
@@ -115,6 +123,7 @@ export class Zeno {
         this.renderComponent = this.renderComponent.bind(this);
         this.renderLayout = this.renderLayout.bind(this);
         this.renderInclude = this.renderInclude.bind(this);
+        this.renderDynamic = this.renderDynamic.bind(this);
     }
 
     renderComponent(name, props, slots) {
@@ -123,7 +132,11 @@ export class Zeno {
             console.warn(`Component '${name}' not found.`);
             return `[Component ${name} not found]`;
         }
+        return this.renderDynamic(def, props, slots);
+    }
 
+    // Helper to render a component definition directly
+    renderDynamic(def, props = {}, slots = {}) {
         const dataFactory = def.data || (() => ({}));
         const componentData = dataFactory();
 
@@ -154,7 +167,7 @@ export class Zeno {
         try {
             return instance.renderFn.call(instance.data);
         } catch (e) {
-            console.error(`Error rendering component ${name}:`, e);
+            console.error("Error rendering dynamic component:", e);
             return `Error: ${e.message}`;
         }
     }
@@ -189,20 +202,11 @@ export class Zeno {
         if (!tpl) {
              return `[View ${name} not found]`;
         }
-
-        // Merge data with current data?
-        // Usually include inherits scope + passed data.
-        // We can create a new instance with merged data.
-
-        const mergedData = { ...this.data, ...data }; // Flatten proxy?
-        // Actually this.data is proxy.
-        // We want new instance to have access to helpers too.
-
+        const mergedData = { ...this.data, ...data };
         const instance = new Zeno({
             data: () => mergedData,
             template: tpl
         });
-
         try {
             return instance.renderFn.call(instance.data);
         } catch (e) {
@@ -223,12 +227,12 @@ export class Zeno {
     }
 
     render() {
-        // Reset global stacks on root render
         globalStacks = {};
 
         this.data.renderComponent = this.renderComponent;
         this.data.renderLayout = this.renderLayout;
         this.data.renderInclude = this.renderInclude;
+        this.data.renderDynamic = this.renderDynamic; // Expose for RouterView
 
         let html = '';
         try {
@@ -262,7 +266,6 @@ class AttributeBag {
     constructor(attrs) {
         this.attrs = attrs;
     }
-
     toString() {
         return Object.entries(this.attrs)
             .map(([k, v]) => {
