@@ -1,6 +1,0 @@
-print("Start Main");
-include("source/lib.zl");
-
-print("Lib Val: " + str(lib_val));
-let msg = hello_from_lib("Zeno");
-print(msg);

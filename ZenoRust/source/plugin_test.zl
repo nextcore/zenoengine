@@ -1,9 +1,0 @@
-print("--- Sidecar Plugin Test ---");
-
-let loaded = plugin_load_sidecar("echo_plugin", "./plugins/mock_plugin.sh", ".");
-print("Plugin Loaded: " + str(loaded));
-
-if (loaded) {
-    let resp = plugin_call("echo_plugin", "test_method", {"foo": "bar"});
-    print("Response Data: " + json_stringify(resp));
-}
