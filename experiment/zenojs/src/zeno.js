@@ -18,7 +18,6 @@ export function onUnmounted(fn) {
 }
 
 export class Zeno {
-    // ... [Static Methods Same as Before]
     static _components = {};
     static _layouts = {};
     static _services = {};
@@ -129,8 +128,52 @@ export class Zeno {
 
         this.data.$services = Zeno._services;
 
+        // Inject Plugins
         if (Zeno.prototype.$router) this.data.$router = Zeno.prototype.$router;
-        if (Zeno.prototype.$store) this.data.$store = Zeno.prototype.$store;
+        if (Zeno.prototype.$store) {
+            this.data.$store = Zeno.prototype.$store;
+
+            // Auth Helper Integration
+            // If store has 'user' state, alias it to `this.user` or `this.auth`
+            // for Blade directives @auth / @guest compatibility.
+            // Assumption: User object is in `$store.state.user`.
+            // Check if user is logged in: user !== null && user.name !== 'Guest' (convention)
+            // Or better: $store.getters.isAuthenticated
+
+            // We define a getter 'auth' on the data proxy?
+            // Actually, `with(this)` will look for 'auth'.
+            // Let's define a computed property for it?
+
+            // Simpler: Just rely on developers defining `user` in data OR
+            // mapping it here.
+
+            // Convention: ZenoJS maps `this.user` to `$store.state.user` automatically if not defined.
+            if (this.data.user === undefined && this.data.$store.state.user) {
+                // Not easily reactive if we just assign value.
+                // We need `get user() { return this.$store.state.user }`.
+                // But `this.data` is a Proxy target (plain object usually).
+                // We can't define property easily on the instance.
+
+                // Workaround: In Compiler, @auth checks `this.user` OR `this.$store.state.user`?
+                // No, standard Blade checks `auth()` helper or `$user`.
+
+                // Let's inject an `auth` helper object.
+                this.data.auth = {
+                    user: () => this.data.$store.state.user,
+                    check: () => {
+                        const u = this.data.$store.state.user;
+                        return u && u.name !== 'Guest' && u.name !== null;
+                    },
+                    guest: () => {
+                        const u = this.data.$store.state.user;
+                        return !u || u.name === 'Guest' || u.name === null;
+                    }
+                };
+
+                // Also alias `user` for convenience?
+                // this.data.user = this.data.$store.state.user; // Initial value only :(
+            }
+        }
 
         if (options.render) {
             this.renderFn = options.render;
@@ -271,23 +314,11 @@ export class Zeno {
             el.removeAttribute('data-z-click');
         });
 
-        // 2. Input Handlers (@model)
         const modelElements = this.el.querySelectorAll('[data-z-model]');
         modelElements.forEach(el => {
             const varName = el.getAttribute('data-z-model');
-            // Bind 'input' event to update data
-            // We need to set the value in `this.data`
-            // But varName might be 'user.name'.
-            // Simple assignment: this.data[varName] only works for top level.
-
             el.addEventListener('input', (e) => {
                 const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-
-                // Deep Set
-                // TODO: Support deep paths like 'user.name'
-                // For now, assume top-level.
-                // If contains dot, traverse.
-
                 if (varName.includes('.')) {
                     const parts = varName.split('.');
                     let target = this.data;
@@ -298,28 +329,9 @@ export class Zeno {
                 } else {
                     this.data[varName] = val;
                 }
-
-                // Note: Updating data triggers effect -> re-render
-                // Re-render replaces input -> focus lost?
-                // YES. This is the problem with String-Based Rendering.
-                // Re-creating the DOM kills focus.
-
-                // Workaround: Use VDOM? Or focus restoration?
-                // Simple focus restoration:
-                // Record active element path/id before render, restore after.
-                // Or: Don't replace innerHTML if we can patch? (Too complex for now).
-
-                // Hacky Fix for "Focus Lost":
-                // In `render()`, check `document.activeElement`.
-                // If it has `data-z-model`, try to find it again after render and focus() it.
-                // AND set cursor position!
             });
             el.removeAttribute('data-z-model');
         });
-
-        // Restore focus?
-        // We need to do this in `render()`.
-        // Let's modify render().
     }
 }
 

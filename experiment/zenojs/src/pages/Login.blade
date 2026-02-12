@@ -1,0 +1,42 @@
+<script>
+export default {
+    data() {
+        return {
+            username: '',
+            password: '',
+            error: null
+        };
+    },
+    methods: {
+        login() {
+            if (this.username === 'admin' && this.password === 'secret') {
+                this.$store.dispatch('login', 'Administrator');
+                this.$router.push('/dashboard');
+            } else {
+                this.error = 'Invalid credentials (try admin/secret)';
+            }
+        }
+    }
+}
+</script>
+
+<template>
+    <div class="page">
+        <h1>Login</h1>
+        <p>Please log in to access Dashboard.</p>
+
+        @if(error)
+            <x-alert type="error" :message="error"></x-alert>
+        @endif
+
+        <div class="box">
+            <input type="text" @model="username" placeholder="Username (admin)">
+            <br><br>
+            <input type="password" @model="password" placeholder="Password (secret)">
+            <br><br>
+            <button @click="login">Login</button>
+        </div>
+
+        <a href="/">Back Home</a>
+    </div>
+</template>
