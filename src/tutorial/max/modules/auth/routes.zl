@@ -127,88 +127,40 @@ http.get: /tutorial/max/register {
 // ==========================================
 http.post: /tutorial/max/auth/register {
   do: {
-    // Get form data
-    http.form: "username" { as: $username }
-    http.form: "email" { as: $email }
-    http.form: "password" { as: $password }
-    
-    // Validate input
-    validate: {
-      username: $username
-      email: $email
-      password: $password
-    } {
+    // Validate input with strict filtering
+    validate: $request.form {
       rules: {
-        username: "required|min:3"
-        email: "required|email"
+        username: "required|min:3|alpha_num|unique:tutorial_users,username"
+        email: "required|email|unique:tutorial_users,email"
         password: "required|min:6"
       }
       as: $errors
+      as_safe: $valid_user // Only contains username, email, password
     }
     
     if: $errors_any {
       then: {
         view.blade: "tutorial/max/auth/register.blade.zl" {
-          error: "Validation failed. Please check your inputs."
           errors: $errors
         }
+        return
       }
-      else: {
-        try: {
-          do: {
-            // Check if email already exists
-            db.table: tutorial_users {
-              db: tutorial
-            }
-            db.where: {
+    }
 
-              col: "email"
+    // Hash password
+    crypto.hash: $valid_user.password { as: $hashed_pass }
+    
+    // Replace password in valid_user with hashed one
+    $valid_user.password = $hashed_pass
+    
+    // Add default role safely
+    $valid_user.role = "member"
 
-              val: $email
-
-            }
-            db.first: { as: $existing_user }
-            
-            isset: $existing_user {
-              do: {
-                view.blade: "tutorial/max/auth/register.blade.zl" {
-                  error: "Email already registered"
-                }
-              }
-            }
-            
-            // Hash password
-            crypto.hash: $password { as: $hashed_password }
-            
-            // Handle avatar upload if provided
-            var: $avatar_path { val: "" }
-            
-            try: {
-              do: {
-                http.upload: {
-                  field: "avatar"
-                  dest: "uploads/avatars"
-                  as: $avatar_filename
-                }
-                var: $avatar_path { val: $avatar_filename }
-              }
-              catch: {
-                // Avatar is optional, continue without it
-                log: "No avatar uploaded"
-              }
-            }
-            
-            // Insert new user
-            db.table: tutorial_users {
-              db: tutorial
-            }
-            db.insert: {
-              username: $username
-              email: $email
-              password: $hashed_password
-              avatar: $avatar_path
-              role: "member"
-            }
+    // Insert new user safely
+    db.insert: "tutorial_users" {
+      db: "tutorial"
+      vals: $valid_user
+    }
             
             var: $user_id { val: $db_last_id }
             

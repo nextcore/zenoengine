@@ -192,8 +192,9 @@ window.onload = function() {
 		return nil, fmt.Errorf("failed to load script: %v", err)
 	}
 
-	globalScope := engine.GetScope()
-	defer engine.PutScope(globalScope)
+	// Global Scope must persist for the lifetime of the application
+	// Do NOT use GetScope() as we never return it to the pool.
+	globalScope := engine.NewScope(nil)
 	globalScope.Set("APP_ENV", app.Env)
 
 	if err := eng.Execute(context.Background(), root, globalScope); err != nil {
