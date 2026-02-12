@@ -9,6 +9,14 @@ export default {
     },
     methods: {
         login() {
+            // Client-side validation
+            const isValid = this.$validate({
+                username: 'required|min:3',
+                password: 'required|min:6'
+            });
+
+            if (!isValid) return;
+
             if (this.username === 'admin' && this.password === 'secret') {
                 this.$store.dispatch('login', 'Administrator');
                 this.$router.push('/dashboard');
@@ -30,10 +38,23 @@ export default {
         @endif
 
         <div class="box">
-            <input type="text" @model="username" placeholder="Username (admin)">
-            <br><br>
-            <input type="password" @model="password" placeholder="Password (secret)">
-            <br><br>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" @model="username" placeholder="Username (admin)" @class({'is-invalid': $errors && $errors.username})>
+                @error('username')
+                    <span style="color:red; font-size:0.8em">{{ message }}</span>
+                @enderror
+            </div>
+
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" @model="password" placeholder="Password (secret)" @class({'is-invalid': $errors && $errors.password})>
+                @error('password')
+                    <span style="color:red; font-size:0.8em">{{ message }}</span>
+                @enderror
+            </div>
+
+            <br>
             <button @click="login">Login</button>
         </div>
 

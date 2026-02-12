@@ -1,6 +1,7 @@
 
 import { reactive, effect } from './reactivity.js';
 import { compile } from './compiler.js';
+import { validate } from './validator.js'; // Import validator
 
 let globalStacks = {};
 let currentInstance = null;
@@ -58,6 +59,9 @@ export class Zeno {
         try {
             const dataFactory = options.data || (() => ({}));
             const rawData = typeof dataFactory === 'function' ? dataFactory() : dataFactory;
+
+            // Initialize errors object
+            rawData.$errors = {};
 
             if (options.mounted) this.hooks.mounted.push(options.mounted.bind(null));
             if (options.unmounted) this.hooks.unmounted.push(options.unmounted);
@@ -128,36 +132,10 @@ export class Zeno {
 
         this.data.$services = Zeno._services;
 
-        // Inject Plugins
         if (Zeno.prototype.$router) this.data.$router = Zeno.prototype.$router;
         if (Zeno.prototype.$store) {
             this.data.$store = Zeno.prototype.$store;
-
-            // Auth Helper Integration
-            // If store has 'user' state, alias it to `this.user` or `this.auth`
-            // for Blade directives @auth / @guest compatibility.
-            // Assumption: User object is in `$store.state.user`.
-            // Check if user is logged in: user !== null && user.name !== 'Guest' (convention)
-            // Or better: $store.getters.isAuthenticated
-
-            // We define a getter 'auth' on the data proxy?
-            // Actually, `with(this)` will look for 'auth'.
-            // Let's define a computed property for it?
-
-            // Simpler: Just rely on developers defining `user` in data OR
-            // mapping it here.
-
-            // Convention: ZenoJS maps `this.user` to `$store.state.user` automatically if not defined.
             if (this.data.user === undefined && this.data.$store.state.user) {
-                // Not easily reactive if we just assign value.
-                // We need `get user() { return this.$store.state.user }`.
-                // But `this.data` is a Proxy target (plain object usually).
-                // We can't define property easily on the instance.
-
-                // Workaround: In Compiler, @auth checks `this.user` OR `this.$store.state.user`?
-                // No, standard Blade checks `auth()` helper or `$user`.
-
-                // Let's inject an `auth` helper object.
                 this.data.auth = {
                     user: () => this.data.$store.state.user,
                     check: () => {
@@ -169,11 +147,15 @@ export class Zeno {
                         return !u || u.name === 'Guest' || u.name === null;
                     }
                 };
-
-                // Also alias `user` for convenience?
-                // this.data.user = this.data.$store.state.user; // Initial value only :(
             }
         }
+
+        // Validator Helper
+        this.data.$validate = (rules) => {
+            const result = validate(this.data, rules);
+            this.data.$errors = result.errors; // Update reactive errors
+            return result.isValid;
+        };
 
         if (options.render) {
             this.renderFn = options.render;
@@ -199,6 +181,8 @@ export class Zeno {
         this.renderInclude = this.renderInclude.bind(this);
         this.renderDynamic = this.renderDynamic.bind(this);
     }
+
+    // ... [Render Logic Same as Before] ...
 
     renderComponent(name, props, slots) {
         const def = Zeno._components[name];

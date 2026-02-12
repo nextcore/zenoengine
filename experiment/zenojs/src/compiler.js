@@ -86,7 +86,7 @@ function codegen(node) {
         else if (name === 'else') {
              code += `} else {\n${childrenCode}\n`;
         }
-        else if (['endif', 'endunless', 'endisset', 'endempty', 'endswitch', 'endforeach', 'endsection', 'endpush', 'endauth', 'endguest'].includes(name)) {
+        else if (['endif', 'endunless', 'endisset', 'endempty', 'endswitch', 'endforeach', 'endsection', 'endpush', 'endauth', 'endguest', 'enderror'].includes(name)) {
              // Closed
         }
         else if (name === 'unless') {
@@ -99,11 +99,19 @@ function codegen(node) {
              code += `if (!${args} || (Array.isArray(${args}) && ${args}.length === 0)) {\n${childrenCode}\n}\n`;
         }
         else if (name === 'auth') {
-             // Check auth helper
              code += `if (this.auth && this.auth.check()) {\n${childrenCode}\n}\n`;
         }
         else if (name === 'guest') {
              code += `if (!this.auth || this.auth.guest()) {\n${childrenCode}\n}\n`;
+        }
+        else if (name === 'error') {
+             // @error('field')
+             const field = args.replace(/^["']|["']$/g, '');
+             code += `if (this.$errors && this.$errors['${field}']) {\n
+                 // Inject $message
+                 const message = this.$errors['${field}'];
+                 ${childrenCode}
+             }\n`;
         }
         else if (name === 'switch') {
              code += `switch (${args}) {\n${childrenCode}\n}\n`;
