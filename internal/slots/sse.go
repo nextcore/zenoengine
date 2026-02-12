@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
+
 	"zeno/pkg/engine"
 	"zeno/pkg/fastjson"
 	"zeno/pkg/utils/coerce"
@@ -12,7 +14,7 @@ import (
 
 // RegisterSSESlots registers Server-Sent Events slots
 func RegisterSSESlots(eng *engine.Engine) {
-	
+
 	// 1. SSE.STREAM - Start SSE connection
 	eng.Register("sse.stream", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
@@ -36,6 +38,13 @@ func RegisterSSESlots(eng *engine.Engine) {
 		scope.Set("__sse_writer", w)
 		scope.Set("__sse_flusher", flusher)
 		scope.Set("__sse_active", true)
+
+		// Create a mutex for thread-safe writing (needed for keepalive)
+		// We use a channel as a mutex to avoid importing sync/atomic or passing pointer complexities
+		// Actually, standard sync.Mutex is fine as long as we store the pointer
+		// We need to import "sync"
+		var mu sync.Mutex
+		scope.Set("__sse_mutex", &mu)
 
 		// Execute children (sse.send, sse.loop, etc.)
 		for _, child := range node.Children {
@@ -65,6 +74,14 @@ func RegisterSSESlots(eng *engine.Engine) {
 
 		flusher, _ := scope.Get("__sse_flusher")
 		flush := flusher.(http.Flusher)
+
+		// Get Mutex
+		muObj, ok := scope.Get("__sse_mutex")
+		if ok {
+			mu := muObj.(*sync.Mutex)
+			mu.Lock()
+			defer mu.Unlock()
+		}
 
 		var eventName string
 		var data interface{}
@@ -143,7 +160,7 @@ func RegisterSSESlots(eng *engine.Engine) {
 		// Get interval (default 1 second)
 		interval := 1000
 		var maxIterations int
-		
+
 		for _, child := range node.Children {
 			if child.Name == "interval" {
 				val := parseNodeValue(child, scope)
@@ -208,6 +225,13 @@ func RegisterSSESlots(eng *engine.Engine) {
 		flusher, _ := scope.Get("__sse_flusher")
 		flush := flusher.(http.Flusher)
 
+		// Get Mutex
+		muObj, _ := scope.Get("__sse_mutex")
+		var mu *sync.Mutex
+		if muObj != nil {
+			mu = muObj.(*sync.Mutex)
+		}
+
 		// Default 30 seconds
 		interval := 30000
 		if node.Value != nil {
@@ -223,10 +247,17 @@ func RegisterSSESlots(eng *engine.Engine) {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
+					if mu != nil {
+						mu.Lock()
+					}
 					fmt.Fprintf(writer, ": keepalive\n\n")
 					flush.Flush()
+					if mu != nil {
+						mu.Unlock()
+					}
 				}
 			}
+
 		}()
 
 		return nil
