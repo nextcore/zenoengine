@@ -1,7 +1,8 @@
 
 import { reactive, effect } from './reactivity.js';
 import { compile } from './compiler.js';
-import { validate } from './validator.js'; // Import validator
+import { validate } from './validator.js';
+import { http } from './http.js'; // Import http
 
 let globalStacks = {};
 let currentInstance = null;
@@ -60,7 +61,7 @@ export class Zeno {
             const dataFactory = options.data || (() => ({}));
             const rawData = typeof dataFactory === 'function' ? dataFactory() : dataFactory;
 
-            // Initialize errors object
+            // Initialize errors
             rawData.$errors = {};
 
             if (options.mounted) this.hooks.mounted.push(options.mounted.bind(null));
@@ -132,6 +133,9 @@ export class Zeno {
 
         this.data.$services = Zeno._services;
 
+        // Inject HTTP
+        this.data.$http = http;
+
         if (Zeno.prototype.$router) this.data.$router = Zeno.prototype.$router;
         if (Zeno.prototype.$store) {
             this.data.$store = Zeno.prototype.$store;
@@ -150,10 +154,9 @@ export class Zeno {
             }
         }
 
-        // Validator Helper
         this.data.$validate = (rules) => {
             const result = validate(this.data, rules);
-            this.data.$errors = result.errors; // Update reactive errors
+            this.data.$errors = result.errors;
             return result.isValid;
         };
 
@@ -182,7 +185,7 @@ export class Zeno {
         this.renderDynamic = this.renderDynamic.bind(this);
     }
 
-    // ... [Render Logic Same as Before] ...
+    // ... [Rest of class same as before] ...
 
     renderComponent(name, props, slots) {
         const def = Zeno._components[name];
