@@ -20,7 +20,7 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 	slots.RegisterBladeSlots(eng)   // Enable Blade Support
 	slots.RegisterInertiaSlots(eng) // Enable Inertia.js Support
 	slots.RegisterFileSystemSlots(eng)
-	slots.RegisterValidatorSlots(eng)
+	slots.RegisterValidatorSlots(eng, dbMgr)
 	slots.RegisterAuthSlots(eng, dbMgr)
 	slots.RegisterImageSlots(eng)
 	slots.RegisterLogicSlots(eng)
