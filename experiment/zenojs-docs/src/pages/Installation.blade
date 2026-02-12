@@ -1,0 +1,29 @@
+<template>
+    @extends('DocsLayout')
+        <h1>Installation</h1>
+
+        <h2>Using CLI</h2>
+        <p>The easiest way to start is using the Zeno CLI:</p>
+
+        <x-code-block lang="bash">
+npx zeno-cli create my-app
+cd my-app
+npm install
+npm run dev
+        </x-code-block>
+
+        <h2>Manual Setup</h2>
+        <p>1. Install Vite</p>
+        <x-code-block lang="bash">npm install vite --save-dev</x-code-block>
+
+        <p>2. Configure <code>vite.config.js</code></p>
+        <x-code-block lang="js">
+import { defineConfig } from 'vite';
+import zeno from 'zeno-js/vite-plugin';
+
+export default defineConfig({
+    plugins: [ zeno() ]
+});
+        </x-code-block>
+    @endsection
+</template>
