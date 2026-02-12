@@ -1,11 +1,20 @@
 
 import { defineConfig } from 'vite';
-import zeno from './vite-plugin-zeno.js';
+import { resolve } from 'path';
 
 export default defineConfig({
-    plugins: [
-        zeno()
-    ],
-    // Ensure we can import compiler.js in the plugin which runs in Node
-    // Node handles ESM natively now.
+    build: {
+        lib: {
+            entry: {
+                zeno: resolve(__dirname, 'index.js'),
+                plugin: resolve(__dirname, 'vite-plugin-zeno.js')
+            },
+            name: 'ZenoJS',
+            formats: ['es', 'cjs']
+        },
+        rollupOptions: {
+            // Externalize deps if any (none currently)
+            external: ['fs', 'path'], // Plugin uses Node modules
+        }
+    }
 });
