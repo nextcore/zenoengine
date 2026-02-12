@@ -147,7 +147,7 @@ http.post: /tutorial/max/auth/register {
       }
     }
 
-    // Hash password
+        // Hash password
     crypto.hash: $valid_user.password { as: $hashed_pass }
     
     // Replace password in valid_user with hashed one
@@ -156,43 +156,45 @@ http.post: /tutorial/max/auth/register {
     // Add default role safely
     $valid_user.role = "member"
 
-    // Insert new user safely
-    db.insert: "tutorial_users" {
-      db: "tutorial"
-      vals: $valid_user
-    }
-            
-            var: $user_id { val: $db_last_id }
-            
-            log: "✅ New user registration attempt successful"
-            
-            // Auto-login after registration
-            auth.login: {
-              username: $email
-              password: $password
-              table: "tutorial_users"
-              db: "tutorial"
-              col_user: "email"
-              col_pass: "password"
-              secret: $jwt_secret
-              as: $token
-            }
-            
-            // Set cookie
-            cookie.set: {
-              name: "auth_token"
-              val: $token
-              age: 86400
-            }
-            
-            http.redirect: "/tutorial/max/dashboard"
-          }
-          catch: {
-            view.blade: "tutorial/max/auth/register.blade.zl" {
-              error: "Registration failed: " + $error
-            }
-          }
+    try: {
+      do: {
+        // Insert new user safely
+        db.insert: "tutorial_users" {
+          db: "tutorial"
+          vals: $valid_user
         }
+        
+        var: $user_id { val: $db_last_id }
+        
+        log: "✅ New user registration attempt successful"
+        
+        // Auto-login after registration
+        auth.login: {
+          username: $email
+          password: $password
+          table: "tutorial_users"
+          db: "tutorial"
+          col_user: "email"
+          col_pass: "password"
+          secret: $jwt_secret
+          as: $token
+        }
+        
+        // Set cookie
+        cookie.set: {
+          name: "auth_token"
+          val: $token
+          age: 86400
+        }
+        
+        http.redirect: "/tutorial/max/dashboard"
+      }
+      catch: {
+        view.blade: "tutorial/max/auth/register.blade.zl" {
+          error: "Registration failed: " + $error
+        }
+      }
+    }
       }
     }
   }

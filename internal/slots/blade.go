@@ -67,6 +67,11 @@ func RegisterBladeSlots(eng *engine.Engine) {
 
 	// 2. Slot Utama: view.blade
 	eng.Register("view.blade", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		// Set Content-Type header for HTML responses
+		if w, ok := ctx.Value("httpWriter").(http.ResponseWriter); ok {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		}
+
 		// Inject CSRF if available
 		if r, ok := ctx.Value("httpRequest").(*http.Request); ok {
 			scope.Set("csrf_field", csrf.TemplateField(r))
