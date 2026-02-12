@@ -1,0 +1,30 @@
+<script>
+export default {
+    data() {
+        return { title: 'Home Page' };
+    },
+    methods: {
+        inc() {
+            this.$store.dispatch('increment');
+        },
+        login() {
+            this.$store.dispatch('login', 'Zeno User');
+        }
+    }
+}
+</script>
+
+<template>
+    <div class="page">
+        <h1>{{ title }}</h1>
+        <p>Global Counter: {{ $store.state.counter }}</p>
+        <p>Double: {{ $store.getters.doubleCounter }}</p>
+        <p>User: {{ $store.state.user.name }}</p>
+
+        <button @click="inc">Increment Global</button>
+        <button @click="login">Login</button>
+
+        <br><br>
+        <a href="/about">Go to About (Check State Persistence)</a>
+    </div>
+</template>
