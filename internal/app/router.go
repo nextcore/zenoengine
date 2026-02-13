@@ -34,7 +34,6 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 	r.Use(middleware.WAF)              // [WAF] Shield up early
 	r.Use(middleware.HostDispatcher)   // [VHOST] O(1) Scalable Host Routing
 	r.Use(middleware.BotDefense)       // [BOT] JS Challenge Interstitial
-	r.Use(middleware.BrotliMiddleware) // [COMPRESSION] Brotli (Priority > Gzip)
 	r.Use(chiMiddleware.Compress(5))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.SecurityHeaders) // New Security Middleware
