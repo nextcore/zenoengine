@@ -1,0 +1,35 @@
+$name: "Zeno"
+log: $name
+
+$status: "active"
+if: $status == "active" {
+    log: "System is active"
+
+    $sub: "nested"
+    if: $sub == "nested" {
+       log: "Nested works"
+    }
+}
+
+$counter: 10
+if: $counter == 10 {
+   log: "Counter is 10"
+} else {
+   log: "Counter is NOT 10"
+}
+
+if: $counter == 5 {
+   log: "Counter is 5"
+} else {
+   log: "Counter is NOT 5 (Correct)"
+}
+
+// Test Then/Else blocks structure
+if: $status == "active" {
+  then: {
+    log: "Then block executed"
+  }
+  else: {
+    log: "Else block executed (Should not happen)"
+  }
+}
