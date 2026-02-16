@@ -1,0 +1,7 @@
+$sharedVar: "Main Value"
+log: "Main: Before include: " + $sharedVar
+
+include: "src/included.zl"
+
+log: "Main: After include: " + $sharedVar
+log: "Main: New Var: " + $newVar

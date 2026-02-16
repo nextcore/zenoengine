@@ -1,0 +1,8 @@
+http.server: {
+    port: 8081
+    routes: {
+        get: "/hello" {
+            return: "Hello from ZenoDart Server!"
+        }
+    }
+}

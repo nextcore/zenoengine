@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'node.dart';
 import 'scope.dart';
+import 'lexer.dart';
+import 'parser.dart';
 
 typedef Handler = Future<void> Function(
     Node node, Scope scope, Executor executor);
@@ -12,6 +15,7 @@ class Executor {
     registerHandler('print', _handleLog);
     registerHandler('if', _handleIf);
     registerHandler('foreach', _handleForeach);
+    registerHandler('include', _handleInclude);
   }
 
   void registerHandler(String name, Handler handler) {
@@ -224,6 +228,39 @@ class Executor {
       }
     } else {
       // Not iterable
+    }
+  }
+
+  Future<void> _handleInclude(Node node, Scope scope, Executor executor) async {
+    final pathRaw = executor.evaluateExpression(node.value, scope);
+    final path = pathRaw?.toString();
+
+    if (path == null || path.isEmpty) {
+      print("Error: include missing path");
+      return;
+    }
+
+    // Resolve path relative to current script (ideally)
+    // Or relative to CWD. For now CWD.
+    final file = File(path);
+    if (!file.existsSync()) {
+      // Try relative to 'src' if not found?
+      // Let's keep it simple: relative to CWD where `dart run` is executed.
+      print(
+          "Error: include file not found: $path (CWD: ${Directory.current.path})");
+      return;
+    }
+
+    try {
+      final content = await file.readAsString();
+      final lexer = Lexer(content);
+      final parser = Parser(lexer, filename: path);
+      final ast = parser.parse();
+
+      // Execute AST in the SAME scope (mixin style)
+      await executor.execute(ast, scope);
+    } catch (e) {
+      print("Error including file $path: $e");
     }
   }
 }

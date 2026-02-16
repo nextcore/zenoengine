@@ -1,0 +1,12 @@
+env.get: "PATH" {
+    as: "pathVar"
+}
+
+log: "PATH: " + $pathVar
+
+env.get: "NON_EXISTENT" {
+    default: "Default Value"
+    as: "missing"
+}
+
+log: "Missing Env: " + $missing

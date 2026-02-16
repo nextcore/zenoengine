@@ -9,7 +9,9 @@
       "dependencies": [
         "args",
         "http",
-        "path"
+        "path",
+        "shelf",
+        "shelf_router"
       ],
       "devDependencies": [
         "lints",
@@ -51,6 +53,27 @@
       "name": "lints",
       "version": "2.1.1",
       "dependencies": []
+    },
+    {
+      "name": "shelf_router",
+      "version": "1.1.4",
+      "dependencies": [
+        "http_methods",
+        "meta",
+        "shelf"
+      ]
+    },
+    {
+      "name": "shelf",
+      "version": "1.4.2",
+      "dependencies": [
+        "async",
+        "collection",
+        "http_parser",
+        "path",
+        "stack_trace",
+        "stream_channel"
+      ]
     },
     {
       "name": "http",
@@ -201,18 +224,6 @@
       ]
     },
     {
-      "name": "shelf",
-      "version": "1.4.2",
-      "dependencies": [
-        "async",
-        "collection",
-        "http_parser",
-        "path",
-        "stack_trace",
-        "stream_channel"
-      ]
-    },
-    {
       "name": "pool",
       "version": "1.5.2",
       "dependencies": [
@@ -316,11 +327,6 @@
       ]
     },
     {
-      "name": "web",
-      "version": "1.1.1",
-      "dependencies": []
-    },
-    {
       "name": "meta",
       "version": "1.18.1",
       "dependencies": []
@@ -334,6 +340,11 @@
         "string_scanner",
         "typed_data"
       ]
+    },
+    {
+      "name": "web",
+      "version": "1.1.1",
+      "dependencies": []
     },
     {
       "name": "string_scanner",
@@ -456,6 +467,11 @@
         "meta",
         "path"
       ]
+    },
+    {
+      "name": "http_methods",
+      "version": "1.1.1",
+      "dependencies": []
     }
   ],
   "configVersion": 1
