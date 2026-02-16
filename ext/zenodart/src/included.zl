@@ -1,7 +1,0 @@
-$sharedVar: "Initial Value"
-log: "Inside Included: " + $sharedVar
-
-$sharedVar: "Modified by Included"
-log: "Inside Included: Modified sharedVar"
-
-$newVar: "Created in Included"
