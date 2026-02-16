@@ -1,0 +1,6 @@
+http.get: "https://jsonplaceholder.typicode.com/todos/1" {
+    then: {
+        log: "Response Status: " + $response.statusCode
+        log: "Response Body: " + $response.body
+    }
+}

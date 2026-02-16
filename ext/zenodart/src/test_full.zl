@@ -1,0 +1,26 @@
+log: "Starting Full Test..."
+
+$apiUrl: "https://jsonplaceholder.typicode.com/users/1"
+http.get: $apiUrl {
+    then: {
+        log: "Fetched user 1. Status: " + $response.statusCode
+
+        $body: $response.body
+        json.parse: $body {
+            as: "user"
+        }
+
+        log: "User Name: " + $user.name
+        log: "User Email: " + $user.email
+
+        $address: $user.address
+        log: "Address City: " + $address.city
+
+        // Loop over geo (Map iteration)
+        foreach: $address.geo {
+             log: "Geo " + $key + ": " + $value
+        }
+    }
+}
+
+log: "Waiting for async..."

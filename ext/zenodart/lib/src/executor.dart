@@ -1,7 +1,8 @@
 import 'node.dart';
 import 'scope.dart';
 
-typedef Handler = void Function(Node node, Scope scope, Executor executor);
+typedef Handler = Future<void> Function(
+    Node node, Scope scope, Executor executor);
 
 class Executor {
   final Map<String, Handler> _handlers = {};
@@ -10,17 +11,18 @@ class Executor {
     registerHandler('log', _handleLog);
     registerHandler('print', _handleLog);
     registerHandler('if', _handleIf);
+    registerHandler('foreach', _handleForeach);
   }
 
   void registerHandler(String name, Handler handler) {
     _handlers[name] = handler;
   }
 
-  void execute(Node node, Scope scope) {
+  Future<void> execute(Node node, Scope scope) async {
     // If root, traverse children
     if (node.name == "root") {
       for (final child in node.children) {
-        execute(child, scope);
+        await execute(child, scope);
       }
       return;
     }
@@ -35,11 +37,11 @@ class Executor {
 
     final handler = _handlers[node.name];
     if (handler != null) {
-      handler(node, scope, this);
+      await handler(node, scope, this);
     } else {
       // Default traversal if no handler
       for (final child in node.children) {
-        execute(child, scope);
+        await execute(child, scope);
       }
     }
   }
@@ -56,112 +58,172 @@ class Executor {
       return map;
     }
 
-    // B. Raw Value
-    final valStr = node.value?.toString() ?? "";
-    if (valStr.isEmpty) return null;
+    // Use Evaluator for simple expressions/literals
+    return evaluateExpression(node.value, scope);
+  }
 
-    // C. String Literal (quotes)
-    if (valStr.length >= 2) {
-      if ((valStr.startsWith('"') && valStr.endsWith('"')) ||
-          (valStr.startsWith("'") && valStr.endsWith("'"))) {
-        return valStr.substring(1, valStr.length - 1);
+  dynamic evaluateExpression(dynamic expression, Scope scope) {
+    if (expression == null) return null;
+    final expr = expression.toString().trim();
+    if (expr.isEmpty) return null;
+
+    // 1. Literal Checks
+    if (expr == "true") return true;
+    if (expr == "false") return false;
+    if (expr == "null") return null;
+
+    // String literals
+    if ((expr.startsWith('"') && expr.endsWith('"')) ||
+        (expr.startsWith("'") && expr.endsWith("'"))) {
+      return expr.substring(1, expr.length - 1);
+    }
+
+    // Numeric literals
+    final asInt = int.tryParse(expr);
+    if (asInt != null) return asInt;
+    final asDouble = double.tryParse(expr);
+    if (asDouble != null) return asDouble;
+
+    // List literal (Basic)
+    if (expr.startsWith('[') && expr.endsWith(']')) {
+      final content = expr.substring(1, expr.length - 1);
+      if (content.trim().isEmpty) return [];
+      // Naive split by comma (WARNING: breaks on strings with commas)
+      return content
+          .split(',')
+          .map((e) => evaluateExpression(e.trim(), scope))
+          .toList();
+    }
+
+    // Simple Equality Check (==)
+    if (expr.contains("==")) {
+      final parts = expr.split("==");
+      if (parts.length == 2) {
+        final left = evaluateExpression(parts[0].trim(), scope);
+        final right = evaluateExpression(parts[1].trim(), scope);
+        return left.toString() == right.toString();
       }
     }
 
-    // D. Variable Reference ($var)
-    if (valStr.startsWith(r'$')) {
-      final key = valStr.substring(1);
-      final (val, ok) = scope.lookup(key);
-      if (ok) return val;
-      // Fallback to raw value if var not found
-      return node.value;
+    // Simple Addition (+) - String Concatenation or Math
+    if (expr.contains("+")) {
+      // Naive split (WARNING: breaks on strings with +)
+      final parts = expr.split("+");
+      if (parts.length >= 2) {
+        dynamic result = evaluateExpression(parts[0].trim(), scope);
+        for (var i = 1; i < parts.length; i++) {
+          final next = evaluateExpression(parts[i].trim(), scope);
+          if (result is num && next is num) {
+            result += next;
+          } else {
+            result = result.toString() + next.toString();
+          }
+        }
+        return result;
+      }
     }
 
-    // E. Numeric/Bool parsing (Basic)
-    if (valStr == "true") return true;
-    if (valStr == "false") return false;
-    final asInt = int.tryParse(valStr);
-    if (asInt != null) return asInt;
-    final asDouble = double.tryParse(valStr);
-    if (asDouble != null) return asDouble;
+    // Variable lookup
+    if (expr.startsWith(r'$')) {
+      // Handle property access $user.name
+      final key = expr.substring(1);
+      final (val, ok) = scope.lookup(key);
+      if (ok) return val;
+      return null;
+    }
 
-    return node.value;
+    // Fallback
+    return expression;
   }
 
-  void _handleLog(Node node, Scope scope, Executor executor) {
+  Future<void> _handleLog(Node node, Scope scope, Executor executor) async {
     // Evaluate value
     final val = executor.resolveValue(node, scope);
     print(val);
   }
 
-  void _handleIf(Node node, Scope scope, Executor executor) {
-    // Basic condition evaluation
-    final conditionRaw = node.value?.toString() ?? "";
+  Future<void> _handleIf(Node node, Scope scope, Executor executor) async {
+    // Evaluate condition
+    final conditionVal = evaluateExpression(node.value, scope);
     bool isTrue = false;
 
-    if (conditionRaw == "true") {
-      isTrue = true;
-    } else if (conditionRaw.contains("==")) {
-      final parts = conditionRaw.split("==");
-      if (parts.length == 2) {
-        final leftRaw = parts[0].trim();
-        final rightRaw = parts[1].trim();
-
-        dynamic leftVal = leftRaw;
-        if (leftRaw.startsWith(r'$')) {
-          final (val, ok) = scope.lookup(leftRaw.substring(1));
-          if (ok) leftVal = val;
-          // else keep raw string
-        } else if ((leftRaw.startsWith('"') && leftRaw.endsWith('"')) ||
-            (leftRaw.startsWith("'") && leftRaw.endsWith("'"))) {
-          leftVal = leftRaw.substring(1, leftRaw.length - 1);
-        }
-
-        dynamic rightVal = rightRaw;
-        if (rightRaw.startsWith(r'$')) {
-          final (val, ok) = scope.lookup(rightRaw.substring(1));
-          if (ok) rightVal = val;
-          // else keep raw string
-        } else if ((rightRaw.startsWith('"') && rightRaw.endsWith('"')) ||
-            (rightRaw.startsWith("'") && rightRaw.endsWith("'"))) {
-          rightVal = rightRaw.substring(1, rightRaw.length - 1);
-        }
-
-        isTrue = leftVal.toString() == rightVal.toString();
-      }
-    } else if (conditionRaw.startsWith(r'$')) {
-      final (val, ok) = scope.lookup(conditionRaw.substring(1));
-      if (ok && val != null && val != false && val != "" && val != 0) {
-        isTrue = true;
-      }
+    if (conditionVal is bool) {
+      isTrue = conditionVal;
+    } else if (conditionVal != null &&
+        conditionVal != "" &&
+        conditionVal != 0) {
+      isTrue = true; // Truthy
     }
 
     if (isTrue) {
+      // Execute children directly OR check for 'then' block
       bool hasThen = false;
       for (final child in node.children) {
         if (child.name == "then") {
           hasThen = true;
           for (final grandChild in child.children) {
-            executor.execute(grandChild, scope);
+            await executor.execute(grandChild, scope);
           }
         }
       }
 
       if (!hasThen) {
+        // Direct children execution
         for (final child in node.children) {
-          if (child.name != "else" && child.name != "then") {
-            executor.execute(child, scope);
+          if (child.name != "else") {
+            await executor.execute(child, scope);
           }
         }
       }
     } else {
+      // Execute else block if exists
       for (final child in node.children) {
         if (child.name == "else") {
           for (final grandChild in child.children) {
-            executor.execute(grandChild, scope);
+            await executor.execute(grandChild, scope);
           }
         }
       }
+    }
+  }
+
+  Future<void> _handleForeach(Node node, Scope scope, Executor executor) async {
+    // Note: We use evaluateExpression directly because resolveValue would treat
+    // this node as a Map (since it has children), which is NOT what we want for foreach.
+    final iterable = executor.evaluateExpression(node.value, scope);
+
+    if (iterable is List) {
+      for (var i = 0; i < iterable.length; i++) {
+        final item = iterable[i];
+        // Create loop scope
+        final loopScope = Scope(parent: scope);
+        loopScope.set('it', item);
+        loopScope.set('index', i);
+        loopScope.set('value', item); // Alias
+
+        for (final child in node.children) {
+          await executor.execute(child, loopScope);
+        }
+      }
+    } else if (iterable is Map) {
+      // Map iteration needs to be async-aware
+      // iterable.forEach is synchronous and doesn't support async callback well.
+      // Use for-in loop over entries.
+      for (final entry in iterable.entries) {
+        final key = entry.key;
+        final value = entry.value;
+
+        final loopScope = Scope(parent: scope);
+        loopScope.set('key', key);
+        loopScope.set('value', value);
+        loopScope.set('it', value); // Alias
+
+        for (final child in node.children) {
+          await executor.execute(child, loopScope);
+        }
+      }
+    } else {
+      // Not iterable
     }
   }
 }
