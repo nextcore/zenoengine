@@ -1,0 +1,14 @@
+log: "Hello, Dart!"
+
+group: {
+    log: "Inside group"
+}
+
+foo: bar {
+    log: "Nested inside foo: bar"
+}
+
+// Test single-line with block end
+endblock: val }
+
+log: "Done"
