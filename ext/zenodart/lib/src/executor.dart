@@ -133,6 +133,8 @@ class Executor {
       final key = expr.substring(1);
       final (val, ok) = scope.lookup(key);
       if (ok) return val;
+      // If not found, return null (standard behavior)
+      // print('Variable not found: $key');
       return null;
     }
 
