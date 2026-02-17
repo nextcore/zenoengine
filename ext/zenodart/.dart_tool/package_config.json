@@ -188,6 +188,12 @@
       "languageVersion": "3.2"
     },
     {
+      "name": "mysql1",
+      "rootUri": "file:///home/jules/.pub-cache/hosted/pub.dev/mysql1-0.20.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "native_toolchain_c",
       "rootUri": "file:///home/jules/.pub-cache/hosted/pub.dev/native_toolchain_c-0.17.4",
       "packageUri": "lib/",
