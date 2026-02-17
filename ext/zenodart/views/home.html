@@ -1,0 +1,16 @@
+@extends('views/layout.html')
+
+@section('title')
+    Home Page
+@endsection
+
+@section('content')
+    <h1>Welcome, {{ $name }}!</h1>
+    <p>This is ZenoBlade in Dart.</p>
+
+    <ul>
+    @foreach($items)
+        <li>{{ $it }}</li>
+    @endforeach
+    </ul>
+@endsection
