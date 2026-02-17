@@ -2,17 +2,18 @@ import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
-import '../executor.dart';
+import 'package:shelf_static/shelf_static.dart';
+import '../executor.dart' as zeno;
 import '../node.dart';
 import '../scope.dart';
 
 class ServerModule {
-  static void register(Executor executor) {
+  static void register(zeno.Executor executor) {
     executor.registerHandler('http.server', _handleServer);
   }
 
   static Future<void> _handleServer(
-      Node node, Scope scope, Executor executor) async {
+      Node node, Scope scope, zeno.Executor executor) async {
     // Usage:
     // http.server: {
     //    port: 3000
@@ -23,6 +24,7 @@ class ServerModule {
 
     int port = 8080;
     final router = Router();
+    String? staticDir;
 
     // Config parsing
     for (final child in node.children) {
@@ -31,6 +33,8 @@ class ServerModule {
         if (p is int)
           port = p;
         else if (p is String) port = int.tryParse(p) ?? 8080;
+      } else if (child.name == 'static') {
+        staticDir = executor.evaluateExpression(child.value, scope)?.toString();
       } else if (child.name == 'routes') {
         for (final routeNode in child.children) {
           final method = routeNode.name.toLowerCase();
@@ -79,12 +83,23 @@ class ServerModule {
       }
     }
 
-    var handler =
-        Pipeline().addMiddleware(logRequests()).addHandler(router.call);
+    var pipeline = Pipeline().addMiddleware(logRequests());
+    Handler handler;
+
+    if (staticDir != null) {
+      final staticHandler =
+          createStaticHandler(staticDir, defaultDocument: 'index.html');
+      // Router first, then static
+      handler = Cascade().add(router.call).add(staticHandler).handler;
+    } else {
+      handler = router.call;
+    }
+
+    final finalHandler = pipeline.addHandler(handler);
 
     try {
       final server =
-          await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
+          await shelf_io.serve(finalHandler, InternetAddress.anyIPv4, port);
       print('Server running on port ${server.port}');
     } catch (e) {
       print("Error starting server: $e");
