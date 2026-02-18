@@ -1,0 +1,28 @@
+time.now: {
+    as: "ts"
+}
+log: "Current time: " + $ts
+
+hash.sha256: "hello" {
+    as: "h"
+}
+log: "SHA256(hello): " + $h
+
+str.upper: "hello world" {
+    as: "u"
+}
+log: "Upper: " + $u
+
+db.connect: "test.db"
+db.execute: "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)"
+db.execute: "INSERT INTO users (name) VALUES (?)" {
+    args: ["Alice"]
+}
+db.query: "SELECT * FROM users" {
+    as: "users"
+}
+foreach: $users {
+    log: "User ID: " + $it.id + ", Name: " + $it.name
+}
+db.close
+file.delete: "test.db"
