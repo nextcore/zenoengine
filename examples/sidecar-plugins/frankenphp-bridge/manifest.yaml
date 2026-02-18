@@ -8,6 +8,13 @@ sidecar:
   auto_start: true
   keep_alive: true
   max_retries: 3
+  
+  # Environment Variables
+  env:
+    # Aktifkan Worker Mode untuk performa tinggi (Laravel Octane style)
+    # FRANKENPHP_CONFIG: "worker ./app/laravel_octane.php"
+    # Atau biarkan kosong untuk mode CLI biasa (One-Shot)
+    FRANKENPHP_CONFIG: ""
 
 permissions:
   filesystem:

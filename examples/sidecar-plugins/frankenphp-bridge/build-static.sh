@@ -2,7 +2,7 @@
 set -e
 
 # Versi PHP yang akan digunakan (sesuaikan dengan release FrankenPHP)
-PHP_VERSION="8.3.3"
+PHP_VERSION="8.4"
 OS="linux"
 ARCH="x86_64"
 
@@ -26,7 +26,7 @@ if command -v docker &> /dev/null; then
     
     # Buat Dockerfile sementara untuk build
     cat > Dockerfile.build <<EOF
-FROM dunglas/frankenphp:static-builder
+FROM dunglas/frankenphp:static-builder-php8.4
 
 WORKDIR /go/src/app
 COPY . .

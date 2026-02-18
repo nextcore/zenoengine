@@ -83,6 +83,19 @@ plugin.call: frankenphp-bridge
 log: $result.output
 ```
 
+### `php.extensions`
+List loaded PHP extensions to verify the environment.
+
+```
+# ZenoLang
+plugin.call: frankenphp-bridge
+  slot: php.extensions
+  as: $exts
+
+log: "Loaded extensions: " + $exts.count
+log: $exts.extensions
+```
+
 ### `php.health`
 Cek status bridge.
 
@@ -94,6 +107,82 @@ plugin.call: frankenphp-bridge
 
 log: $health.status
 ```
+
+## Ekstensi PHP
+Image `static-builder` secara default menyertakan **sebagian besar ekstensi populer** (seperti PDO, MySQL, PGSQL, Redis, GD, Intl, BCMath, OpCache, dll). Anda bisa menggunakan slot `php.extensions` untuk melihat daftarnya.
+
+Jika memerlukan ekstensi khusus yang tidak ada, Anda perlu memodifikasi `build-static.sh` untuk melakukan custom build library `libphp`.
+
+## Laravel Support
+
+Anda bisa menjalankan aplikasi Laravel melalui sidecar ini menggunakan mode **One-Shot (CLI)**. Ini mirip dengan menjalankan request via CGI atau Lambda function (booting per request).
+
+### Contoh Script Handler
+Lihat `app/laravel_handler.php` sebagai contoh entry point.
+
+### Cara Pakai di ZenoLang
+
+```zeno
+# Panggil Laravel Handler
+plugin.call: frankenphp-bridge
+  slot: php.run
+  script: "path/to/laravel_handler.php"
+  scope:
+    request:
+      uri: "/api/users"
+      method: "GET"
+      query: { page: 1 }
+  as: $response
+
+# Parse Output JSON dari Handler
+$jsonResponse = json_decode($response.output)
+log: "Status: " + $jsonResponse.status
+log: "Body: " + $jsonResponse.body
+```
+
+> **Catatan Performa**: Mode ini melakukan booting framework Laravel setiap kali request dijalankan.
+
+## Laravel Octane / Worker Mode (High Performance)
+
+Untuk performa maksimal (setara Laravel Octane), gunakan mode **Worker**. Dalam mode ini, aplikasi booting sekali saja dan tetap berjalan di memori.
+
+### 1. Siapkan Worker Script
+Gunakan `app/laravel_octane.php` sebagai entry point. Pastikan path ke Laravel project benar.
+
+### 2. Konfigurasi Sidecar
+Set environment variable `FRANKENPHP_CONFIG` di `manifest.yaml` atau saat menjalankan ZenoEngine.
+
+```yaml
+# manifest.yaml
+sidecar:
+  env:
+    FRANKENPHP_CONFIG: "worker ./app/laravel_octane.php"
+    MAX_REQUESTS: "500"
+    
+    # [Optional] Listen di TCP Port (bukan Unix Socket)
+    # Berguna jika ingin debug atau akses dari luar container/host
+    FRANKENPHP_PORT: "8000" 
+    FRANKENPHP_HOST: "127.0.0.1" # Default: 127.0.0.1
+```
+
+### 3. Panggil via `php.request`
+Gunakan slot khusus `php.request` yang akan mem-proxy request ke worker internal (Unix Socket atau TCP).
+
+```zeno
+# Panggil Worker (Ultra Fast)
+plugin.call: frankenphp-bridge
+  slot: php.request
+  scope:
+    request:
+      uri: "/api/users"
+      method: "GET"
+  as: $response
+
+log: "Status: " + $response.status
+log: "Body: " + $response.body
+```
+
+Mode ini jauh lebih cepat (sub-millisecond latency untuk hello world) dibandingkan `php.run` (30ms+).
 
 ## Test Manual
 
