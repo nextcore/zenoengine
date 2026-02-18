@@ -1,0 +1,21 @@
+name: frankenphp-bridge
+version: 1.0.0
+type: sidecar
+binary: ./frankenphp-bridge  # CGO_ENABLED=1 go build -o frankenphp-bridge .
+
+sidecar:
+  protocol: json-rpc
+  auto_start: true
+  keep_alive: true
+  max_retries: 3
+
+permissions:
+  filesystem:
+    - ./app
+    - ./public
+    - ./vendor
+  network:
+    - "*"
+  scope:
+    - read
+    - write
