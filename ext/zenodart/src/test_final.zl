@@ -1,9 +1,0 @@
-http.server: {
-    port: 8082
-    static: "public"
-    routes: {
-        get: "/hello" {
-            return: "Hello"
-        }
-    }
-}
