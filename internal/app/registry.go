@@ -43,6 +43,8 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 
 	slots.RegisterSessionSlots(eng)
 
+	slots.RegisterCaptchaSlots(eng, r)
+
 	// Register Plugin slots
 	slots.RegisterPluginSlots(eng, r, dbMgr)
 }
