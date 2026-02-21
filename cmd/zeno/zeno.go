@@ -59,6 +59,8 @@ func main() {
 			cli.HandlePlugin(os.Args[2:])
 		case "version":
 			cli.HandleVersion()
+		case "docs":
+			cli.HandleDocs(os.Args[2:])
 		default:
 			// Automatically run if it ends with .zl
 			if strings.HasSuffix(cmd, ".zl") {
