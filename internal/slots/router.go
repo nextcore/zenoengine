@@ -279,10 +279,27 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		path := getPath(node, scope)
 
 		// Check if group has middleware
-		middlewareName := ""
+		var middlewares []string
 		for _, c := range node.Children {
 			if c.Name == "middleware" {
-				middlewareName = coerce.ToString(resolveValue(c.Value, scope))
+				val := resolveValue(c.Value, scope)
+				if slice, err := coerce.ToSlice(val); err == nil {
+					for _, item := range slice {
+						middlewares = append(middlewares, coerce.ToString(item))
+					}
+				} else {
+					// Fallback: Parse string representation "[a, b]"
+					s := coerce.ToString(val)
+					if strings.HasPrefix(strings.TrimSpace(s), "[") {
+						content := strings.Trim(strings.TrimSpace(s), "[]")
+						parts := strings.Split(content, ",")
+						for _, p := range parts {
+							middlewares = append(middlewares, strings.Trim(strings.TrimSpace(p), "\"'"))
+						}
+					} else {
+						middlewares = append(middlewares, s)
+					}
+				}
 			}
 		}
 
@@ -311,17 +328,19 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		// Create sub-router
 		subRouter := chi.NewRouter()
 
-		// [NEW] Apply native Chi middleware if auth is specified
-		if middlewareName == "auth" {
-			// Use JWT_SECRET from environment (same as auth controller)
-			jwtSecret := os.Getenv("JWT_SECRET")
-			if jwtSecret == "" {
-				// Fallback to .env default
-				jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
-				fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
+		// [NEW] Apply Middleware Stack
+		for _, m := range middlewares {
+			if m == "auth" {
+				// Use JWT_SECRET from environment
+				jwtSecret := os.Getenv("JWT_SECRET")
+				if jwtSecret == "" {
+					jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
+					fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
+				}
+				subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
+				fmt.Printf("   🔒 [GROUP MIDDLEWARE] Applied 'auth' to group %s\n", path)
 			}
-			subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
-			fmt.Printf("   🔒 [GROUP MIDDLEWARE] Applied native Chi auth to group %s\n", path)
+			// Future: Add other middlewares here (e.g. "throttle", "cors")
 		}
 
 		// Mount sub-router
@@ -363,7 +382,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			}
 
 			var doNode *engine.Node
-			var middlewareName string
+			var middlewares []string
 
 			// Scan for Metadata and Logic Container
 			for _, c := range node.Children {
@@ -390,10 +409,26 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				}
 
 				// Capture Middleware (Metadata Level)
-				// Support both: middleware: "auth" AND middleware with parameters as route attributes
 				if c.Name == "middleware" {
 					if c.Value != nil {
-						middlewareName = coerce.ToString(resolveValue(c.Value, scope))
+						val := resolveValue(c.Value, scope)
+						if slice, err := coerce.ToSlice(val); err == nil {
+							for _, item := range slice {
+								middlewares = append(middlewares, coerce.ToString(item))
+							}
+						} else {
+							// Fallback: Parse string representation "[a, b]"
+							s := coerce.ToString(val)
+							if strings.HasPrefix(strings.TrimSpace(s), "[") {
+								content := strings.Trim(strings.TrimSpace(s), "[]")
+								parts := strings.Split(content, ",")
+								for _, p := range parts {
+									middlewares = append(middlewares, strings.Trim(strings.TrimSpace(p), "\"'"))
+								}
+							} else {
+								middlewares = append(middlewares, s)
+							}
+						}
 					}
 				}
 
@@ -476,17 +511,17 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// This is the idiomatic Go/Chi way for route-specific middleware
 			targetRouter := getCurrentRouter(ctx)
 
-			if middlewareName == "auth" {
-				// Create a new router chain with middleware applied
-				// Use JWT_SECRET from environment (same as auth controller)
-				jwtSecret := os.Getenv("JWT_SECRET")
-				if jwtSecret == "" {
-					// Fallback to .env default
-					jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
-					fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
+			for _, m := range middlewares {
+				if m == "auth" {
+					// Use JWT_SECRET from environment
+					jwtSecret := os.Getenv("JWT_SECRET")
+					if jwtSecret == "" {
+						jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
+						fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
+					}
+					targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))
+					fmt.Printf("   🔒 [MIDDLEWARE] Applied 'auth' to %s\n", fullDocPath)
 				}
-				targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))
-				fmt.Printf("   🔒 [MIDDLEWARE] Applied native Chi auth via r.With() to %s\n", fullDocPath)
 			}
 
 			// Register Documentation
