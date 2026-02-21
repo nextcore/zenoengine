@@ -392,8 +392,11 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				}
 				subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
 				fmt.Printf("   🔒 [GROUP MIDDLEWARE] Applied 'auth' to group %s\n", path)
+			} else if customNode := middleware.Registry.Get(m); customNode != nil {
+				// Custom Zeno Middleware
+				subRouter.Use(middleware.ZenoMiddleware(eng, customNode))
+				fmt.Printf("   🛡️ [GROUP MIDDLEWARE] Applied custom '%s' to group %s\n", m, path)
 			}
-			// Future: Add other middlewares here (e.g. "throttle", "cors")
 		}
 
 		// Mount sub-router
@@ -574,6 +577,10 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 					}
 					targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))
 					fmt.Printf("   🔒 [MIDDLEWARE] Applied 'auth' to %s\n", fullDocPath)
+				} else if customNode := middleware.Registry.Get(m); customNode != nil {
+					// Custom Zeno Middleware
+					targetRouter = targetRouter.With(middleware.ZenoMiddleware(eng, customNode))
+					fmt.Printf("   🛡️ [MIDDLEWARE] Applied custom '%s' to %s\n", m, fullDocPath)
 				}
 			}
 
