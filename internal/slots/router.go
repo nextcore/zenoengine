@@ -36,7 +36,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 	// Helper: Membuat Handler (Runtime Execution) - OPTIMIZED (Zero Runtime Overhead)
 	// Auth is handled by native Chi middleware, injected via context
-	createHandler := func(children []*engine.Node, baseScope *engine.Scope) http.HandlerFunc {
+	createHandler := func(children []*engine.Node, baseScope *engine.Scope, bindings map[string]string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			// 1. Get Arena from pool for this request
 			arena := engine.GetArena()
@@ -57,6 +57,59 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 					reqScope.Set(key, val)
 					// Set also in params map: $params.id
 					params[key] = val
+
+					// [NEW] Route Model Binding Logic
+					if modelTable, ok := bindings[key]; ok {
+						// Execute: db.first on table 'modelTable' where id = val
+						// We need to inject this query result into the scope as '$key' (overwriting the ID string)
+
+						// NOTE: We rely on "orm.find" behavior but manually constructed for performance?
+						// Or just re-use engine execution?
+						// Re-using engine execution is safer.
+						// We construct a mini-AST:
+						// db.table: table { where: { id: val }, first: { as: key } }
+
+						// But wait, key might be "user". We want $user to be the object.
+						// And check if found. If not found -> Abort 404.
+
+						// Construct Node
+						bindingNode := &engine.Node{
+							Name: "db.table",
+							Value: modelTable,
+							Children: []*engine.Node{
+								{
+									Name: "where",
+									Children: []*engine.Node{
+										{Name: "id", Value: val},
+									},
+								},
+								{
+									Name: "first",
+									Children: []*engine.Node{
+										{Name: "as", Value: key},
+									},
+								},
+							},
+						}
+
+						// Execute binding query
+						// We pass a new context? Or same?
+						// Same context has httpWriter, so it's fine.
+						// But we suppress output? db slots don't output unless log/echo.
+						if err := eng.Execute(r.Context(), bindingNode, reqScope); err != nil {
+							// If error (DB fail), panic or 500?
+							panic(err)
+						}
+
+						// Check if found
+						// db.first sets ${key}_found boolean
+						foundVal, _ := reqScope.Get(key + "_found")
+						if found, _ := coerce.ToBool(foundVal); !found {
+							// 404 Not Found
+							http.Error(w, "404 Not Found", http.StatusNotFound)
+							return // Stop execution of the handler
+						}
+					}
 				}
 				reqScope.Set("params", params)
 			}
@@ -529,8 +582,20 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 			fmt.Printf("   ➕ [ROUTE] %-6s %s\n", m, fullDocPath)
 
+			// [NEW] Parse Bindings (Route Model Binding)
+			bindings := make(map[string]string)
+			for _, c := range node.Children {
+				if c.Name == "bind" {
+					if m, ok := parseNodeValue(c, scope).(map[string]interface{}); ok {
+						for k, v := range m {
+							bindings[k] = coerce.ToString(v)
+						}
+					}
+				}
+			}
+
 			// Register route handler on the middleware-enabled router chain
-			targetRouter.MethodFunc(m, path, createHandler(execChildren, scope))
+			targetRouter.MethodFunc(m, path, createHandler(execChildren, scope, bindings))
 			return nil
 		}, engine.SlotMeta{
 			Description: fmt.Sprintf("Register a %s route handler.", m),
