@@ -61,6 +61,8 @@ func main() {
 			cli.HandleVersion()
 		case "docs":
 			cli.HandleDocs(os.Args[2:])
+		case "route:list":
+			cli.HandleRouteList(os.Args[2:])
 		default:
 			// Automatically run if it ends with .zl
 			if strings.HasSuffix(cmd, ".zl") {
