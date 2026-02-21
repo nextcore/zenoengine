@@ -63,6 +63,8 @@ func main() {
 			cli.HandleDocs(os.Args[2:])
 		case "route:list":
 			cli.HandleRouteList(os.Args[2:])
+		case "make:model", "make:schema":
+			cli.HandleMakeSchema(os.Args[2:])
 		default:
 			// Automatically run if it ends with .zl
 			if strings.HasSuffix(cmd, ".zl") {

@@ -26,6 +26,18 @@ func HandleRouteList(args []string) {
 	// Register Slots
 	app.RegisterAllSlots(eng, nil, dbMgr, queue, nil)
 
+	// [FIX] Mock http.server to prevent hanging
+	eng.Register("http.server", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		fmt.Println("   🛑 [CLI] Skipped http.server startup")
+		return nil
+	}, engine.SlotMeta{Description: "Mock server for CLI"})
+
+	// [FIX] Mock worker.start to prevent hanging
+	eng.Register("worker.start", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		fmt.Println("   🛑 [CLI] Skipped worker startup")
+		return nil
+	}, engine.SlotMeta{Description: "Mock worker for CLI"})
+
 	// 2. Load and Execute src/main.zl
 	if _, err := os.Stat("src/main.zl"); os.IsNotExist(err) {
 		fmt.Println("❌ src/main.zl not found. Run this command from your project root.")

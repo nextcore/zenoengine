@@ -46,4 +46,7 @@ func TestBladeAttributesBag(t *testing.T) {
 
 	if !strings.Contains(out, `class="primary"`) { t.Error("Attribute 'class' missing from output") }
 	if !strings.Contains(out, `type="submit"`) { t.Error("Attribute 'type' missing from output") }
+
+	// [FIX] Verify that the original <x-tag> is NOT present (transformation success)
+	if strings.Contains(out, `<x-btn`) { t.Error("Component tag was not transformed (false positive)") }
 }
