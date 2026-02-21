@@ -334,8 +334,8 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				// Use JWT_SECRET from environment
 				jwtSecret := os.Getenv("JWT_SECRET")
 				if jwtSecret == "" {
-					jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
-					fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
+					fmt.Printf("   ❌ Fatal: JWT_SECRET environment variable is not set. Authentication middleware requires it.\n")
+					os.Exit(1)
 				}
 				subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
 				fmt.Printf("   🔒 [GROUP MIDDLEWARE] Applied 'auth' to group %s\n", path)
@@ -516,8 +516,8 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 					// Use JWT_SECRET from environment
 					jwtSecret := os.Getenv("JWT_SECRET")
 					if jwtSecret == "" {
-						jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
-						fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
+						fmt.Printf("   ❌ Fatal: JWT_SECRET environment variable is not set. Authentication middleware requires it.\n")
+						os.Exit(1)
 					}
 					targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))
 					fmt.Printf("   🔒 [MIDDLEWARE] Applied 'auth' to %s\n", fullDocPath)
