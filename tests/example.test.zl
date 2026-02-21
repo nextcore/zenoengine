@@ -1,0 +1,9 @@
+test: "Math Logic" {
+  assert.eq: 2 { expected: 2 }
+  assert.neq: 1 { expected: 2 }
+}
+
+test: "Variable Logic" {
+  var: $x { val: 10 }
+  assert.eq: $x { expected: 10 }
+}
