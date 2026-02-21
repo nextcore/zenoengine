@@ -1,8 +1,0 @@
-// Migration: Create users table
-schema.create: "users" {
-  column.id
-  column.string: "name"
-  column.timestamps
-}
-
-log: "Migrated table: users"
