@@ -23,8 +23,10 @@ type InputMeta struct {
 // Struct untuk menyimpan Dokumentasi Slot
 type SlotMeta struct {
 	Description    string               `json:"description"`
-	Example        string               `json:"example"` // Snippet kode .zl
+	Group          string               `json:"group,omitempty"` // [BARU] Group for documentation (e.g., "HTTP", "Database")
+	Example        string               `json:"example"`         // Snippet kode .zl
 	Inputs         map[string]InputMeta `json:"inputs,omitempty"`
+	Returns        string               `json:"returns,omitempty"`         // [BARU] Description of return value
 	RequiredBlocks []string             `json:"required_blocks,omitempty"` // e.g. ["do"], ["then", "else"]
 	ValueType      string               `json:"value_type,omitempty"`      // [BARU] Tipe data untuk value utama slot
 }

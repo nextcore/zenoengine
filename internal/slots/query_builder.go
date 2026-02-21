@@ -228,6 +228,7 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Set the table to be used for subsequent database operations.",
+		Group:       "Database",
 		Example:     "db.table: 'users'",
 		Inputs: map[string]engine.InputMeta{
 			"name": {Description: "Table name (Optional if specified in main value)", Required: false},
@@ -271,7 +272,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 		qs.Columns = cols
 		return nil
-	}, engine.SlotMeta{Example: "db.columns: ['id', 'name']"})
+	}, engine.SlotMeta{
+		Example: "db.columns: ['id', 'name']",
+		Group:   "Database",
+	})
 
 	// DB.JOIN / LEFT_JOIN
 	joinHandler := func(joinType string) func(context.Context, *engine.Node, *engine.Scope) error {
@@ -320,9 +324,17 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			return nil
 		}
 	}
-	eng.Register("db.join", joinHandler("INNER"), engine.SlotMeta{Example: "db.join {\n  table: posts\n  on: ['users.id', '=', 'posts.user_id']\n}"})
-	eng.Register("db.left_join", joinHandler("LEFT"), engine.SlotMeta{Example: "db.left_join ..."})
-	eng.Register("db.right_join", joinHandler("RIGHT"), engine.SlotMeta{})
+	eng.Register("db.join", joinHandler("INNER"), engine.SlotMeta{
+		Example: "db.join {\n  table: posts\n  on: ['users.id', '=', 'posts.user_id']\n}",
+		Group:   "Database",
+	})
+	eng.Register("db.left_join", joinHandler("LEFT"), engine.SlotMeta{
+		Example: "db.left_join ...",
+		Group:   "Database",
+	})
+	eng.Register("db.right_join", joinHandler("RIGHT"), engine.SlotMeta{
+		Group: "Database",
+	})
 
 	// DB.WHERE_IN
 	eng.Register("db.where_in", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -348,7 +360,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "IN", Value: val})
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.where_in {\n  col: id\n  val: [1, 2, 3]\n}"})
+	}, engine.SlotMeta{
+		Example: "db.where_in {\n  col: id\n  val: [1, 2, 3]\n}",
+		Group:   "Database",
+	})
 
 	// DB.WHERE_NULL
 	eng.Register("db.where_null", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -362,7 +377,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "NULL", Value: nil})
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.where_null: deleted_at"})
+	}, engine.SlotMeta{
+		Example: "db.where_null: deleted_at",
+		Group:   "Database",
+	})
 
 	// DB.WHERE_NOT_NULL
 	eng.Register("db.where_not_null", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -376,7 +394,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "NOT NULL", Value: nil})
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.where_not_null: created_at"})
+	}, engine.SlotMeta{
+		Example: "db.where_not_null: created_at",
+		Group:   "Database",
+	})
 
 	// DB.WHERE_NOT_IN
 	eng.Register("db.where_not_in", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -402,7 +423,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "NOT IN", Value: val})
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.where_not_in {\n  col: status\n  val: ['archived', 'deleted']\n}"})
+	}, engine.SlotMeta{
+		Example: "db.where_not_in {\n  col: status\n  val: ['archived', 'deleted']\n}",
+		Group:   "Database",
+	})
 
 	// DB.GROUP_BY
 	eng.Register("db.group_by", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -416,7 +440,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			qs.GroupBy = append(qs.GroupBy, coerce.ToString(resolveValue(node.Value, scope)))
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.group_by: 'status'"})
+	}, engine.SlotMeta{
+		Example: "db.group_by: 'status'",
+		Group:   "Database",
+	})
 
 	// DB.HAVING
 	eng.Register("db.having", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -444,7 +471,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			qs.Having = append(qs.Having, WhereCond{Column: col, Op: op, Value: val})
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.having {\n  col: count\n  op: '>'\n  val: 5\n}"})
+	}, engine.SlotMeta{
+		Example: "db.having {\n  col: count\n  op: '>'\n  val: 5\n}",
+		Group:   "Database",
+	})
 
 	// DB.WHERE
 	eng.Register("db.where", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -481,6 +511,7 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Add a WHERE filter to the query.",
+		Group:       "Database",
 		Example:     "db.where\n  col: id\n  val: $user_id",
 		Inputs: map[string]engine.InputMeta{
 			"col": {Description: "Column name", Required: false},
@@ -502,7 +533,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			qs.OrderBy = coerce.ToString(resolveValue(node.Value, scope))
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.order_by: 'id DESC'"})
+	}, engine.SlotMeta{
+		Example: "db.order_by: 'id DESC'",
+		Group:   "Database",
+	})
 
 	// DB.LIMIT
 	eng.Register("db.limit", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -516,7 +550,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		limit, _ := coerce.ToInt(val)
 		qs.Limit = limit
 		return nil
-	}, engine.SlotMeta{Example: "db.limit: $limit"})
+	}, engine.SlotMeta{
+		Example: "db.limit: $limit",
+		Group:   "Database",
+	})
 
 	// DB.OFFSET
 	eng.Register("db.offset", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -524,13 +561,12 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		if !ok {
 			return nil
 		}
-		qs := qsVal.(*QueryState)
-
-		val := resolveValue(node.Value, scope)
-		offset, _ := coerce.ToInt(val)
-		qs.Offset = offset
+		qsVal.(*QueryState).Offset, _ = coerce.ToInt(resolveValue(node.Value, scope))
 		return nil
-	}, engine.SlotMeta{Example: "db.offset: $offset"})
+	}, engine.SlotMeta{
+		Example: "db.offset: $offset",
+		Group:   "Database",
+	})
 
 	// =========================================================================
 	// EXECUTION SLOTS
@@ -594,6 +630,7 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Retrieve multiple rows from the database based on the current query state.",
+		Group:       "Database",
 		Example:     "db.get\n  as: $users",
 		Inputs: map[string]engine.InputMeta{
 			"as": {Description: "Variable name to store results", Required: true},
@@ -660,6 +697,7 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Retrieve the first row from the database based on the current query state.",
+		Group:       "Database",
 		Example:     "db.first\n  as: $user",
 		Inputs: map[string]engine.InputMeta{
 			"as": {Description: "Variable name to store result", Required: true},
@@ -704,7 +742,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			scope.Set("db_last_id", id)
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.insert\n  name: $name"})
+	}, engine.SlotMeta{
+		Example: "db.insert\n  name: $name",
+		Group:   "Database",
+	})
 
 	// DB.UPDATE
 	eng.Register("db.update", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -741,7 +782,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 		_, err = executor.ExecContext(ctx, query, vals...)
 		return err
-	}, engine.SlotMeta{Example: "db.update\n  status: 'active'"})
+	}, engine.SlotMeta{
+		Example: "db.update\n  status: 'active'",
+		Group:   "Database",
+	})
 
 	// DB.DELETE
 	eng.Register("db.delete", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -773,7 +817,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			scope.Set(target, count)
 		}
 		return nil
-	}, engine.SlotMeta{Example: "db.delete\n  as: $count"})
+	}, engine.SlotMeta{
+		Example: "db.delete\n  as: $count",
+		Group:   "Database",
+	})
 
 	// DB.COUNT
 	eng.Register("db.count", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -804,6 +851,7 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Count the number of rows based on the current query state.",
+		Group:       "Database",
 		Example:     "db.count\n  as: $total",
 		Inputs: map[string]engine.InputMeta{
 			"as": {Description: "Variable name to store result", Required: true},

@@ -268,6 +268,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Mengelompokkan route berdasarkan Domain atau Subdomain tertentu.",
+		Group:       "HTTP",
 		Example:     "http.host: \"api.zeno.dev\"\n  do:\n    http.get: \"/v1/users\" { ... }",
 	})
 
@@ -335,7 +336,11 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		}
 
 		return nil
-	}, engine.SlotMeta{})
+	}, engine.SlotMeta{
+		Description: "Groups routes under a common path prefix and optional middleware.",
+		Group:       "HTTP",
+		Example:     "http.group: '/admin' {\n  middleware: 'auth'\n  do: { ... }\n}",
+	})
 
 	// ==========================================
 	// 2. STANDARD HTTP METHODS (Mendukung Implicit Do)
@@ -492,7 +497,11 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// Register route handler on the middleware-enabled router chain
 			targetRouter.MethodFunc(m, path, createHandler(execChildren, scope))
 			return nil
-		}, engine.SlotMeta{})
+		}, engine.SlotMeta{
+			Description: fmt.Sprintf("Register a %s route handler.", m),
+			Group:       "HTTP",
+			Example:     fmt.Sprintf("http.%s: '/users' { ... }", strings.ToLower(m)),
+		})
 	}
 
 	// ==========================================
@@ -549,6 +558,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Meneruskan request ke backend service lain (Reverse Proxy).",
+		Group:       "HTTP",
 		Example:     "http.proxy: \"http://localhost:8080\"\n  path: \"/api\"",
 	})
 
@@ -629,6 +639,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Hosting aplikasi SPA (React/Vue) atau Static Site.",
+		Group:       "HTTP",
 		Example:     "http.static: \"./dist\"\n  path: \"/\"\n  spa: true",
 	})
 }
