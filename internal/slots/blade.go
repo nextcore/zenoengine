@@ -17,8 +17,11 @@ import (
 	"html"
 
 	"github.com/gorilla/csrf"
+// SafeString is a string that should not be escaped
 )
 
+type SafeString string
+func (s SafeString) String() string { return string(s) }
 // Blade Template Cache
 var (
 	bladeCache sync.Map // map[string]*cachedTemplate
@@ -59,6 +62,10 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		}
 
 		val := resolveValue(node.Value, scope)
+		if s, ok := val.(SafeString); ok {
+			w.Write([]byte(s))
+			return nil
+		}
 		str := coerce.ToString(val)
 		safeStr := html.EscapeString(str)
 		w.Write([]byte(safeStr))
@@ -205,6 +212,7 @@ func RegisterBladeSlots(eng *engine.Engine) {
 
 		var slotContent string
 		slots := make(map[string]string)
+		var attrBuilder strings.Builder
 
 		for _, child := range node.Children {
 			if child.Name == "slot" {
@@ -236,10 +244,19 @@ func RegisterBladeSlots(eng *engine.Engine) {
 				// Resolve Value
 				val := resolveValue(child.Value, scope)
 				newScope.Set(child.Name, val)
+				// Build attributes string
+				valStr := coerce.ToString(val)
+				escapedVal := html.EscapeString(valStr)
+				if valStr == "true" {
+					attrBuilder.WriteString(fmt.Sprintf(" %s", child.Name))
+				} else {
+					attrBuilder.WriteString(fmt.Sprintf(" %s=\"%s\"", child.Name, escapedVal))
+				}
 			}
 		}
 
 		// Bind Slots
+		newScope.Set("attributes", SafeString(strings.TrimSpace(attrBuilder.String())))
 		newScope.Set("slot", slotContent) // Htmlable technically, but string here.
 		for k, v := range slots {
 			newScope.Set(k, v) // $header, $footer
