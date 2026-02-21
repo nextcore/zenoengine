@@ -23,6 +23,37 @@ Guarantee backward compatibility.
 
 ---
 
+## Phase 1.5: The Laravel Bridge (Seamless Adoption)
+*Focus: Making Zeno feel like home for Laravel Developers.*
+
+### 1. Eloquent ORM Parity (Zeno Query Builder)
+Replicate the "magic" and ease of Eloquent without the overhead.
+*   **Action:** Create a fluent, expressive query builder in `.zl` that mimics Eloquent.
+*   **Example:** `User::where('active', 1)->get()` becomes `db.table: "users" { where: { active: 1 }, get: true }`.
+*   **Goal:** Zero SQL knowledge required for standard CRUD operations.
+
+### 2. Blade Component System (ZenoBlade++)
+Upgrade the existing template engine to support modern Component architecture.
+*   **Action:** Implement `<x-alert type="error" />` syntax support.
+*   **Feature:** Component Slots, Props validation, and View Composers similar to Laravel.
+*   **Outcome:** Frontend development feels identical to Laravel 10/11.
+
+### 3. Artisan Console Parity (Zeno CLI)
+Ensure every essential `artisan` command has a `zeno` equivalent.
+*   **Mapping:**
+    *   `php artisan make:model` -> `zeno make:schema`
+    *   `php artisan migrate` -> `zeno db:migrate`
+    *   `php artisan serve` -> `zeno run`
+    *   `php artisan route:list` -> `zeno route:list`
+*   **Benefit:** Muscle memory from Laravel transfers 1:1 to Zeno.
+
+### 4. Middleware & Request Lifecycle
+Adopt the robust request pipeline model.
+*   **Action:** Implement a middleware stack for Authentication, Throttling, and CSRF protection that mirrors Laravel's Kernel.
+*   **Outcome:** Security features are standard, not optional addons.
+
+---
+
 ## Phase 2: The Expansion (Ecosystem & Tooling)
 *Focus: Matching the Giants in Tooling.*
 
