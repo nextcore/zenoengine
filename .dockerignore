@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+dist/
+build/
+zeno
+zeno.exe
+
+# Dependency directories
+node_modules/
+vendor/
+
+# Local configuration
+.env
+.env.local
+
+# Logs and DBs
+*.log
+*.db
+*.db-journal
+*.sqlite
+
+# IDEs
+.vscode/
+.idea/
+
+# Tests
+tests/
+coverage.out
+
+# Documentation Site (Source)
+zeno-docs/

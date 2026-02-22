@@ -61,6 +61,18 @@ cd zeno-go
 go build -o zeno cmd/zeno/zeno.go
 ```
 
+## 🐳 Deployment (Docker)
+
+Zeno is production-ready with a built-in Dockerfile.
+
+```bash
+# Build Image
+docker build -t zeno-app .
+
+# Run Container
+docker run -p 3000:3000 -e APP_ENV=production zeno-app
+```
+
 ## 🏁 Getting Started
 
 1.  **Create a new project:**
