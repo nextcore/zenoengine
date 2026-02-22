@@ -630,6 +630,105 @@ func RegisterUtilSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{})
 
 	// ==========================================
+	// GLOBAL HELPERS (Laravel Parity)
+	// ==========================================
+
+	// DD: Dump and Die
+	eng.Register("dd", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		val := resolveValue(node.Value, scope)
+		fmt.Printf("🔥 [DD] %v\n", val)
+
+		// If HTTP context, write to response too
+		if w, ok := ctx.Value("httpWriter").(http.ResponseWriter); ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(500)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"DEBUG_DD": val,
+			})
+		}
+
+		// Exit logic? We can't os.Exit(1) because it kills the server.
+		// We return a special error "ErrReturn" or similar to stop execution?
+		// Engine doesn't have "ErrHalt". But we can panic and recover?
+		// Or assume the user wants to stop the request.
+		// For now, simple error.
+		return fmt.Errorf("dd: execution stopped")
+	}, engine.SlotMeta{
+		Description: "Dump variable and stop execution (Debugging).",
+		Example: "dd: $user",
+		Group: "Helpers",
+	})
+
+	// DUMP: Dump only
+	eng.Register("dump", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		val := resolveValue(node.Value, scope)
+		fmt.Printf("🐛 [DUMP] %v\n", val)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Dump variable to console without stopping execution.",
+		Example: "dump: $user",
+		Group: "Helpers",
+	})
+
+	// ABORT: 404, 403, 500
+	eng.Register("abort", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		status := 500
+		if node.Value != nil {
+			status, _ = coerce.ToInt(resolveValue(node.Value, scope))
+		}
+		message := http.StatusText(status)
+		for _, c := range node.Children {
+			if c.Name == "message" || c.Name == "msg" {
+				message = coerce.ToString(parseNodeValue(c, scope))
+			}
+		}
+
+		if w, ok := ctx.Value("httpWriter").(http.ResponseWriter); ok {
+			http.Error(w, message, status)
+		}
+		return fmt.Errorf("abort: %d %s", status, message)
+	}, engine.SlotMeta{
+		Description: "Abort execution with HTTP Error.",
+		Example: "abort: 404 { message: 'Not Found' }",
+		Group: "Helpers",
+	})
+
+	// CONFIG: Wrapper for env (for now)
+	eng.Register("config", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		// Usage: config: "app.name" { default: "Zeno" }
+		key := coerce.ToString(resolveValue(node.Value, scope))
+		// For parity with Laravel config('app.name'), we map dots to env vars?
+		// app.name -> APP_NAME
+		// database.connections.mysql.host -> DB_HOST?
+		// Simple strategy: Uppercase and replace . with _
+		envKey := strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+		val := os.Getenv(envKey)
+
+		target := "config_val"
+		var def interface{}
+
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+			if c.Name == "default" {
+				def = parseNodeValue(c, scope)
+			}
+		}
+
+		if val == "" && def != nil {
+			scope.Set(target, def)
+		} else {
+			scope.Set(target, val)
+		}
+		return nil
+	}, engine.SlotMeta{
+		Description: "Get configuration value (maps dot-notation to ENV vars).",
+		Example: "config: 'app.name' { as: $appName }",
+		Group: "Helpers",
+	})
+
+	// ==========================================
 	// SLOT: CAST.TO_INT
 	// ==========================================
 	eng.Register("cast.to_int", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {

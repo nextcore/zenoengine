@@ -44,10 +44,15 @@ func HandleMigrate() {
 	queue := worker.NewDBQueue(dbMgr, "default")
 	app.RegisterAllSlots(eng, nil, dbMgr, queue, nil)
 
-	migrationDir := "migrations"
+	migrationDir := "database/migrations"
+	// Check if database/migrations exists, otherwise fallback to root "migrations" for legacy support
 	if _, err := os.Stat(migrationDir); os.IsNotExist(err) {
-		slog.Info("✨ No migration directory found. Skipping root migrations.")
-		os.Exit(0)
+		if _, err := os.Stat("migrations"); err == nil {
+			migrationDir = "migrations"
+		} else {
+			slog.Info("✨ No migration directory found (checked 'database/migrations' and 'migrations').")
+			os.Exit(0)
+		}
 	}
 
 	mig := migrator.New(eng, dbMgr, migrationDir)
