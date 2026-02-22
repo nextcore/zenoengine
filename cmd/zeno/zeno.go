@@ -71,6 +71,10 @@ func main() {
 			cli.HandleInstall(os.Args[2:])
 		case "build":
 			cli.HandleBuild(os.Args[2:])
+		case "plugin:new":
+			cli.HandlePluginNew(os.Args[2:])
+		case "plugin:build":
+			cli.HandlePluginBuild(os.Args[2:])
 		default:
 			// Automatically run if it ends with .zl
 			if strings.HasSuffix(cmd, ".zl") {
