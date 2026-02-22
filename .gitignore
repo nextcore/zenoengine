@@ -34,3 +34,5 @@ wwwroot/dist/
 
 # Rust builds
 /examples/wasm-plugins/hello-rust/target
+build/
+dist/

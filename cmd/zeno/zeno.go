@@ -69,6 +69,8 @@ func main() {
 			cli.HandleLSPCompletion(os.Args[2:])
 		case "install":
 			cli.HandleInstall(os.Args[2:])
+		case "build":
+			cli.HandleBuild(os.Args[2:])
 		default:
 			// Automatically run if it ends with .zl
 			if strings.HasSuffix(cmd, ".zl") {
