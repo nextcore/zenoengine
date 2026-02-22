@@ -59,22 +59,6 @@ func main() {
 			cli.HandlePlugin(os.Args[2:])
 		case "version":
 			cli.HandleVersion()
-		case "docs":
-			cli.HandleDocs(os.Args[2:])
-		case "route:list":
-			cli.HandleRouteList(os.Args[2:])
-		case "make:model", "make:schema":
-			cli.HandleMakeSchema(os.Args[2:])
-		case "lsp:completion":
-			cli.HandleLSPCompletion(os.Args[2:])
-		case "install":
-			cli.HandleInstall(os.Args[2:])
-		case "build":
-			cli.HandleBuild(os.Args[2:])
-		case "plugin:new":
-			cli.HandlePluginNew(os.Args[2:])
-		case "plugin:build":
-			cli.HandlePluginBuild(os.Args[2:])
 		default:
 			// Automatically run if it ends with .zl
 			if strings.HasSuffix(cmd, ".zl") {

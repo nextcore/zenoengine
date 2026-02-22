@@ -36,7 +36,6 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Define the active model/table for ORM operations.",
-		Group:       "ORM",
 		Example:     "orm.model: 'users'",
 	})
 
@@ -82,7 +81,6 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return err
 	}, engine.SlotMeta{
 		Description: "Find a single record by primary key.",
-		Group:       "ORM",
 		Example:     "orm.find: 1 { as: $user }",
 	})
 
@@ -149,7 +147,6 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 	}, engine.SlotMeta{
 		Description: "Save (Insert or Update) a model object.",
-		Group:       "ORM",
 		Example:     "orm.save: $user",
 	})
 
@@ -183,11 +180,7 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		
 		qs.Where = originalWhere
 		return err
-	}, engine.SlotMeta{
-		Description: "Delete a model record.",
-		Group:       "ORM",
-		Example:     "orm.delete: $user",
-	})
+	}, engine.SlotMeta{})
 
 	// ORM.BELONGSTO: 'User' { as: 'author', foreign_key: 'user_id' }
 	eng.Register("orm.belongsTo", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -218,10 +211,7 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		})
 
 		return nil
-	}, engine.SlotMeta{
-		Description: "Define a many-to-one relationship.",
-		Group:       "ORM",
-	})
+	}, engine.SlotMeta{Description: "Define a many-to-one relationship."})
 
 	// ORM.HASMANY: 'Post' { as: 'posts', foreign_key: 'user_id' }
 	eng.Register("orm.hasMany", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -256,10 +246,7 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		})
 
 		return nil
-	}, engine.SlotMeta{
-		Description: "Define a one-to-many relationship.",
-		Group:       "ORM",
-	})
+	}, engine.SlotMeta{Description: "Define a one-to-many relationship."})
 
 	// ORM.WITH: 'author' { orm.all: $posts }
 	eng.Register("orm.with", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -448,10 +435,7 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		return nil
-	}, engine.SlotMeta{
-		Description: "Eager load a relationship.",
-		Group:       "ORM",
-	})
+	}, engine.SlotMeta{Description: "Eager load a relationship."})
 
 	// DB.SEED: { name: 'UserSeeder', data: [...] }
 	eng.Register("db.seed", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -464,8 +448,5 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		logNode := &engine.Node{Name: "log", Value: "🌱 Seeding completed."}
 		eng.Execute(ctx, logNode, scope)
 		return nil
-	}, engine.SlotMeta{
-		Description: "Execute database seeders.",
-		Group:       "Database",
-	})
+	}, engine.SlotMeta{Description: "Execute database seeders."})
 }

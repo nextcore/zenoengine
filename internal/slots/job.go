@@ -47,7 +47,6 @@ func RegisterJobSlots(eng *engine.Engine, queue worker.JobQueue, setConfig func(
 		return nil
 	}, engine.SlotMeta{
 		Description: "Configure worker queues.",
-		Group:       "Worker",
 		Example: `worker.config
   - "high_priority"
   - "default"`,
@@ -97,7 +96,6 @@ func RegisterJobSlots(eng *engine.Engine, queue worker.JobQueue, setConfig func(
 		return nil
 	}, engine.SlotMeta{
 		Description: "Add a job to the background queue (Redis/DB).",
-		Group:       "Worker",
 		Example: `job.enqueue
   queue: "emails"
   payload:

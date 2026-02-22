@@ -36,7 +36,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 	// Helper: Membuat Handler (Runtime Execution) - OPTIMIZED (Zero Runtime Overhead)
 	// Auth is handled by native Chi middleware, injected via context
-	createHandler := func(children []*engine.Node, baseScope *engine.Scope, bindings map[string]string) http.HandlerFunc {
+	createHandler := func(children []*engine.Node, baseScope *engine.Scope) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			// 1. Get Arena from pool for this request
 			arena := engine.GetArena()
@@ -57,59 +57,6 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 					reqScope.Set(key, val)
 					// Set also in params map: $params.id
 					params[key] = val
-
-					// [NEW] Route Model Binding Logic
-					if modelTable, ok := bindings[key]; ok {
-						// Execute: db.first on table 'modelTable' where id = val
-						// We need to inject this query result into the scope as '$key' (overwriting the ID string)
-
-						// NOTE: We rely on "orm.find" behavior but manually constructed for performance?
-						// Or just re-use engine execution?
-						// Re-using engine execution is safer.
-						// We construct a mini-AST:
-						// db.table: table { where: { id: val }, first: { as: key } }
-
-						// But wait, key might be "user". We want $user to be the object.
-						// And check if found. If not found -> Abort 404.
-
-						// Construct Node
-						bindingNode := &engine.Node{
-							Name: "db.table",
-							Value: modelTable,
-							Children: []*engine.Node{
-								{
-									Name: "where",
-									Children: []*engine.Node{
-										{Name: "id", Value: val},
-									},
-								},
-								{
-									Name: "first",
-									Children: []*engine.Node{
-										{Name: "as", Value: key},
-									},
-								},
-							},
-						}
-
-						// Execute binding query
-						// We pass a new context? Or same?
-						// Same context has httpWriter, so it's fine.
-						// But we suppress output? db slots don't output unless log/echo.
-						if err := eng.Execute(r.Context(), bindingNode, reqScope); err != nil {
-							// If error (DB fail), panic or 500?
-							panic(err)
-						}
-
-						// Check if found
-						// db.first sets ${key}_found boolean
-						foundVal, _ := reqScope.Get(key + "_found")
-						if found, _ := coerce.ToBool(foundVal); !found {
-							// 404 Not Found
-							http.Error(w, "404 Not Found", http.StatusNotFound)
-							return // Stop execution of the handler
-						}
-					}
 				}
 				reqScope.Set("params", params)
 			}
@@ -321,7 +268,6 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Mengelompokkan route berdasarkan Domain atau Subdomain tertentu.",
-		Group:       "HTTP",
 		Example:     "http.host: \"api.zeno.dev\"\n  do:\n    http.get: \"/v1/users\" { ... }",
 	})
 
@@ -332,27 +278,10 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		path := getPath(node, scope)
 
 		// Check if group has middleware
-		var middlewares []string
+		middlewareName := ""
 		for _, c := range node.Children {
 			if c.Name == "middleware" {
-				val := resolveValue(c.Value, scope)
-				if slice, err := coerce.ToSlice(val); err == nil {
-					for _, item := range slice {
-						middlewares = append(middlewares, coerce.ToString(item))
-					}
-				} else {
-					// Fallback: Parse string representation "[a, b]"
-					s := coerce.ToString(val)
-					if strings.HasPrefix(strings.TrimSpace(s), "[") {
-						content := strings.Trim(strings.TrimSpace(s), "[]")
-						parts := strings.Split(content, ",")
-						for _, p := range parts {
-							middlewares = append(middlewares, strings.Trim(strings.TrimSpace(p), "\"'"))
-						}
-					} else {
-						middlewares = append(middlewares, s)
-					}
-				}
+				middlewareName = coerce.ToString(resolveValue(c.Value, scope))
 			}
 		}
 
@@ -381,22 +310,17 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		// Create sub-router
 		subRouter := chi.NewRouter()
 
-		// [NEW] Apply Middleware Stack
-		for _, m := range middlewares {
-			if m == "auth" {
-				// Use JWT_SECRET from environment
-				jwtSecret := os.Getenv("JWT_SECRET")
-				if jwtSecret == "" {
-					fmt.Printf("   ❌ Fatal: JWT_SECRET environment variable is not set. Authentication middleware requires it.\n")
-					os.Exit(1)
-				}
-				subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
-				fmt.Printf("   🔒 [GROUP MIDDLEWARE] Applied 'auth' to group %s\n", path)
-			} else if customNode := middleware.Registry.Get(m); customNode != nil {
-				// Custom Zeno Middleware
-				subRouter.Use(middleware.ZenoMiddleware(eng, customNode))
-				fmt.Printf("   🛡️ [GROUP MIDDLEWARE] Applied custom '%s' to group %s\n", m, path)
+		// [NEW] Apply native Chi middleware if auth is specified
+		if middlewareName == "auth" {
+			// Use JWT_SECRET from environment (same as auth controller)
+			jwtSecret := os.Getenv("JWT_SECRET")
+			if jwtSecret == "" {
+				// Fallback to .env default
+				jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
+				fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
 			}
+			subRouter.Use(middleware.MultiTenantAuth(jwtSecret))
+			fmt.Printf("   🔒 [GROUP MIDDLEWARE] Applied native Chi auth to group %s\n", path)
 		}
 
 		// Mount sub-router
@@ -411,11 +335,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		}
 
 		return nil
-	}, engine.SlotMeta{
-		Description: "Groups routes under a common path prefix and optional middleware.",
-		Group:       "HTTP",
-		Example:     "http.group: '/admin' {\n  middleware: 'auth'\n  do: { ... }\n}",
-	})
+	}, engine.SlotMeta{})
 
 	// ==========================================
 	// 2. STANDARD HTTP METHODS (Mendukung Implicit Do)
@@ -438,7 +358,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			}
 
 			var doNode *engine.Node
-			var middlewares []string
+			var middlewareName string
 
 			// Scan for Metadata and Logic Container
 			for _, c := range node.Children {
@@ -465,26 +385,10 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				}
 
 				// Capture Middleware (Metadata Level)
+				// Support both: middleware: "auth" AND middleware with parameters as route attributes
 				if c.Name == "middleware" {
 					if c.Value != nil {
-						val := resolveValue(c.Value, scope)
-						if slice, err := coerce.ToSlice(val); err == nil {
-							for _, item := range slice {
-								middlewares = append(middlewares, coerce.ToString(item))
-							}
-						} else {
-							// Fallback: Parse string representation "[a, b]"
-							s := coerce.ToString(val)
-							if strings.HasPrefix(strings.TrimSpace(s), "[") {
-								content := strings.Trim(strings.TrimSpace(s), "[]")
-								parts := strings.Split(content, ",")
-								for _, p := range parts {
-									middlewares = append(middlewares, strings.Trim(strings.TrimSpace(p), "\"'"))
-								}
-							} else {
-								middlewares = append(middlewares, s)
-							}
-						}
+						middlewareName = coerce.ToString(resolveValue(c.Value, scope))
 					}
 				}
 
@@ -567,21 +471,17 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// This is the idiomatic Go/Chi way for route-specific middleware
 			targetRouter := getCurrentRouter(ctx)
 
-			for _, m := range middlewares {
-				if m == "auth" {
-					// Use JWT_SECRET from environment
-					jwtSecret := os.Getenv("JWT_SECRET")
-					if jwtSecret == "" {
-						fmt.Printf("   ❌ Fatal: JWT_SECRET environment variable is not set. Authentication middleware requires it.\n")
-						os.Exit(1)
-					}
-					targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))
-					fmt.Printf("   🔒 [MIDDLEWARE] Applied 'auth' to %s\n", fullDocPath)
-				} else if customNode := middleware.Registry.Get(m); customNode != nil {
-					// Custom Zeno Middleware
-					targetRouter = targetRouter.With(middleware.ZenoMiddleware(eng, customNode))
-					fmt.Printf("   🛡️ [MIDDLEWARE] Applied custom '%s' to %s\n", m, fullDocPath)
+			if middlewareName == "auth" {
+				// Create a new router chain with middleware applied
+				// Use JWT_SECRET from environment (same as auth controller)
+				jwtSecret := os.Getenv("JWT_SECRET")
+				if jwtSecret == "" {
+					// Fallback to .env default
+					jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
+					fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
 				}
+				targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))
+				fmt.Printf("   🔒 [MIDDLEWARE] Applied native Chi auth via r.With() to %s\n", fullDocPath)
 			}
 
 			// Register Documentation
@@ -589,26 +489,10 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 			fmt.Printf("   ➕ [ROUTE] %-6s %s\n", m, fullDocPath)
 
-			// [NEW] Parse Bindings (Route Model Binding)
-			bindings := make(map[string]string)
-			for _, c := range node.Children {
-				if c.Name == "bind" {
-					if m, ok := parseNodeValue(c, scope).(map[string]interface{}); ok {
-						for k, v := range m {
-							bindings[k] = coerce.ToString(v)
-						}
-					}
-				}
-			}
-
 			// Register route handler on the middleware-enabled router chain
-			targetRouter.MethodFunc(m, path, createHandler(execChildren, scope, bindings))
+			targetRouter.MethodFunc(m, path, createHandler(execChildren, scope))
 			return nil
-		}, engine.SlotMeta{
-			Description: fmt.Sprintf("Register a %s route handler.", m),
-			Group:       "HTTP",
-			Example:     fmt.Sprintf("http.%s: '/users' { ... }", strings.ToLower(m)),
-		})
+		}, engine.SlotMeta{})
 	}
 
 	// ==========================================
@@ -665,7 +549,6 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Meneruskan request ke backend service lain (Reverse Proxy).",
-		Group:       "HTTP",
 		Example:     "http.proxy: \"http://localhost:8080\"\n  path: \"/api\"",
 	})
 
@@ -746,7 +629,6 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Hosting aplikasi SPA (React/Vue) atau Static Site.",
-		Group:       "HTTP",
 		Example:     "http.static: \"./dist\"\n  path: \"/\"\n  spa: true",
 	})
 }

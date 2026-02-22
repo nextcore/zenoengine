@@ -19,7 +19,6 @@ func RegisterCacheSlots(eng *engine.Engine, rdb interface{}) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Menyimpan data sementara (Cache). Currently disabled.",
-		Group:       "Cache",
 		Example: `cache.put
   key: "homepage_stats"
   val: stats_data
@@ -47,7 +46,6 @@ func RegisterCacheSlots(eng *engine.Engine, rdb interface{}) {
 		return nil
 	}, engine.SlotMeta{
 		Description: "Mengambil data cache. Always returns default value (cache disabled).",
-		Group:       "Cache",
 		Example: `cache.get
   key: "homepage_stats"
   default: 0
@@ -58,8 +56,5 @@ func RegisterCacheSlots(eng *engine.Engine, rdb interface{}) {
 	eng.Register("cache.forget", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		// Cache disabled - no-op
 		return nil
-	}, engine.SlotMeta{
-		Example: "cache.forget: 'homepage_stats'",
-		Group:   "Cache",
-	})
+	}, engine.SlotMeta{Example: "cache.forget: 'homepage_stats'"})
 }

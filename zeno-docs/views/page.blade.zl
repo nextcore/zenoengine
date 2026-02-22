@@ -1,7 +1,0 @@
-@extends('layout')
-
-@section('content')
-<div class="prose prose-indigo max-w-none">
-    {{ $content }}
-</div>
-@endsection

@@ -28,8 +28,9 @@ func TestVerifyAspNetHash(t *testing.T) {
 	blob[0] = 0x01 // Version
 	blob[1] = 0x01 // SHA256
 	// Iter 10000 = 0x00002710
-	blob[5] = 0x27
-	blob[6] = 0x10
+	// Fix: BigEndian requires 0x00 0x00 0x27 0x10
+	blob[7] = 0x27
+	blob[8] = 0x10
 	// SaltLen 16 = 0x00000010
 	blob[12] = 0x10
 
