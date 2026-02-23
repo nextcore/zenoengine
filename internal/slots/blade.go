@@ -917,7 +917,7 @@ func transpileBladeNative(content string) (*engine.Node, error) {
 							return nil, err
 						}
 						node.Children = append(node.Children, &engine.Node{
-							Name:     "empty",
+							Name:     "forelse_empty",
 							Children: emptyNode.Children,
 						})
 					}

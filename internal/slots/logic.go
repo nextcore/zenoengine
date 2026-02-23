@@ -924,7 +924,7 @@ func RegisterLogicSlots(eng *engine.Engine) {
 
 		if len(list) == 0 {
 			for _, child := range node.Children {
-				if child.Name == "empty" {
+				if child.Name == "forelse_empty" {
 					return eng.Execute(ctx, child, scope)
 				}
 			}
@@ -942,9 +942,11 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	}, engine.SlotMeta{
 		Description: "Perulangan list dengan blok cadangan jika list kosong.",
 		Inputs: map[string]engine.InputMeta{
-			"as":             {Description: "Alias variabel item"},
-			"do":             {Description: "Blok yang diulang"},
-			"empty":          {Description: "Blok jika data kosong"},
+			"as":            {Description: "Alias variabel item"},
+			"do":            {Description: "Blok yang diulang"},
+			"forelse_empty": {Description: "Blok jika data kosong"},
+			// Keep 'empty' for backward compat if users write manually, though parser uses forelse_empty
+			"empty":          {Description: "Blok jika data kosong (Legacy)"},
 			"__native_write": {Description: "Internal Blade attribute", Required: false},
 		},
 	})
