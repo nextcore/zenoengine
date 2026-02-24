@@ -1,8 +1,11 @@
 package slots
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"zeno/pkg/dbmanager"
+	"zeno/pkg/engine"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -54,13 +57,40 @@ func TestQueryState_BuildSQL(t *testing.T) {
 				Table:   "users",
 				Dialect: mockDialect,
 				Where: []WhereCond{
-					{Column: "age", Op: ">", Value: 18},
-					{Column: "status", Op: "=", Value: "active"},
+					{Logical: "AND", Column: "age", Op: ">", Value: 18},
+					{Logical: "AND", Column: "status", Op: "=", Value: "active"},
+					{Logical: "OR", Column: "role", Op: "=", Value: "admin"},
 				},
 			},
 			queryType: "SELECT",
-			wantSQL:   "SELECT * FROM `users` WHERE `age` > ? AND `status` = ?",
-			wantArgs:  []interface{}{18, "active"},
+			wantSQL:   "SELECT * FROM `users` WHERE `age` > ? AND `status` = ? OR `role` = ?",
+			wantArgs:  []interface{}{18, "active", "admin"},
+		},
+		{
+			name: "Select With Between",
+			qs: QueryState{
+				Table:   "users",
+				Dialect: mockDialect,
+				Where: []WhereCond{
+					{Logical: "AND", Column: "age", Op: "BETWEEN", Value: []interface{}{18, 30}},
+				},
+			},
+			queryType: "SELECT",
+			wantSQL:   "SELECT * FROM `users` WHERE `age` BETWEEN ? AND ?",
+			wantArgs:  []interface{}{18, 30},
+		},
+		{
+			name: "Select With Not Between String List",
+			qs: QueryState{
+				Table:   "users",
+				Dialect: mockDialect,
+				Where: []WhereCond{
+					{Logical: "AND", Column: "age", Op: "NOT BETWEEN", Value: "[18, 30]"},
+				},
+			},
+			queryType: "SELECT",
+			wantSQL:   "SELECT * FROM `users` WHERE `age` NOT BETWEEN ? AND ?",
+			wantArgs:  []interface{}{"18", "30"},
 		},
 		{
 			name: "Select With Join",
@@ -133,6 +163,121 @@ func TestQueryState_BuildSQL(t *testing.T) {
 			gotSQL, gotArgs := tt.qs.BuildSQL(tt.queryType)
 			assert.Equal(t, tt.wantSQL, gotSQL)
 			assert.Equal(t, tt.wantArgs, gotArgs)
+		})
+	}
+}
+
+func TestDBQuery(t *testing.T) {
+	eng := engine.NewEngine()
+	// Using sqlite to bypass empty dialect panics
+	dbMgr := dbmanager.NewDBManager()
+	err := dbMgr.AddConnection("default", "sqlite", ":memory:", 1, 1)
+	assert.NoError(t, err)
+
+	RegisterDBSlots(eng, dbMgr)
+
+	tests := []struct {
+		name   string
+		script string
+	}{
+		{
+			name: "Basic Block Query",
+			script: `db.query: 'users' {
+				where { col: 'status' val: 'active' }
+				limit: 10
+			}`,
+		},
+		{
+			name: "Exists Query",
+			script: `db.query: 'orders' {
+				where { col: 'id' val: 5 }
+				exists: { as: $is_found }
+			}`,
+		},
+		{
+			name: "Doesnt Exist Query",
+			script: `db.query: 'orders' {
+				where { col: 'id' val: 5 }
+				doesnt_exist: { as: $is_empty }
+			}`,
+		},
+		{
+			name: "Aggregates Query",
+			script: `db.query: 'sales' {
+				sum: 'amount' { as: $total_sales }
+				avg: 'amount' { as: $avg_sales }
+				min: 'amount' { as: $min_sales }
+				max: 'amount' { as: $max_sales }
+			}`,
+		},
+		{
+			name: "Pluck Query",
+			script: `db.query: 'users' {
+				where { col: 'status' val: 'active' }
+				pluck: 'id' { as: $user_ids }
+			}`,
+		},
+		{
+			name: "Paginate Query",
+			script: `db.query: 'logs' {
+				where { col: 'level' val: 'error' }
+				paginate { page: 2 per_page: 50 as: $results }
+			}`,
+		},
+		{
+			name: "Insert Query",
+			script: `db.query: 'users' {
+				insert { name: 'Alice' role: 'admin' }
+			}`,
+		},
+		{
+			name: "Update Query",
+			script: `db.query: 'users' {
+				where { col: 'id' val: 1 }
+				update { status: 'inactive' }
+			}`,
+		},
+		{
+			name: "Delete Query",
+			script: `db.query: 'users' {
+				where { col: 'status' val: 'deleted' }
+				delete { as: $deleted_count }
+			}`,
+		},
+		{
+			name: "Get Query",
+			script: `db.query: 'users' {
+				where { col: 'role' val: 'user' }
+				get { as: $users }
+			}`,
+		},
+		{
+			name: "First Query",
+			script: `db.query: 'users' {
+				where { col: 'id' val: 1 }
+				first { as: $user }
+			}`,
+		},
+		{
+			name: "Count Query",
+			script: `db.query: 'users' {
+				where { col: 'status' val: 'active' }
+				count { as: $active_count }
+			}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node, err := engine.ParseString(tt.script, "test.zl")
+			assert.NoError(t, err)
+
+			scope := engine.NewScope(nil)
+			err = eng.Execute(context.Background(), node, scope)
+			// At minimum it should not return errors related to slot binding missing
+			if err != nil && !strings.Contains(err.Error(), "no such table") && !strings.Contains(err.Error(), "no connection") {
+				t.Fatalf("Unexpected execution error: %v", err)
+			}
 		})
 	}
 }

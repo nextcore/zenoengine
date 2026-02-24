@@ -2,6 +2,7 @@ package slots
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"zeno/pkg/dbmanager"
@@ -29,10 +30,40 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			DBName:  dbName,
 			Dialect: dialect,
 		})
-		
+
 		// Store model metadata for other orm.* slots
 		scope.Set("_active_model", tableName)
-		
+
+		// Execute children to allow registering relationships inside the block
+		// Parse relations and schema metadata directly from children instead of evaluating
+		for _, c := range node.Children {
+			if c.Name == "db" || c.Name == "connection" || c.Name == "table" || c.Name == "name" {
+				continue
+			}
+
+			// Capture Schema Properties directly
+			if c.Name == "fillable" {
+				fillableStr := coerce.ToString(parseNodeValue(c, scope))
+				fillableParts := strings.Split(fillableStr, ",")
+
+				fillMap := make(map[string]bool)
+				for _, f := range fillableParts {
+					fillMap[strings.TrimSpace(f)] = true
+				}
+				scope.Set("_schema_"+tableName+"_fillable", fillMap)
+				continue
+			}
+
+			// Execute relationship decorators inside the model block
+			// Because standard execution of unknown nodes inside 'orm.model' can cause infinite loops
+			// we explicitly map only known relation keywords
+			if strings.HasPrefix(c.Name, "orm.hasMany") || strings.HasPrefix(c.Name, "orm.hasOne") || strings.HasPrefix(c.Name, "orm.belongsTo") || strings.HasPrefix(c.Name, "orm.belongsToMany") {
+				if err := eng.Execute(ctx, c, scope); err != nil {
+					return err
+				}
+			}
+		}
+
 		return nil
 	}, engine.SlotMeta{
 		Description: "Define the active model/table for ORM operations.",
@@ -72,12 +103,12 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				{Name: "as", Value: target},
 			},
 		}
-		
+
 		err := eng.Execute(ctx, firstNode, scope)
-		
+
 		// Restore original where state
 		qs.Where = originalWhere
-		
+
 		return err
 	}, engine.SlotMeta{
 		Description: "Find a single record by primary key.",
@@ -115,32 +146,108 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			}
 		}
 
+		// Apply Fillable Filter if defined
+		isFillable := func(key string) bool {
+			if key == primaryKey {
+				// We don't want to update primary keys usually, but for insert it shouldn't matter as it falls through
+				// However, if we're filtering mass assignment, we shouldn't allow manually updating the primary key.
+				return false
+			}
+
+			fillableRaw, ok := scope.Get("_schema_" + qs.Table + "_fillable")
+			if !ok || fillableRaw == nil {
+				return true // No fillable defined, allow all
+			}
+			fillMap := fillableRaw.(map[string]bool)
+			return fillMap[key]
+		}
+		sanitizeValue := func(v interface{}) interface{} {
+			switch val := v.(type) {
+			case map[string]interface{}, []interface{}, []map[string]interface{}:
+				b, err := json.Marshal(val)
+				if err == nil {
+					return string(b)
+				}
+			}
+			return v
+		}
+
+		executor, dialect, err := getExecutor(scope, dbMgr, qs.DBName)
+		if err != nil {
+			return err
+		}
+
 		if isUpdate {
 			// Update Logic
-			originalWhere := qs.Where
-			qs.Where = append(qs.Where, WhereCond{Column: primaryKey, Op: "=", Value: idVal})
-			
-			// Build sets excluding the PK
-			updateNode := &engine.Node{Name: "db.update"}
+			var sets []string
+			var vals []interface{}
+
+			i := 1
 			for k, v := range data {
-				if k == primaryKey { continue }
-				updateNode.Children = append(updateNode.Children, &engine.Node{Name: k, Value: v})
+				if !isFillable(k) {
+					continue
+				}
+				sets = append(sets, fmt.Sprintf("%s = %s", dialect.QuoteIdentifier(k), dialect.Placeholder(i)))
+				vals = append(vals, sanitizeValue(v))
+				i++
 			}
-			
-			err := eng.Execute(ctx, updateNode, scope)
-			qs.Where = originalWhere
+
+			if len(sets) == 0 {
+				return nil // Nothing to update
+			}
+
+			// Add primary key to where clause
+			whereClause := ""
+			baseIdx := len(vals)
+
+			// We only want the PK for the where condition of the update
+			whereConds := []string{
+				fmt.Sprintf("%s = %s", dialect.QuoteIdentifier(primaryKey), dialect.Placeholder(baseIdx+1)),
+			}
+			vals = append(vals, idVal)
+			whereClause = " WHERE " + strings.Join(whereConds, " AND ")
+
+			query := fmt.Sprintf("UPDATE %s SET %s%s", dialect.QuoteIdentifier(qs.Table), strings.Join(sets, ", "), whereClause)
+			fmt.Printf("Executing update: %s\n", query)
+			_, err = executor.ExecContext(ctx, query, vals...)
 			return err
+
 		} else {
 			// Insert Logic
-			insertNode := &engine.Node{Name: "db.insert"}
+			var cols []string
+			var placeholders []string
+			var vals []interface{}
+
+			i := 1
 			for k, v := range data {
-				insertNode.Children = append(insertNode.Children, &engine.Node{Name: k, Value: v})
+				// Don't insert PK if it's nil/0
+				if k == primaryKey {
+					continue
+				}
+				if !isFillable(k) {
+					continue
+				}
+				cols = append(cols, dialect.QuoteIdentifier(k))
+				placeholders = append(placeholders, dialect.Placeholder(i))
+				vals = append(vals, sanitizeValue(v))
+				i++
 			}
-			err := eng.Execute(ctx, insertNode, scope)
+
+			if len(cols) == 0 {
+				return nil // Nothing to insert
+			}
+
+			query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+				dialect.QuoteIdentifier(qs.Table), strings.Join(cols, ", "), strings.Join(placeholders, ", "))
+			fmt.Printf("Executing insert: %s\n", query)
+
+			res, err := executor.ExecContext(ctx, query, vals...)
 			if err == nil {
-				// Set the new ID back to the object if possible
-				if lastId, ok := scope.Get("db_last_id"); ok {
-					data[primaryKey] = lastId
+				if dialect.Name() != "postgres" {
+					if lastId, err := res.LastInsertId(); err == nil {
+						data[primaryKey] = lastId
+						scope.Set("db_last_id", lastId)
+					}
 				}
 			}
 			return err
@@ -174,10 +281,10 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 		originalWhere := qs.Where
 		qs.Where = append(qs.Where, WhereCond{Column: primaryKey, Op: "=", Value: id})
-		
+
 		deleteNode := &engine.Node{Name: "db.delete"}
 		err := eng.Execute(ctx, deleteNode, scope)
-		
+
 		qs.Where = originalWhere
 		return err
 	}, engine.SlotMeta{})
@@ -248,6 +355,93 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		return nil
 	}, engine.SlotMeta{Description: "Define a one-to-many relationship."})
 
+	// ORM.HASONE: 'Profile' { as: 'profile', foreign_key: 'user_id' }
+	eng.Register("orm.hasOne", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		relatedModel := coerce.ToString(resolveValue(node.Value, scope))
+		asName := strings.ToLower(relatedModel)
+		localKey := "id"
+		foreignKey := strings.ToLower(coerce.ToString(scope.GetDefault("_active_model", ""))) + "_id"
+
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				asName = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "foreign_key" || c.Name == "fk" {
+				foreignKey = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "local_key" || c.Name == "lk" {
+				localKey = coerce.ToString(parseNodeValue(c, scope))
+			}
+		}
+
+		modelName := coerce.ToString(scope.GetDefault("_active_model", ""))
+		if modelName == "" {
+			return fmt.Errorf("orm.hasOne: no active model")
+		}
+
+		relKey := fmt.Sprintf("_rel_%s_%s", modelName, asName)
+		scope.Set(relKey, map[string]interface{}{
+			"type":        "hasOne",
+			"model":       relatedModel,
+			"local_key":   localKey,
+			"foreign_key": foreignKey,
+		})
+
+		return nil
+	}, engine.SlotMeta{Description: "Define a one-to-one relationship."})
+
+	// ORM.BELONGSTOMANY: 'Role' { as: 'roles', table: 'role_user', foreign_pivot_key: 'user_id', related_pivot_key: 'role_id' }
+	eng.Register("orm.belongsToMany", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		relatedModel := coerce.ToString(resolveValue(node.Value, scope))
+		asName := strings.ToLower(relatedModel) + "s"
+
+		modelName := coerce.ToString(scope.GetDefault("_active_model", ""))
+		if modelName == "" {
+			return fmt.Errorf("orm.belongsToMany: no active model")
+		}
+
+		// Defaults based on convention
+		pivotTable := strings.ToLower(modelName) + "_" + strings.ToLower(relatedModel)
+		foreignPivotKey := strings.ToLower(modelName) + "_id"
+		relatedPivotKey := strings.ToLower(relatedModel) + "_id"
+		parentKey := "id"
+		relatedKey := "id"
+
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				asName = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "table" {
+				pivotTable = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "foreign_pivot_key" || c.Name == "fpk" {
+				foreignPivotKey = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "related_pivot_key" || c.Name == "rpk" {
+				relatedPivotKey = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "parent_key" || c.Name == "pk" {
+				parentKey = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "related_key" || c.Name == "rk" {
+				relatedKey = coerce.ToString(parseNodeValue(c, scope))
+			}
+		}
+
+		relKey := fmt.Sprintf("_rel_%s_%s", modelName, asName)
+		scope.Set(relKey, map[string]interface{}{
+			"type":              "belongsToMany",
+			"model":             relatedModel,
+			"table":             pivotTable,
+			"foreign_pivot_key": foreignPivotKey,
+			"related_pivot_key": relatedPivotKey,
+			"parent_key":        parentKey,
+			"related_key":       relatedKey,
+		})
+
+		return nil
+	}, engine.SlotMeta{Description: "Define a many-to-many relationship."})
+
 	// ORM.WITH: 'author' { orm.all: $posts }
 	eng.Register("orm.with", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		relName := coerce.ToString(resolveValue(node.Value, scope))
@@ -275,12 +469,18 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		// 2. Hydrate Relational Data
-		// This is a simplified Eager Loading (not full N+1 fix yet, but functional API)
-		// We'll look for the result in scope based on the child slot's 'as' attribute.
+		// This is a simplified Eager Loading
 		var targetVar string
-		for _, c := range node.Children[0].Children {
-			if c.Name == "as" {
-				targetVar = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+
+		// If the child is directly 'set: $var_name', capture it. Otherwise look for 'as: $var_name' inside children
+		if node.Children[0].Name == "set" {
+			targetVar = strings.TrimPrefix(coerce.ToString(node.Children[0].Value), "$")
+		} else {
+			for _, c := range node.Children[0].Children {
+				if c.Name == "as" {
+					targetVar = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+					break
+				}
 			}
 		}
 
@@ -289,149 +489,451 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		data, ok := scope.Get(targetVar)
-		if !ok {
+		if !ok || data == nil {
 			return nil
 		}
 
-		// Hydration Logic
+		// Hydration Logic (Eager Loading)
 		if rel["type"] == "belongsTo" {
-			// Find related for each item
+			foreignKey := rel["foreign_key"].(string)
+
+			// 1. Extract all unique foreign keys from parents
+			var fkVals []interface{}
+			var parentObj map[string]interface{}
+			var isList bool
+
 			list, err := coerce.ToSlice(data)
 			if err != nil {
-				// Single object
-				obj := data.(map[string]interface{})
-				fkVal := obj[rel["foreign_key"].(string)]
-				// Temporary switch model context
-				oldModel := scope.GetDefault("_active_model", "")
-				oldQS, _ := scope.Get("_query_state")
-				
-				// Set new model context
-				dialect := dbMgr.GetDialect("default") // Assuming default DB
-				scope.Set("_active_model", rel["model"])
-				scope.Set("_query_state", &QueryState{
-					Table: rel["model"].(string),
-					Dialect: dialect,
-					DBName: "default",
-				})
-
-				eng.Execute(ctx, &engine.Node{
-					Name: "orm.find",
-					Value: fkVal,
-					Children: []*engine.Node{{Name: "as", Value: relName}},
-				}, scope)
-				
-				if related, ok := scope.Get(relName); ok {
-					obj[relName] = related
+				isList = false
+				parentObj = data.(map[string]interface{})
+				if fk, ok := parentObj[foreignKey]; ok && fk != nil {
+					fkVals = append(fkVals, fk)
 				}
-				
-				// Restore context
-				scope.Set("_active_model", oldModel)
-				scope.Set("_query_state", oldQS)
 			} else {
-				// List of objects
+				isList = true
+				fkMap := make(map[interface{}]bool)
 				for _, item := range list {
 					obj := item.(map[string]interface{})
-					fkVal := obj[rel["foreign_key"].(string)]
-					
-					oldModel := scope.GetDefault("_active_model", "")
-					oldQS, _ := scope.Get("_query_state")
-					
-					dialect := dbMgr.GetDialect("default")
-					scope.Set("_active_model", rel["model"])
-					scope.Set("_query_state", &QueryState{
-						Table: rel["model"].(string),
-						Dialect: dialect,
-						DBName: "default",
-					})
-
-					eng.Execute(ctx, &engine.Node{
-						Name: "orm.find",
-						Value: fkVal,
-						Children: []*engine.Node{{Name: "as", Value: "___temp_rel"}},
-					}, scope)
-					if related, ok := scope.Get("___temp_rel"); ok {
-						obj[relName] = related
+					if fk, ok := obj[foreignKey]; ok && fk != nil {
+						if !fkMap[fk] {
+							fkMap[fk] = true
+							fkVals = append(fkVals, fk)
+						}
 					}
-					
-					scope.Set("_active_model", oldModel)
-					scope.Set("_query_state", oldQS)
 				}
 			}
+
+			if len(fkVals) == 0 {
+				return nil // Nothing to load
+			}
+
+			// 2. Fetch all related records in ONE query
+			oldModel := scope.GetDefault("_active_model", "")
+			oldQS, _ := scope.Get("_query_state")
+
+			dialect := dbMgr.GetDialect("default")
+			scope.Set("_active_model", rel["model"])
+			scope.Set("_query_state", &QueryState{
+				Table:   rel["model"].(string),
+				Dialect: dialect,
+				DBName:  "default",
+			})
+
+			eng.Execute(ctx, &engine.Node{
+				Name: "db.where",
+				Children: []*engine.Node{
+					{Name: "col", Value: "id"}, // belongsTo usually targets `id` on the related table
+					{Name: "op", Value: "IN"},
+					{Name: "val", Value: fkVals},
+				},
+			}, scope)
+
+			eng.Execute(ctx, &engine.Node{
+				Name:     "db.get",
+				Children: []*engine.Node{{Name: "as", Value: "___temp_rel_list"}},
+			}, scope)
+
+			// 3. Map related records back to parents in memory
+			var relatedList []interface{}
+			if temp, ok := scope.Get("___temp_rel_list"); ok && temp != nil {
+				// We expect db.get to return a slice
+				if slice, err := coerce.ToSlice(temp); err == nil {
+					relatedList = slice
+				}
+			}
+
+			// Build dictionary for O(1) matching
+			relDict := make(map[interface{}]map[string]interface{})
+			for _, relItem := range relatedList {
+				r := relItem.(map[string]interface{})
+				relDict[r["id"]] = r
+			}
+
+			if !isList {
+				if fk, ok := parentObj[foreignKey]; ok {
+					if matched, found := relDict[fk]; found {
+						parentObj[relName] = matched
+					}
+				}
+			} else {
+				for _, item := range list {
+					obj := item.(map[string]interface{})
+					if fk, ok := obj[foreignKey]; ok {
+						if matched, found := relDict[fk]; found {
+							obj[relName] = matched
+						}
+					}
+				}
+			}
+
+			// Restore context
+			scope.Set("_active_model", oldModel)
+			scope.Set("_query_state", oldQS)
+
 		} else if rel["type"] == "hasMany" {
-			// Find many for each item
+			localKey := rel["local_key"].(string)
+			foreignKey := rel["foreign_key"].(string)
+
+			// 1. Extract all unique local keys from parents
+			var localKVals []interface{}
+			var parentObj map[string]interface{}
+			var isList bool
+
 			list, err := coerce.ToSlice(data)
 			if err != nil {
-				// Single object
-				obj := data.(map[string]interface{})
-				localVal := obj[rel["local_key"].(string)]
-				
-				oldModel := scope.GetDefault("_active_model", "")
-				oldQS, _ := scope.Get("_query_state")
-
-				dialect := dbMgr.GetDialect("default")
-				scope.Set("_active_model", rel["model"])
-				scope.Set("_query_state", &QueryState{
-					Table: rel["model"].(string),
-					Dialect: dialect,
-					DBName: "default",
-				})
-				
-				eng.Execute(ctx, &engine.Node{
-					Name: "db.where",
-					Children: []*engine.Node{
-						{Name: "col", Value: rel["foreign_key"]},
-						{Name: "op", Value: "="},
-						{Name: "val", Value: localVal},
-					},
-				}, scope)
-				eng.Execute(ctx, &engine.Node{
-					Name: "db.get",
-					Children: []*engine.Node{{Name: "as", Value: "___temp_rel_list"}},
-				}, scope)
-				
-				if related, ok := scope.Get("___temp_rel_list"); ok {
-					obj[relName] = related
+				isList = false
+				parentObj = data.(map[string]interface{})
+				if lk, ok := parentObj[localKey]; ok && lk != nil {
+					localKVals = append(localKVals, lk)
 				}
-				
-				scope.Set("_active_model", oldModel)
-				scope.Set("_query_state", oldQS)
 			} else {
+				isList = true
+				lkMap := make(map[interface{}]bool)
 				for _, item := range list {
 					obj := item.(map[string]interface{})
-					localVal := obj[rel["local_key"].(string)]
-					
-					oldModel := scope.GetDefault("_active_model", "")
-					oldQS, _ := scope.Get("_query_state")
-
-					dialect := dbMgr.GetDialect("default")
-					scope.Set("_active_model", rel["model"])
-					scope.Set("_query_state", &QueryState{
-						Table: rel["model"].(string),
-						Dialect: dialect,
-						DBName: "default",
-					})
-					
-					eng.Execute(ctx, &engine.Node{
-						Name: "db.where",
-						Children: []*engine.Node{
-							{Name: "col", Value: rel["foreign_key"]},
-							{Name: "op", Value: "="},
-							{Name: "val", Value: localVal},
-						},
-					}, scope)
-					eng.Execute(ctx, &engine.Node{
-						Name: "db.get",
-						Children: []*engine.Node{{Name: "as", Value: "___temp_rel_list"}},
-					}, scope)
-					
-					if related, ok := scope.Get("___temp_rel_list"); ok {
-						obj[relName] = related
+					if lk, ok := obj[localKey]; ok && lk != nil {
+						if !lkMap[lk] {
+							lkMap[lk] = true
+							localKVals = append(localKVals, lk)
+						}
 					}
-					
-					scope.Set("_active_model", oldModel)
-					scope.Set("_query_state", oldQS)
 				}
 			}
+
+			if len(localKVals) == 0 {
+				return nil
+			}
+
+			// 2. Fetch all related records in ONE query
+			oldModel := scope.GetDefault("_active_model", "")
+			oldQS, _ := scope.Get("_query_state")
+
+			dialect := dbMgr.GetDialect("default")
+			scope.Set("_active_model", rel["model"])
+			scope.Set("_query_state", &QueryState{
+				Table:   rel["model"].(string),
+				Dialect: dialect,
+				DBName:  "default",
+			})
+
+			eng.Execute(ctx, &engine.Node{
+				Name: "db.where",
+				Children: []*engine.Node{
+					{Name: "col", Value: foreignKey},
+					{Name: "op", Value: "IN"},
+					{Name: "val", Value: localKVals},
+				},
+			}, scope)
+
+			eng.Execute(ctx, &engine.Node{
+				Name:     "db.get",
+				Children: []*engine.Node{{Name: "as", Value: "___temp_rel_list"}},
+			}, scope)
+
+			// 3. Map related records back to parents in memory (Grouping by foreign key)
+			var relatedList []interface{}
+			if temp, ok := scope.Get("___temp_rel_list"); ok && temp != nil {
+				if slice, err := coerce.ToSlice(temp); err == nil {
+					relatedList = slice
+				}
+			}
+
+			// Group related items by foreign_key
+			relDict := make(map[interface{}][]map[string]interface{})
+			for _, relItem := range relatedList {
+				if r, ok := relItem.(map[string]interface{}); ok {
+					fkVal := r[foreignKey]
+					if fkVal != nil {
+						// Ensure we don't end up with int64 / int mismatch in maps (sqlite returns int64)
+						fkStr := coerce.ToString(fkVal)
+						relDict[fkStr] = append(relDict[fkStr], r)
+					}
+				}
+			}
+
+			if !isList {
+				if lk, ok := parentObj[localKey]; ok {
+					lkStr := coerce.ToString(lk)
+					if matched, found := relDict[lkStr]; found {
+						parentObj[relName] = matched
+					} else {
+						parentObj[relName] = make([]map[string]interface{}, 0)
+					}
+				}
+			} else {
+				for _, item := range list {
+					if obj, ok := item.(map[string]interface{}); ok {
+						if lk, ok := obj[localKey]; ok {
+							lkStr := coerce.ToString(lk)
+							if matched, found := relDict[lkStr]; found {
+								obj[relName] = matched
+							} else {
+								obj[relName] = make([]map[string]interface{}, 0)
+							}
+						}
+					}
+				}
+			}
+
+			// Restore context
+			scope.Set("_active_model", oldModel)
+			scope.Set("_query_state", oldQS)
+
+		} else if rel["type"] == "hasOne" {
+			localKey := rel["local_key"].(string)
+			foreignKey := rel["foreign_key"].(string)
+
+			// 1. Extract all unique local keys from parents
+			var localKVals []interface{}
+			var parentObj map[string]interface{}
+			var isList bool
+
+			list, err := coerce.ToSlice(data)
+			if err != nil {
+				isList = false
+				parentObj = data.(map[string]interface{})
+				if lk, ok := parentObj[localKey]; ok && lk != nil {
+					localKVals = append(localKVals, lk)
+				}
+			} else {
+				isList = true
+				lkMap := make(map[interface{}]bool)
+				for _, item := range list {
+					obj := item.(map[string]interface{})
+					if lk, ok := obj[localKey]; ok && lk != nil {
+						if !lkMap[lk] {
+							lkMap[lk] = true
+							localKVals = append(localKVals, lk)
+						}
+					}
+				}
+			}
+
+			if len(localKVals) == 0 {
+				return nil
+			}
+
+			// 2. Fetch all related records in ONE query
+			oldModel := scope.GetDefault("_active_model", "")
+			oldQS, _ := scope.Get("_query_state")
+
+			dialect := dbMgr.GetDialect("default")
+			scope.Set("_active_model", rel["model"])
+			scope.Set("_query_state", &QueryState{
+				Table:   rel["model"].(string),
+				Dialect: dialect,
+				DBName:  "default",
+			})
+
+			eng.Execute(ctx, &engine.Node{
+				Name: "db.where",
+				Children: []*engine.Node{
+					{Name: "col", Value: foreignKey},
+					{Name: "op", Value: "IN"},
+					{Name: "val", Value: localKVals},
+				},
+			}, scope)
+
+			eng.Execute(ctx, &engine.Node{
+				Name:     "db.get",
+				Children: []*engine.Node{{Name: "as", Value: "___temp_rel_list"}},
+			}, scope)
+
+			// 3. Map related records back to parents in memory (1-to-1 matching)
+			var relatedList []interface{}
+			if temp, ok := scope.Get("___temp_rel_list"); ok && temp != nil {
+				if slice, err := coerce.ToSlice(temp); err == nil {
+					relatedList = slice
+				}
+			}
+
+			// Map single item by foreign_key
+			relDict := make(map[interface{}]map[string]interface{})
+			for _, relItem := range relatedList {
+				if r, ok := relItem.(map[string]interface{}); ok {
+					fkVal := r[foreignKey]
+					if fkVal != nil {
+						fkStr := coerce.ToString(fkVal)
+						// Only take the first one found for hasOne
+						if _, exists := relDict[fkStr]; !exists {
+							relDict[fkStr] = r
+						}
+					}
+				}
+			}
+
+			if !isList {
+				if lk, ok := parentObj[localKey]; ok {
+					lkStr := coerce.ToString(lk)
+					if matched, found := relDict[lkStr]; found {
+						parentObj[relName] = matched
+					} else {
+						parentObj[relName] = nil
+					}
+				}
+			} else {
+				for _, item := range list {
+					if obj, ok := item.(map[string]interface{}); ok {
+						if lk, ok := obj[localKey]; ok {
+							lkStr := coerce.ToString(lk)
+							if matched, found := relDict[lkStr]; found {
+								obj[relName] = matched
+							} else {
+								obj[relName] = nil
+							}
+						}
+					}
+				}
+			}
+
+			// Restore context
+			scope.Set("_active_model", oldModel)
+			scope.Set("_query_state", oldQS)
+		} else if rel["type"] == "belongsToMany" {
+			parentKey := rel["parent_key"].(string)
+			foreignPivotKey := rel["foreign_pivot_key"].(string)
+
+			// 1. Extract all unique parent keys from parents
+			var parentKVals []interface{}
+			var parentObj map[string]interface{}
+			var isList bool
+
+			list, err := coerce.ToSlice(data)
+			if err != nil {
+				isList = false
+				parentObj = data.(map[string]interface{})
+				if pk, ok := parentObj[parentKey]; ok && pk != nil {
+					parentKVals = append(parentKVals, pk)
+				}
+			} else {
+				isList = true
+				pkMap := make(map[interface{}]bool)
+				for _, item := range list {
+					obj := item.(map[string]interface{})
+					if pk, ok := obj[parentKey]; ok && pk != nil {
+						if !pkMap[pk] {
+							pkMap[pk] = true
+							parentKVals = append(parentKVals, pk)
+						}
+					}
+				}
+			}
+
+			if len(parentKVals) == 0 {
+				return nil
+			}
+
+			// 2. Fetch all related records in ONE query
+			oldModel := scope.GetDefault("_active_model", "")
+			oldQS, _ := scope.Get("_query_state")
+
+			dialect := dbMgr.GetDialect("default")
+			scope.Set("_active_model", rel["model"])
+			scope.Set("_query_state", &QueryState{
+				Table:   rel["model"].(string),
+				Dialect: dialect,
+				DBName:  "default",
+			})
+
+			// db.join
+			joinOn := []interface{}{
+				fmt.Sprintf("%s.%s", rel["model"], rel["related_key"]),
+				"=",
+				fmt.Sprintf("%s.%s", rel["table"], rel["related_pivot_key"]),
+			}
+			eng.Execute(ctx, &engine.Node{
+				Name: "db.join",
+				Children: []*engine.Node{
+					{Name: "table", Value: rel["table"]},
+					{Name: "on", Value: joinOn},
+				},
+			}, scope)
+
+			// db.where on pivot table
+			whereCol := fmt.Sprintf("%s.%s", rel["table"], foreignPivotKey)
+			eng.Execute(ctx, &engine.Node{
+				Name: "db.where",
+				Children: []*engine.Node{
+					{Name: "col", Value: whereCol},
+					{Name: "op", Value: "IN"},
+					{Name: "val", Value: parentKVals},
+				},
+			}, scope)
+
+			eng.Execute(ctx, &engine.Node{
+				Name:     "db.get",
+				Children: []*engine.Node{{Name: "as", Value: "___temp_rel_list"}},
+			}, scope)
+
+			// 3. Map related records back to parents in memory (Grouping by foreign_pivot_key)
+			var relatedList []interface{}
+			if temp, ok := scope.Get("___temp_rel_list"); ok && temp != nil {
+				if slice, err := coerce.ToSlice(temp); err == nil {
+					relatedList = slice
+				}
+			}
+
+			// Group related items by foreign_pivot_key
+			relDict := make(map[interface{}][]map[string]interface{})
+			for _, relItem := range relatedList {
+				if r, ok := relItem.(map[string]interface{}); ok {
+					// In some SQL drivers, joined columns with identical names might overwrite one another
+					// However, the foreign_pivot_key is usually unique to the pivot table and preserved.
+					fkVal := r[foreignPivotKey]
+					if fkVal != nil {
+						fkStr := coerce.ToString(fkVal)
+						relDict[fkStr] = append(relDict[fkStr], r)
+					}
+				}
+			}
+
+			if !isList {
+				if pk, ok := parentObj[parentKey]; ok {
+					pkStr := coerce.ToString(pk)
+					if matched, found := relDict[pkStr]; found {
+						parentObj[relName] = matched
+					} else {
+						parentObj[relName] = make([]map[string]interface{}, 0)
+					}
+				}
+			} else {
+				for _, item := range list {
+					if obj, ok := item.(map[string]interface{}); ok {
+						if pk, ok := obj[parentKey]; ok {
+							pkStr := coerce.ToString(pk)
+							if matched, found := relDict[pkStr]; found {
+								obj[relName] = matched
+							} else {
+								obj[relName] = make([]map[string]interface{}, 0)
+							}
+						}
+					}
+				}
+			}
+
+			// Restore context
+			scope.Set("_active_model", oldModel)
+			scope.Set("_query_state", oldQS)
 		}
 
 		return nil

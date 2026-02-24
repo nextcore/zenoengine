@@ -207,7 +207,7 @@ func RegisterMetaSlots(eng *engine.Engine) {
 		}
 
 		// 4. Load Template (Using shared helpers from blade.go)
-		fullPath := filepath.Join("views", ensureBladeExt(viewFile))
+		fullPath := filepath.Join(viewRoot(scope), ensureBladeExt(viewFile))
 		programNode, err := getCachedOrParse(fullPath)
 		if err != nil {
 			return err

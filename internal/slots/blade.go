@@ -36,6 +36,20 @@ func ensureBladeExt(path string) string {
 	return path
 }
 
+// viewRoot returns the view root directory for the current scope.
+// If view.root has been set via the `view.root:` slot, that path is used.
+// Otherwise it falls back to the conventional "views/" directory.
+func viewRoot(scope *engine.Scope) string {
+	if scope != nil {
+		if v, ok := scope.Get("_view_root"); ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
+			}
+		}
+	}
+	return "views"
+}
+
 func RegisterBladeSlots(eng *engine.Engine) {
 	RegisterLogicSlots(eng)
 
@@ -51,6 +65,32 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		w.Write([]byte(str))
 		return nil
 	}, engine.SlotMeta{Description: "Internal write for native blade"})
+
+	// view.root: set a per-app view root path.
+	// This allows multiple apps inside one ZenoEngine instance to each have
+	// their own isolated view directory. Call it at the top of each app's
+	// route file. Falls back to "views/" if not set.
+	//
+	// Example:
+	//   view.root: 'apps/blog/resources/views'
+	eng.Register("view.root", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		root := coerce.ToString(resolveValue(node.Value, scope))
+		if root == "" {
+			for _, c := range node.Children {
+				if c.Name == "path" || c.Name == "dir" {
+					root = coerce.ToString(parseNodeValue(c, scope))
+				}
+			}
+		}
+		if root == "" {
+			return fmt.Errorf("view.root: path is required")
+		}
+		scope.Set("_view_root", root)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Sets the base directory for Blade views for this app/module.",
+		Example:     "view.root: 'apps/blog/resources/views'",
+	})
 
 	eng.Register("__native_write_safe", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
@@ -107,7 +147,7 @@ func RegisterBladeSlots(eng *engine.Engine) {
 			return fmt.Errorf("view.blade.native: file required")
 		}
 
-		fullPath := filepath.Join("views", ensureBladeExt(viewFile))
+		fullPath := filepath.Join(viewRoot(scope), ensureBladeExt(viewFile))
 
 		// Use cache for performance
 		programNode, err := getCachedOrParse(fullPath)
@@ -170,7 +210,7 @@ func RegisterBladeSlots(eng *engine.Engine) {
 			return fmt.Errorf("view.extends: file required")
 		}
 
-		fullPath := filepath.Join("views", ensureBladeExt(layoutFile))
+		fullPath := filepath.Join(viewRoot(scope), ensureBladeExt(layoutFile))
 
 		// Use cache for performance
 		layoutRoot, err := getCachedOrParse(fullPath)
@@ -191,7 +231,7 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		// x-user.profile -> components/user/profile.blade.zl
 		// Logic: replace . with /
 		compPath := strings.ReplaceAll(compName, ".", "/")
-		fullPath := filepath.Join("views", "components", compPath+".blade.zl")
+		fullPath := filepath.Join(viewRoot(scope), "components", compPath+".blade.zl")
 
 		// 1. Prepare Component Scope
 		// Use empty scope for isolation (Components must declare props)
@@ -261,7 +301,7 @@ func RegisterBladeSlots(eng *engine.Engine) {
 			return nil
 		}
 
-		fullPath := filepath.Join("views", ensureBladeExt(viewFile))
+		fullPath := filepath.Join(viewRoot(scope), ensureBladeExt(viewFile))
 
 		// Parse Child Data
 		var includeData map[string]interface{}
@@ -349,6 +389,45 @@ func RegisterBladeSlots(eng *engine.Engine) {
 		}
 		return nil
 	}, engine.SlotMeta{Description: "Render stack content"})
+
+	eng.Register("view.class", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
+		if !ok {
+			return nil
+		}
+
+		var classes []string
+
+		if len(node.Children) > 0 {
+			dataNode := node.Children[0]
+			if dataNode.Name == "data_map" {
+				for _, child := range dataNode.Children {
+					valStr := coerce.ToString(child.Value)
+					var cond bool
+					if strings.HasPrefix(valStr, "$") {
+						resolved, _ := scope.Get(strings.TrimPrefix(valStr, "$"))
+						cond, _ = coerce.ToBool(resolved)
+					} else {
+						if valStr == "true" {
+							cond = true
+						} else {
+							cond, _ = coerce.ToBool(valStr)
+						}
+					}
+
+					if cond {
+						classes = append(classes, child.Name)
+					}
+				}
+			}
+		}
+
+		if len(classes) > 0 {
+			out := fmt.Sprintf(`class="%s"`, strings.Join(classes, " "))
+			w.Write([]byte(out))
+		}
+		return nil
+	}, engine.SlotMeta{Description: "Render Blade @class"})
 }
 
 // ==========================================
@@ -570,6 +649,22 @@ func transpileBladeNative(content string) (*engine.Node, error) {
 				Value: "$csrf_field",
 			})
 			pos += 5
+		} else if strings.HasPrefix(content[pos:], "@method") {
+			// @method('PUT')
+			startParen := strings.Index(content[pos:], "(")
+			endParen := findBalancedParen(content[pos:])
+
+			if startParen != -1 && endParen != -1 {
+				methodRaw := content[pos+startParen+1 : pos+endParen]
+				methodVal := strings.Trim(methodRaw, "'\" ")
+
+				htmlOutput := fmt.Sprintf(`<input type="hidden" name="_method" value="%s">`, methodVal)
+				root.Children = append(root.Children, createWriteNode(htmlOutput))
+
+				pos += endParen + 1
+			} else {
+				pos += 7
+			}
 		} else if strings.HasPrefix(content[pos:], "@include") {
 			// @include('view.name', ['key' => 'val'])
 			startParen := strings.Index(content[pos:], "(")
@@ -601,6 +696,58 @@ func transpileBladeNative(content string) (*engine.Node, error) {
 			} else {
 				pos += 8 // @include
 			}
+		} else if strings.HasPrefix(content[pos:], "@class") {
+			startParen := strings.Index(content[pos:], "(")
+			endParen := findBalancedParen(content[pos:])
+
+			if startParen != -1 && endParen != -1 {
+				argsRaw := content[pos+startParen+1 : pos+endParen]
+				dataNode := parseBladeData(argsRaw)
+				if dataNode != nil {
+					classNode := &engine.Node{
+						Name:     "view.class",
+						Children: []*engine.Node{dataNode},
+					}
+					root.Children = append(root.Children, classNode)
+				}
+				pos += endParen + 1
+			} else {
+				pos += 6
+			}
+		} else if strings.HasPrefix(content[pos:], "@zeno") {
+			blockStart := pos + 5
+			blockEnd := strings.Index(content[blockStart:], "@endzeno")
+			if blockEnd == -1 {
+				return nil, fmt.Errorf("unclosed @zeno")
+			}
+			absoluteBlockEnd := blockStart + blockEnd
+			codeRaw := content[blockStart:absoluteBlockEnd]
+
+			parsedNode, err := engine.ParseString(codeRaw, "blade_zeno_block")
+			if err != nil {
+				return nil, fmt.Errorf("compile error in @zeno block: %v", err)
+			}
+			if parsedNode != nil {
+				root.Children = append(root.Children, parsedNode.Children...)
+			}
+			pos = absoluteBlockEnd + 8
+		} else if strings.HasPrefix(content[pos:], "@php") {
+			blockStart := pos + 4
+			blockEnd := strings.Index(content[blockStart:], "@endphp")
+			if blockEnd == -1 {
+				return nil, fmt.Errorf("unclosed @php")
+			}
+			absoluteBlockEnd := blockStart + blockEnd
+			codeRaw := content[blockStart:absoluteBlockEnd]
+
+			parsedNode, err := engine.ParseString(codeRaw, "blade_php_block")
+			if err != nil {
+				return nil, fmt.Errorf("compile error in @php block: %v", err)
+			}
+			if parsedNode != nil {
+				root.Children = append(root.Children, parsedNode.Children...)
+			}
+			pos = absoluteBlockEnd + 7
 		} else if strings.HasPrefix(content[pos:], "@extends") {
 			// @extends('layout')
 			startParen := strings.Index(content[pos:], "(")
@@ -1703,6 +1850,13 @@ func parseBladeData(s string) *engine.Node {
 				}
 
 				valNode.Name = key // Encode Key as Node Name for simplicity in this specific "data_map" structure
+				dataNode.Children = append(dataNode.Children, valNode)
+			} else if len(parts) == 1 {
+				valRaw := strings.TrimSpace(parts[0])
+				key := strings.Trim(valRaw, "'\"")
+
+				// It's just a class name string without a condition, so condition is true
+				valNode := &engine.Node{Name: key, Value: "true"}
 				dataNode.Children = append(dataNode.Children, valNode)
 			}
 		}

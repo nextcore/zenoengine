@@ -1,0 +1,49 @@
+// ==========================================
+// ZENOSTUDIO — API Routes
+// JSON endpoints for the frontend tools
+// ==========================================
+
+// Server stats endpoint
+http.get: '/studio/api/stats' {
+    do: {
+        date.now: { as: $now; format: "2006-01-02T15:04:05Z07:00" }
+        system.env: "APP_ENV" { as: $env }
+        system.env: "APP_PORT" { as: $port }
+        coalesce: $env { default: "development"; as: $env }
+        coalesce: $port { default: ":3000"; as: $port }
+
+        json: {
+            status: "ok"
+            engine: "ZenoEngine v1.0"
+            env: $env
+            port: $port
+            time: $now
+        }
+    }
+}
+
+// Script execution endpoint (dev tool)
+http.post: '/studio/api/run' {
+    do: {
+        http.json_body: { key: "code"; as: $code }
+
+        if: $code == "" {
+            then: {
+                json: { error: "No code provided" }
+                return
+            }
+        }
+
+        try: {
+            do: {
+                meta.eval: $code
+                json: { success: true; output: "Script executed successfully." }
+            }
+            catch: {
+                json: { success: false; error: $error }
+            }
+        }
+    }
+}
+
+log: "✅ ZenoStudio API routes loaded → /studio/api"

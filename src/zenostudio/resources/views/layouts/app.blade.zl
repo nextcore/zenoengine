@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ $page_title ?? 'ZenoStudio' }} — ZenoStudio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/studio/assets/css/studio.css">
+    @yield('head')
+</head>
+<body>
+    <div class="studio-shell">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">Z</div>
+                <div class="brand-text">
+                    <span class="brand-name">ZenoStudio</span>
+                    <span class="brand-sub">v1.0 · Dev Tool</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">Tools</div>
+                <a href="/studio" class="nav-item {{ $active_page == 'dashboard' ? 'active' : '' }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    Dashboard
+                </a>
+                <a href="/studio/playground" class="nav-item {{ $active_page == 'playground' ? 'active' : '' }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    Playground
+                </a>
+                <a href="/studio/routes" class="nav-item {{ $active_page == 'routes' ? 'active' : '' }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+                    Routes
+                </a>
+                <a href="/studio/slots" class="nav-item {{ $active_page == 'slots' ? 'active' : '' }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                    Slot Reference
+                </a>
+
+                <div class="nav-section-label" style="margin-top:24px">Links</div>
+                <a href="/tutorial/max" class="nav-item" target="_blank">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    Tutorial Demo
+                </a>
+                <a href="/api/docs" class="nav-item" target="_blank">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    API Docs
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="engine-badge">
+                    <span class="engine-dot"></span>
+                    ZenoEngine Running
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">@yield('title')</h1>
+                    <p class="page-subtitle">@yield('subtitle')</p>
+                </div>
+                @yield('header-actions')
+            </div>
+
+            <div class="page-body">
+                @yield('content')
+            </div>
+        </main>
+
+    </div>
+    <script src="/studio/assets/js/studio.js"></script>
+    @yield('scripts')
+</body>
+</html>

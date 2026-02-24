@@ -35,9 +35,10 @@ func getExecutor(scope *engine.Scope, dbMgr *dbmanager.DBManager, dbName string)
 }
 
 type WhereCond struct {
-	Column string
-	Op     string
-	Value  interface{}
+	Logical string // "AND" or "OR"
+	Column  string
+	Op      string
+	Value   interface{}
 }
 
 type JoinDef struct {
@@ -117,7 +118,11 @@ func (qs *QueryState) BuildSQL(queryType string) (string, []interface{}) {
 		sb.WriteString(" WHERE ")
 		for i, cond := range qs.Where {
 			if i > 0 {
-				sb.WriteString(" AND ")
+				logical := cond.Logical
+				if logical == "" {
+					logical = "AND"
+				}
+				sb.WriteString(fmt.Sprintf(" %s ", logical))
 			}
 			// Handle IN / NOT IN
 			if strings.ToUpper(cond.Op) == "IN" || strings.ToUpper(cond.Op) == "NOT IN" {
@@ -151,6 +156,39 @@ func (qs *QueryState) BuildSQL(queryType string) (string, []interface{}) {
 					cond.Op,
 					strings.Join(placeholders, ", "),
 				))
+			} else if strings.ToUpper(cond.Op) == "BETWEEN" || strings.ToUpper(cond.Op) == "NOT BETWEEN" {
+				// Expect Value to be slice of 2 items
+				v := reflect.ValueOf(cond.Value)
+				var val1, val2 interface{}
+
+				if v.Kind() == reflect.Slice && v.Len() >= 2 {
+					val1 = v.Index(0).Interface()
+					val2 = v.Index(1).Interface()
+				} else if str, ok := cond.Value.(string); ok && strings.HasPrefix(strings.TrimSpace(str), "[") {
+					content := strings.TrimSpace(str)
+					content = strings.TrimPrefix(content, "[")
+					content = strings.TrimSuffix(content, "]")
+					parts := strings.Split(content, ",")
+					if len(parts) >= 2 {
+						val1 = strings.TrimSpace(parts[0])
+						val2 = strings.TrimSpace(parts[1])
+					}
+				}
+
+				// Apply bound values if valid
+				if val1 != nil && val2 != nil {
+					p1 := qs.Dialect.Placeholder(len(args) + 1)
+					args = append(args, val1)
+					p2 := qs.Dialect.Placeholder(len(args) + 1)
+					args = append(args, val2)
+
+					sb.WriteString(fmt.Sprintf("%s %s %s AND %s",
+						qs.Quote(cond.Column),
+						cond.Op,
+						p1,
+						p2,
+					))
+				}
 			} else if strings.ToUpper(cond.Op) == "NULL" {
 				sb.WriteString(fmt.Sprintf("%s IS NULL", qs.Quote(cond.Column)))
 			} else if strings.ToUpper(cond.Op) == "NOT NULL" {
@@ -204,6 +242,68 @@ func (qs *QueryState) BuildSQL(queryType string) (string, []interface{}) {
 }
 
 func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+
+	// DB.QUERY (Fluent Block-Style Builder)
+	eng.Register("db.query", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		// Main value: db.query: 'users' (table name)
+		tableName := coerce.ToString(resolveValue(node.Value, scope))
+		dbName := "default"
+
+		// Cari nama opsional dan db di anak level atas
+		for _, c := range node.Children {
+			if c.Name == "table" || c.Name == "name" {
+				tableName = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "db" {
+				dbName = coerce.ToString(parseNodeValue(c, scope))
+			}
+		}
+
+		dialect := dbMgr.GetDialect(dbName)
+
+		// Create a local inner scope for this entire query building process
+		// So "_query_state" doesn't leak into the global scope
+		innerScope := engine.NewScope(scope)
+		innerScope.Set("_query_state", &QueryState{
+			Table:   tableName,
+			DBName:  dbName,
+			Dialect: dialect,
+		})
+
+		// Execute all children instructions inside the query block
+		for _, c := range node.Children {
+			// Skip basic configuration keys to avoid executing them as slots
+			if c.Name == "table" || c.Name == "name" || c.Name == "db" {
+				continue
+			}
+
+			// We dynamically adjust child names to append "db." prefix if missing
+			// Example: where { ... } becomes db.where { ... } in the engine's perspective
+			callName := c.Name
+			if !strings.HasPrefix(callName, "db.") {
+				callName = "db." + callName
+			}
+
+			// Mock a node call for execution
+			callNode := &engine.Node{
+				Name:     callName,
+				Value:    c.Value,
+				Children: c.Children,
+				Line:     c.Line,
+				Col:      c.Col,
+				Filename: c.Filename,
+			}
+
+			if err := eng.Execute(ctx, callNode, innerScope); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}, engine.SlotMeta{
+		Description: "A fluent block wrapper for constructing and executing a query on a specific table.",
+		Example:     "db.query: 'users' {\n  where: { col: 'status', val: 'active' }\n  get: { as: $users }\n}",
+	})
 
 	// DB.TABLE
 	eng.Register("db.table", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -475,7 +575,7 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		if col != "" {
-			qs.Where = append(qs.Where, WhereCond{Column: col, Op: op, Value: val})
+			qs.Where = append(qs.Where, WhereCond{Logical: "AND", Column: col, Op: op, Value: val})
 			qs.Args = append(qs.Args, val)
 		}
 		return nil
@@ -487,6 +587,100 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			"op":  {Description: "Operator (Default: '=')", Required: false},
 			"val": {Description: "Filter value", Required: false},
 		},
+	})
+
+	// DB.OR_WHERE
+	eng.Register("db.or_where", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.or_where called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+
+		col := ""
+		op := "="
+		var val interface{}
+
+		if len(node.Children) > 0 {
+			for _, c := range node.Children {
+				if c.Name == "col" {
+					col = coerce.ToString(parseNodeValue(c, scope))
+				}
+				if c.Name == "op" {
+					op = coerce.ToString(parseNodeValue(c, scope))
+				}
+				if c.Name == "val" {
+					val = parseNodeValue(c, scope)
+				}
+			}
+		}
+
+		if col != "" {
+			qs.Where = append(qs.Where, WhereCond{Logical: "OR", Column: col, Op: op, Value: val})
+			qs.Args = append(qs.Args, val)
+		}
+		return nil
+	}, engine.SlotMeta{
+		Description: "Add an OR WHERE filter to the query.",
+		Example:     "db.or_where\n  col: role\n  val: 'admin'",
+	})
+
+	// DB.WHERE_BETWEEN
+	eng.Register("db.where_between", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.where_between called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+
+		col := ""
+		var val interface{}
+
+		for _, c := range node.Children {
+			if c.Name == "col" {
+				col = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "val" {
+				val = parseNodeValue(c, scope)
+			}
+		}
+
+		if col != "" && val != nil {
+			qs.Where = append(qs.Where, WhereCond{Logical: "AND", Column: col, Op: "BETWEEN", Value: val})
+		}
+		return nil
+	}, engine.SlotMeta{
+		Description: "Add a WHERE BETWEEN filter to the query.",
+		Example:     "db.where_between\n  col: age\n  val: [18, 30]",
+	})
+
+	// DB.WHERE_NOT_BETWEEN
+	eng.Register("db.where_not_between", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.where_not_between called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+
+		col := ""
+		var val interface{}
+
+		for _, c := range node.Children {
+			if c.Name == "col" {
+				col = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "val" {
+				val = parseNodeValue(c, scope)
+			}
+		}
+
+		if col != "" && val != nil {
+			qs.Where = append(qs.Where, WhereCond{Logical: "AND", Column: col, Op: "NOT BETWEEN", Value: val})
+		}
+		return nil
+	}, engine.SlotMeta{
+		Description: "Add a WHERE NOT BETWEEN filter to the query.",
+		Example:     "db.where_not_between\n  col: age\n  val: [18, 30]",
 	})
 
 	// DB.ORDER_BY
@@ -808,5 +1002,312 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		Inputs: map[string]engine.InputMeta{
 			"as": {Description: "Variable name to store result", Required: true},
 		},
+	})
+
+	// DB.EXISTS
+	eng.Register("db.exists", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.exists called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+		target := "exists"
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		oldLimit := qs.Limit
+		qs.Limit = 1
+		query, args := qs.BuildSQL("SELECT")
+		qs.Limit = oldLimit
+
+		executor, _, err := getExecutor(scope, dbMgr, qs.DBName)
+		if err != nil {
+			return err
+		}
+
+		rows, err := executor.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		exists := rows.Next()
+		scope.Set(target, exists)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Check if at least one row exists based on the current query state.",
+		Example:     "db.exists\n  as: $has_users",
+	})
+
+	// DB.DOESNT_EXIST
+	eng.Register("db.doesnt_exist", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.doesnt_exist called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+		target := "doesnt_exist"
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		oldLimit := qs.Limit
+		qs.Limit = 1
+		query, args := qs.BuildSQL("SELECT")
+		qs.Limit = oldLimit
+
+		executor, _, err := getExecutor(scope, dbMgr, qs.DBName)
+		if err != nil {
+			return err
+		}
+
+		rows, err := executor.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		exists := rows.Next()
+		scope.Set(target, !exists)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Check if no rows exist based on the current query state.",
+		Example:     "db.doesnt_exist\n  as: $is_empty",
+	})
+
+	// AGGREGATE HANDLER GENERATOR
+	aggregateHandler := func(funcName string) func(context.Context, *engine.Node, *engine.Scope) error {
+		return func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+			qsVal, ok := scope.Get("_query_state")
+			if !ok {
+				return fmt.Errorf("db.%s called without db.table", strings.ToLower(funcName))
+			}
+			qs := qsVal.(*QueryState)
+			target := strings.ToLower(funcName)
+			col := "*"
+
+			if node.Value != nil {
+				col = coerce.ToString(resolveValue(node.Value, scope))
+			}
+
+			for _, c := range node.Children {
+				if c.Name == "col" {
+					col = coerce.ToString(parseNodeValue(c, scope))
+				}
+				if c.Name == "as" {
+					target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+				}
+			}
+
+			// We temporarily modify Columns to the aggregate, then switch back
+			oldCols := qs.Columns
+			qs.Columns = []string{fmt.Sprintf("%s(%s)", funcName, qs.Quote(col))}
+			query, args := qs.BuildSQL("SELECT")
+			qs.Columns = oldCols
+
+			executor, _, err := getExecutor(scope, dbMgr, qs.DBName)
+			if err != nil {
+				return err
+			}
+			var result interface{}
+			err = executor.QueryRowContext(ctx, query, args...).Scan(&result)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+
+			// Coerce to proper type based on funcName. sum/min/max usually float or int.
+			b, ok := result.([]byte)
+			if ok {
+				result = string(b)
+			}
+
+			scope.Set(target, result)
+			return nil
+		}
+	}
+
+	eng.Register("db.sum", aggregateHandler("SUM"), engine.SlotMeta{Example: "db.sum: 'price'\n  as: $total_price"})
+	eng.Register("db.avg", aggregateHandler("AVG"), engine.SlotMeta{Example: "db.avg: 'rating'\n  as: $average"})
+	eng.Register("db.min", aggregateHandler("MIN"), engine.SlotMeta{Example: "db.min: 'age'\n  as: $youngest"})
+	eng.Register("db.max", aggregateHandler("MAX"), engine.SlotMeta{Example: "db.max: 'age'\n  as: $oldest"})
+
+	// DB.PLUCK
+	eng.Register("db.pluck", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.pluck called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+
+		col := ""
+		target := "plucks"
+
+		if node.Value != nil {
+			col = coerce.ToString(resolveValue(node.Value, scope))
+		}
+
+		for _, c := range node.Children {
+			if c.Name == "col" {
+				col = coerce.ToString(parseNodeValue(c, scope))
+			}
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		if col == "" {
+			return fmt.Errorf("db.pluck requires a column name")
+		}
+
+		// Save old columns
+		oldCols := qs.Columns
+		qs.Columns = []string{qs.Quote(col)}
+		query, args := qs.BuildSQL("SELECT")
+		qs.Columns = oldCols
+
+		executor, _, err := getExecutor(scope, dbMgr, qs.DBName)
+		if err != nil {
+			return err
+		}
+
+		rows, err := executor.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var results []interface{}
+
+		for rows.Next() {
+			var val interface{}
+			if err := rows.Scan(&val); err != nil {
+				return err
+			}
+			b, ok := val.([]byte)
+			if ok {
+				val = string(b)
+			}
+			results = append(results, val)
+		}
+
+		scope.Set(target, results)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Retrieve a single column's values as a flat array.",
+		Example:     "db.pluck: 'id'\n  as: $user_ids",
+	})
+
+	// DB.PAGINATE
+	eng.Register("db.paginate", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.paginate called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+
+		target := "paginator"
+		perPage := 15
+		page := 1
+
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+			if c.Name == "per_page" {
+				val, _ := coerce.ToFloat64(parseNodeValue(c, scope))
+				perPage = int(val)
+			}
+			if c.Name == "page" {
+				val, _ := coerce.ToFloat64(parseNodeValue(c, scope))
+				page = int(val)
+			}
+		}
+		if page < 1 {
+			page = 1
+		}
+		if perPage < 1 {
+			perPage = 15
+		}
+
+		executor, _, err := getExecutor(scope, dbMgr, qs.DBName)
+		if err != nil {
+			return err
+		}
+
+		// 1. Get Total Count
+		countQuery, countArgs := qs.BuildSQL("COUNT")
+		var total int
+		err = executor.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// 2. Compute Pagination Meta
+		// We avoid importing math by doing integer arithmetic
+		lastPage := (total + perPage - 1) / perPage
+		if lastPage < 1 {
+			lastPage = 1
+		}
+
+		// 3. Set Limit and Offset for actual query
+		qs.Limit = perPage
+		qs.Offset = (page - 1) * perPage
+		query, args := qs.BuildSQL("SELECT")
+
+		rows, err := executor.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		cols, _ := rows.Columns()
+		var results []map[string]interface{}
+
+		for rows.Next() {
+			columns := make([]interface{}, len(cols))
+			columnPointers := make([]interface{}, len(cols))
+			for i := range columns {
+				columnPointers[i] = &columns[i]
+			}
+			if err := rows.Scan(columnPointers...); err != nil {
+				return err
+			}
+			m := make(map[string]interface{})
+			for i, colName := range cols {
+				val := columns[i]
+				b, ok := val.([]byte)
+				if ok {
+					m[colName] = string(b)
+				} else {
+					m[colName] = val
+				}
+			}
+			results = append(results, m)
+		}
+
+		paginator := map[string]interface{}{
+			"data":         results,
+			"total":        total,
+			"per_page":     perPage,
+			"current_page": page,
+			"last_page":    lastPage,
+			"from":         qs.Offset + 1,
+			"to":           qs.Offset + len(results),
+		}
+		if len(results) == 0 {
+			paginator["from"] = 0
+			paginator["to"] = 0
+		}
+
+		scope.Set(target, paginator)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Retrieve rows paginated with metadata.",
+		Example:     "db.paginate\n  page: 1\n  per_page: 20\n  as: $users_paginator",
 	})
 }

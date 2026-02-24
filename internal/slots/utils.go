@@ -41,14 +41,45 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 		// [NEW] Support Null Coalesce: $var ?? 'default'
 		if strings.Contains(valStr, "??") {
 			parts := strings.SplitN(valStr, "??", 2)
-			v1 := strings.TrimSpace(parts[0])
-			v2 := strings.TrimSpace(parts[1])
+			if len(parts) == 2 {
+				v1 := strings.TrimSpace(parts[0])
+				v2 := strings.TrimSpace(parts[1])
 
-			res1 := parseNodeValue(&engine.Node{Value: v1}, scope)
-			if res1 != nil && fmt.Sprintf("%v", res1) != "" && fmt.Sprintf("%v", res1) != "<nil>" {
-				return res1
+				res1 := parseNodeValue(&engine.Node{Value: v1}, scope)
+				if res1 != nil && fmt.Sprintf("%v", res1) != "" && fmt.Sprintf("%v", res1) != "<nil>" {
+					return res1
+				}
+				return parseNodeValue(&engine.Node{Value: v2}, scope)
 			}
-			return parseNodeValue(&engine.Node{Value: v2}, scope)
+		}
+
+		// [NEW] Support Ternary: $var ? 'trueVal' : 'falseVal'
+		if strings.Contains(valStr, " ? ") && strings.Contains(valStr, " : ") {
+			parts := strings.SplitN(valStr, " ? ", 2)
+			if len(parts) == 2 {
+				condStr := strings.TrimSpace(parts[0])
+				rest := strings.SplitN(parts[1], " : ", 2)
+				if len(rest) == 2 {
+					trueStr := strings.TrimSpace(rest[0])
+					falseStr := strings.TrimSpace(rest[1])
+
+					condVal := parseNodeValue(&engine.Node{Value: condStr}, scope)
+					var b bool
+					if condVal != nil {
+						if bVal, err := coerce.ToBool(condVal); err == nil {
+							b = bVal
+						} else {
+							strVal := coerce.ToString(condVal)
+							b = (strVal != "" && strVal != "false" && strVal != "0" && strVal != "<nil>")
+						}
+					}
+
+					if b {
+						return parseNodeValue(&engine.Node{Value: trueStr}, scope)
+					}
+					return parseNodeValue(&engine.Node{Value: falseStr}, scope)
+				}
+			}
 		}
 
 		key := strings.TrimPrefix(valStr, "$")

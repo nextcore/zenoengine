@@ -1,0 +1,121 @@
+@extends('layouts.app')
+
+@section('title', 'Slot Reference')
+@section('subtitle', 'All built-in ZenoLang slots — searchable and grouped by category')
+
+@section('content')
+<div class="card">
+    <div class="card-header">
+        <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="slot-search" placeholder="Search slots..." oninput="filterSlots(this.value)">
+        </div>
+        <div id="slot-count" class="badge">Loading...</div>
+    </div>
+    <div id="slots-loading" class="empty-state">Loading slot reference...</div>
+    <div id="slots-content" style="display:none">
+        <div id="slots-groups"></div>
+    </div>
+    <div id="slots-empty" class="empty-state" style="display:none">No slots match your search.</div>
+</div>
+@endsection
+
+@section('scripts')
+<script>
+let allSlots = [];
+
+fetch('/api/docs/json')
+    .then(r => r.json())
+    .then(spec => {
+        // Extract slot info from x-slots extension or components
+        const slots = spec['x-slots'] || spec.components?.schemas || {};
+        allSlots = [];
+        for (const [name, info] of Object.entries(slots)) {
+            allSlots.push({ name, description: info.description || '—', example: info.example || '' });
+        }
+        allSlots.sort((a, b) => a.name.localeCompare(b.name));
+        document.getElementById('slots-loading').style.display = 'none';
+        document.getElementById('slot-count').textContent = allSlots.length + ' slots';
+        if (allSlots.length > 0) {
+            document.getElementById('slots-content').style.display = 'block';
+            renderSlots(allSlots);
+        } else {
+            renderFallback();
+        }
+    })
+    .catch(() => renderFallback());
+
+function renderSlots(slots) {
+    const groups = {};
+    slots.forEach(s => {
+        const prefix = s.name.split('.')[0];
+        if (!groups[prefix]) groups[prefix] = [];
+        groups[prefix].push(s);
+    });
+
+    const container = document.getElementById('slots-groups');
+    container.innerHTML = Object.entries(groups).map(([prefix, items]) => `
+        <div class="slot-group" data-group="${prefix}">
+            <div class="slot-group-header">
+                <span class="slot-group-name">${prefix}</span>
+                <span class="slot-group-count">${items.length} slots</span>
+            </div>
+            <div class="slot-list">
+                ${items.map(s => `
+                <div class="slot-item" data-name="${s.name}" data-desc="${s.description}">
+                    <div class="slot-item-header">
+                        <code class="slot-name">${s.name}:</code>
+                    </div>
+                    <div class="slot-desc">${s.description}</div>
+                    ${s.example ? `<pre class="slot-example">${s.example}</pre>` : ''}
+                </div>`).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderFallback() {
+    // Show known slots from documentation as static fallback
+    const knownSlots = [
+        { prefix: 'http', slots: ['http.get', 'http.post', 'http.put', 'http.delete', 'http.group', 'http.host', 'http.static', 'http.redirect', 'http.json', 'http.form', 'http.not_found'] },
+        { prefix: 'db', slots: ['db.table', 'db.get', 'db.first', 'db.where', 'db.insert', 'db.update', 'db.delete', 'db.count', 'db.limit', 'db.offset', 'db.order_by', 'db.paginate', 'db.transaction'] },
+        { prefix: 'orm', slots: ['orm.model', 'orm.get', 'orm.find', 'orm.save', 'orm.delete', 'orm.with', 'orm.where'] },
+        { prefix: 'view', slots: ['view:', 'view.root:', 'view.blade:', 'view.extends', 'view.include', 'view.component'] },
+        { prefix: 'auth', slots: ['auth.login', 'auth.user', 'auth.check', 'auth.middleware'] },
+        { prefix: 'session', slots: ['session.get', 'session.set', 'session.flash', 'session.get_flash'] },
+        { prefix: 'validate', slots: ['validate:'] },
+        { prefix: 'meta', slots: ['meta.eval', 'meta.template', 'meta.scope', 'meta.parse'] },
+        { prefix: 'log / var / if / each', slots: ['log:', 'var:', 'if:', 'each:', 'return', 'try:', 'include:'] },
+    ];
+    document.getElementById('slots-loading').style.display = 'none';
+    const content = document.getElementById('slots-content');
+    content.style.display = 'block';
+    document.getElementById('slot-count').textContent = '50+ slots';
+    document.getElementById('slots-groups').innerHTML = knownSlots.map(g => `
+        <div class="slot-group" data-group="${g.prefix}">
+            <div class="slot-group-header">
+                <span class="slot-group-name">${g.prefix}</span>
+                <span class="slot-group-count">${g.slots.length} slots</span>
+            </div>
+            <div class="slot-list">
+                ${g.slots.map(s => `<div class="slot-item" data-name="${s}"><div class="slot-item-header"><code class="slot-name">${s}</code></div><div class="slot-desc">See <a href="http://localhost:5173" target="_blank" class="link">documentation</a> for full reference.</div></div>`).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function filterSlots(val) {
+    const q = val.toLowerCase();
+    document.querySelectorAll('.slot-item').forEach(el => {
+        const match = el.dataset.name.includes(q) || el.dataset.desc?.toLowerCase().includes(q);
+        el.style.display = match ? '' : 'none';
+    });
+    document.querySelectorAll('.slot-group').forEach(g => {
+        const visible = [...g.querySelectorAll('.slot-item')].some(i => i.style.display !== 'none');
+        g.style.display = visible ? '' : 'none';
+    });
+    const anyVisible = [...document.querySelectorAll('.slot-item')].some(i => i.style.display !== 'none');
+    document.getElementById('slots-empty').style.display = anyVisible ? 'none' : 'flex';
+}
+</script>
+@endsection
