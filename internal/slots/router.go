@@ -631,4 +631,46 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		Description: "Hosting aplikasi SPA (React/Vue) atau Static Site.",
 		Example:     "http.static: \"./dist\"\n  path: \"/\"\n  spa: true",
 	})
+
+	// ==========================================
+	// 5. HTTP ROUTES INTROSPECTION
+	// ==========================================
+	eng.Register("http.routes", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		target := "routes"
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		routes := make([]map[string]interface{}, 0)
+
+		fmt.Println("   [DEBUG] Walking rootRouter...")
+		err := chi.Walk(rootRouter, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+			// clean up method because chi can return multiple methods
+			methods := strings.Split(method, ",")
+			for _, m := range methods {
+				if m != "" && m != "*" {
+					r := make(map[string]interface{})
+					r["method"] = strings.TrimSpace(m)
+					r["path"] = route
+					routes = append(routes, r)
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			fmt.Printf("   [DEBUG] chi.Walk Error: %v\n", err)
+			return err
+		}
+
+		fmt.Printf("   [DEBUG] chi.Walk found %d routes\n", len(routes))
+
+		scope.Set(target, routes)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Mengambil daftar semua rute HTTP yang terdaftar di engine.",
+		Example:     "http.routes: { as: $routes }",
+	})
 }

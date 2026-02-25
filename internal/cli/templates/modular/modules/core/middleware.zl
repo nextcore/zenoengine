@@ -1,0 +1,47 @@
+// modules/core/middleware.zl
+
+// -----------------------------------------------------------------
+// AUTH MIDDLEWARE
+// -----------------------------------------------------------------
+http.middleware: 'auth' {
+    do: {
+        session.get: "user_id" { as: $userId }
+        
+        if: $userId == null {
+            then: {
+                http.redirect: '/login' { flash: { error: "Please log in first." } }
+                return
+            }
+        }
+        
+        db.table: "users"
+        db.where: "id" { equals: $userId }
+        db.first: { as: $user }
+        
+        if: $user == null {
+            then: {
+                session.destroy: true
+                http.redirect: '/login'
+                return
+            }
+        }
+        
+        var: $currentUser { val: $user }
+        http.next: true
+    }
+}
+
+// -----------------------------------------------------------------
+// ADMIN MIDDLEWARE
+// -----------------------------------------------------------------
+http.middleware: 'admin' {
+    do: {
+        if: $currentUser.role != "admin" {
+            then: {
+                http.redirect: '/users' { flash: { error: "Admins Only." } }
+                return
+            }
+        }
+        http.next: true
+    }
+}

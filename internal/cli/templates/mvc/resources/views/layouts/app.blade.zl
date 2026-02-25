@@ -1,0 +1,69 @@
+<!-- resources/views/layouts/app.blade.zl -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenoEngine Application</title>
+    <!-- Simple default CSS for presentation -->
+    <style>
+        body { font-family: system-ui, sans-serif; line-height: 1.6; margin: 0; padding: 0; background: #f4f4f5; color: #18181b; }
+        .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+        .header { background: #fff; border-bottom: 1px solid #e4e4e7; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .nav a { margin-left: 1rem; color: #3f3f46; text-decoration: none; }
+        .nav a:hover { color: #000; }
+        .card { background: #fff; border-radius: 8px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 2rem; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: #2563eb; color: #fff; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }
+        .btn-danger { background: #dc2626; }
+        .alert { padding: 1rem; margin-bottom: 1rem; border-radius: 4px; }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #4ade80; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #e4e4e7; }
+        th { background: #f8f8f1; }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div>
+            <strong>Zeno MVC</strong>
+        </div>
+        <nav class="nav">
+            @if(isset($currentUser))
+                <a href="/dashboard">Dashboard</a>
+                @if($currentUser->role == 'admin')
+                    <a href="/admin/users">Manage Users</a>
+                @endif
+                <form action="/logout" method="POST" style="display:inline;">
+                    {{ csrf_field() }}
+                    <button type="submit" class="btn btn-danger" style="margin-left: 1rem;">Logout</button>
+                </form>
+            @else
+                <a href="/login">Login</a>
+                <a href="/register">Register</a>
+            @endif
+        </nav>
+    </header>
+
+    <div class="container">
+        @if(isset($flash['error']))
+            <div class="alert alert-error">
+                {{ $flash['error'] }}
+            </div>
+        @endif
+        
+        @if(isset($flash['success']))
+            <div class="alert alert-success">
+                {{ $flash['success'] }}
+            </div>
+        @endif
+
+        @yield('content')
+    </div>
+
+</body>
+</html>

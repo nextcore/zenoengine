@@ -1,0 +1,52 @@
+import{_ as a,o as n,c as e,ag as i}from"./chunks/framework.ePeAWSvT.js";const k=JSON.parse('{"title":"Realtime Server-Sent Events (SSE)","description":"","frontmatter":{},"headers":[],"relativePath":"advanced/realtime-sse.md","filePath":"advanced/realtime-sse.md"}'),t={name:"advanced/realtime-sse.md"};function p(l,s,o,h,r,c){return n(),e("div",null,[...s[0]||(s[0]=[i(`<h1 id="realtime-server-sent-events-sse" tabindex="-1">Realtime Server-Sent Events (SSE) <a class="header-anchor" href="#realtime-server-sent-events-sse" aria-label="Permalink to &quot;Realtime Server-Sent Events (SSE)&quot;">​</a></h1><p>ZenoEngine provides built-in, first-class support for <strong>Server-Sent Events (SSE)</strong>. This allows you to stream data from the server to the client in realtime without the overhead or complexity of WebSockets. SSE is perfect for dashboards, live feeds, progress bars, and notifications.</p><h2 id="basic-server-sent-events" tabindex="-1">Basic Server-Sent Events <a class="header-anchor" href="#basic-server-sent-events" aria-label="Permalink to &quot;Basic Server-Sent Events&quot;">​</a></h2><p>To start an SSE stream, use the <code>sse.stream</code> slot on any HTTP GET route. This will automatically set the correct headers (<code>Content-Type: text/event-stream</code>, <code>Cache-Control: no-cache</code>, <code>Connection: keep-alive</code>) and keep the connection open.</p><div class="language-zeno vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">zeno</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>http.get: &#39;/api/stream&#39; {</span></span>
+<span class="line"><span>    do: {</span></span>
+<span class="line"><span>        sse.stream: {</span></span>
+<span class="line"><span>            do: {</span></span>
+<span class="line"><span>                // Your SSE logic goes here</span></span>
+<span class="line"><span>                // Note: sse.keepalive is called automatically every 15s</span></span>
+<span class="line"><span>            }</span></span>
+<span class="line"><span>        }</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h2 id="sending-events" tabindex="-1">Sending Events <a class="header-anchor" href="#sending-events" aria-label="Permalink to &quot;Sending Events&quot;">​</a></h2><p>Inside an <code>sse.stream</code> block, you use <code>sse.send</code> to push data to the connected client. You can send plain text, HTML (useful for HTMX/Datastar), or JSON.</p><div class="language-zeno vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">zeno</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>http.get: &#39;/api/notifications&#39; {</span></span>
+<span class="line"><span>    do: {</span></span>
+<span class="line"><span>        sse.stream: {</span></span>
+<span class="line"><span>            do: {</span></span>
+<span class="line"><span>                // Send a simple string message</span></span>
+<span class="line"><span>                sse.send: &quot;Connection established!&quot;</span></span>
+<span class="line"><span>                </span></span>
+<span class="line"><span>                // Send JSON data with a specific event name</span></span>
+<span class="line"><span>                $payload: { status: &quot;processing&quot;, progress: 50 }</span></span>
+<span class="line"><span>                sse.send: $payload { event: &quot;update&quot; }</span></span>
+<span class="line"><span>                </span></span>
+<span class="line"><span>                // Send HTML (example: for Datastar/HTMX morphing)</span></span>
+<span class="line"><span>                sse.send: &quot;&lt;div&gt;New Notification&lt;/div&gt;&quot; { event: &quot;datastar-fragment&quot; }</span></span>
+<span class="line"><span>            }</span></span>
+<span class="line"><span>        }</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h2 id="using-sse-loops" tabindex="-1">Using SSE Loops <a class="header-anchor" href="#using-sse-loops" aria-label="Permalink to &quot;Using SSE Loops&quot;">​</a></h2><p>Usually, SSE endpoints run continuously or tick at intervals to send updates. ZenoLang provides <code>sse.loop</code> as a lightweight construct for periodic streaming.</p><div class="language-zeno vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">zeno</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>http.get: &#39;/api/ticker&#39; {</span></span>
+<span class="line"><span>    do: {</span></span>
+<span class="line"><span>        sse.stream: {</span></span>
+<span class="line"><span>            do: {</span></span>
+<span class="line"><span>                // Loop 10 times, pausing for 1 second between each tick</span></span>
+<span class="line"><span>                sse.loop: 10 {</span></span>
+<span class="line"><span>                    delay: &quot;1s&quot;</span></span>
+<span class="line"><span>                    do: {</span></span>
+<span class="line"><span>                        date.now: { as: $time }</span></span>
+<span class="line"><span>                        sse.send: &quot;Current time is: &quot; + $time</span></span>
+<span class="line"><span>                    }</span></span>
+<span class="line"><span>                }</span></span>
+<span class="line"><span>            }</span></span>
+<span class="line"><span>        }</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span>}</span></span></code></pre></div><p>If you don&#39;t specify the main iteration count (e.g., <code>sse.loop: { delay: &quot;2s&quot; }</code>), it will loop indefinitely until the client disconnects.</p><h2 id="consuming-sse-on-the-frontend" tabindex="-1">Consuming SSE on the Frontend <a class="header-anchor" href="#consuming-sse-on-the-frontend" aria-label="Permalink to &quot;Consuming SSE on the Frontend&quot;">​</a></h2><p>Because ZenoEngine uses standard SSE, you can consume it using vanilla JavaScript&#39;s <code>EventSource</code> API in any frontend framework, or with HTML-over-the-wire libraries like HTMX and Datastar.</p><h3 id="vanilla-javascript" tabindex="-1">Vanilla JavaScript <a class="header-anchor" href="#vanilla-javascript" aria-label="Permalink to &quot;Vanilla JavaScript&quot;">​</a></h3><div class="language-javascript vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">javascript</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">const</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> eventSource</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;"> =</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;"> new</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;"> EventSource</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">(</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;">&#39;/api/notifications&#39;</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// Listen to default messages</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">eventSource.</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;">onmessage</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;"> =</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;"> function</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">(</span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70;">event</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">) {</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    console.</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;">log</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">(</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;">&quot;New message:&quot;</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">, event.data);</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// Listen to specific named events</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">eventSource.</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;">addEventListener</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">(</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;">&#39;update&#39;</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">, </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">function</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">(</span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70;">event</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">) {</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">    const</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> data</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;"> =</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> JSON</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">.</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;">parse</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">(event.data);</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    console.</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;">log</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">(</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;">&quot;Update received:&quot;</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">, data.progress);</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">});</span></span></code></pre></div>`,16)])])}const E=a(t,[["render",p]]);export{k as __pageData,E as default};

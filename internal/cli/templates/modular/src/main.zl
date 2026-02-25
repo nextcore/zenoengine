@@ -1,0 +1,31 @@
+// ==========================================
+// ZENOENGINE MODULAR TEMPLATE
+// ==========================================
+
+log: "🚀 Starting ZenoEngine Modular API & Web Server..."
+
+// Set the global views directory to 'modules' since views are feature-grouped
+view.root: 'modules'
+
+// Serve static assets from 'public' directory at root URL
+http.static: 'public' { path: '/' }
+
+// 1. RUN MIGRATIONS
+include: 'database/migrations/001_create_users_table.zl'
+
+// 2. LOAD SYSTEM MIDDLEWARE & CORE UTILS
+include: 'modules/core/middleware.zl'
+
+// 3. LOAD FEATURE MODULES (Web & API Routes combined per domain)
+include: 'modules/auth/routes.zl'
+include: 'modules/users/routes.zl'
+
+// 4. LOAD GLOBAL REST API NAMESPACE (Optional)
+// include: 'api/v1/routes.zl'
+
+// Home Route
+http.get: '/' {
+    do: {
+        http.redirect: '/login'
+    }
+}

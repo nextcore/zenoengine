@@ -1,0 +1,43 @@
+<!-- modules/users/manage.blade.zl -->
+@extends('core.layout')
+
+@section('content')
+<div class="card" style="max-width: 800px; margin: 2rem auto;">
+    <h2 style="margin-top: 0">Manage Users Directory</h2>
+    
+    <p>This area is restricted to administrators.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($users as $u)
+            <tr>
+                <td>#{{ $u->id }}</td>
+                <td><strong>{{ $u->name }}</strong></td>
+                <td>{{ $u->email }}</td>
+                <td>
+                    <span style="background: {{ $u->role == 'admin' ? '#fef08a' : '#e5e7eb' }}; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; text-transform: uppercase;">
+                        {{ $u->role }}
+                    </span>
+                </td>
+                <td>
+                    <a href="#" style="color: #3b82f6; text-decoration: none;">Edit</a>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+    
+    <div style="margin-top: 2rem;">
+        <a href="/users" class="btn" style="background: #4b5563;">&larr; Back to Dashboard</a>
+    </div>
+</div>
+@endsection

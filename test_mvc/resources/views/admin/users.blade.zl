@@ -1,0 +1,41 @@
+<!-- resources/views/admin/users.blade.zl -->
+@extends('layouts.app')
+
+@section('content')
+<div class="card" style="max-width: 800px; margin: 2rem auto;">
+    <h2 style="margin-top: 0">Manage Users (Admin Only)</h2>
+    
+    <p>This page is protected by the `admin` middleware.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Registered At</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($users as $u)
+            <tr>
+                <td>#{{ $u->id }}</td>
+                <td><strong>{{ $u->name }}</strong></td>
+                <td>{{ $u->email }}</td>
+                <td>
+                    <span style="background: {{ $u->role == 'admin' ? '#fef08a' : '#e2e8f0' }}; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; text-transform: uppercase;">
+                        {{ $u->role }}
+                    </span>
+                </td>
+                <td>{{ $u->created_at }}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+    
+    <div style="margin-top: 2rem;">
+        <a href="/dashboard" class="btn" style="background: #3f3f46;">&larr; Back to Dashboard</a>
+    </div>
+</div>
+@endsection

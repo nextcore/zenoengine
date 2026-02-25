@@ -1,0 +1,18 @@
+// app/middleware/admin.zl
+
+// The 'admin' middleware ensures the authenticated user has the 'admin' role
+// Note: This middleware expects 'auth' to have already run
+http.middleware: 'admin' {
+    do: {
+        if: $currentUser.role != "admin" {
+            then: {
+                http.redirect: '/dashboard' {
+                    flash: { error: "Access Denied: Admins Only." }
+                }
+                return
+            }
+        }
+        
+        http.next: true
+    }
+}

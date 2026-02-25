@@ -1,0 +1,8 @@
+// api/v1/routes.zl
+// Define your public JSON REST APIs here
+
+http.get: '/api/v1/status' {
+    do: {
+        http.json: { "status": "online", "modular": true }
+    }
+}

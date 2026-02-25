@@ -60,7 +60,8 @@ export default defineConfig({
             { text: 'Requests', link: '/basics/requests' },
             { text: 'Responses', link: '/basics/responses' },
             { text: 'Views (Blade)', link: '/views/blade' },
-            { text: 'Validation', link: '/basics/validation' }
+            { text: 'Validation', link: '/basics/validation' },
+            { text: 'Authentication', link: '/basics/authentication' }
           ]
         },
         {
@@ -82,6 +83,16 @@ export default defineConfig({
             { text: 'Relationships', link: '/orm/relationships' },
             { text: 'Eager Loading', link: '/orm/eager-loading' },
             { text: 'Mutators & Casts', link: '/orm/mutators' }
+          ]
+        },
+        {
+          text: 'Advanced',
+          collapsed: false,
+          items: [
+            { text: 'Realtime SSE', link: '/advanced/realtime-sse' },
+            { text: 'Background Jobs & Queues', link: '/advanced/jobs-queues' },
+            { text: 'Web Server Gateway', link: '/advanced/gateway' },
+            { text: 'Filesystem & Uploads', link: '/advanced/filesystem' }
           ]
         },
         {

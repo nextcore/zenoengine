@@ -1,0 +1,102 @@
+// app/controllers/AuthController.zl
+
+// Show Login Form
+http.get: '/login' {
+    middleware: ['guest'] // Assumes guest middleware exists or is skipped if logged in
+    do: {
+        http.view: 'auth/login'
+    }
+}
+
+// Process Login
+http.post: '/login' {
+    do: {
+        http.form: { as: $creds }
+        
+        db.table: "users"
+        db.where: "email" { equals: $creds.email }
+        db.first: { as: $user }
+        
+        if: $user == null {
+            then: {
+                http.redirect: '/login' { flash: { error: "Invalid email or password." } }
+                return
+            }
+        }
+        
+        hash.verify: { text: $creds.password, hash: $user.password, as: $valid }
+        
+        if: $valid == false {
+            then: {
+                http.redirect: '/login' { flash: { error: "Invalid email or password." } }
+                return
+            }
+        }
+        
+        // Success
+        session.set: "user_id" { val: $user.id }
+        session.regenerate: true
+        
+        http.redirect: '/dashboard'
+    }
+}
+
+// Show Register Form
+http.get: '/register' {
+    do: {
+        http.view: 'auth/register'
+    }
+}
+
+// Process Registration
+http.post: '/register' {
+    do: {
+        http.form: { as: $data }
+        
+        // Simple manual validation
+        if: $data.password != $data.password_confirmation {
+            then: {
+                http.redirect: '/register' { flash: { error: "Passwords do not match." } }
+                return
+            }
+        }
+        
+        // Check if email exists
+        db.table: "users"
+        db.where: "email" { equals: $data.email }
+        db.first: { as: $existingUser }
+        
+        if: $existingUser != null {
+            then: {
+                http.redirect: '/register' { flash: { error: "Email is already taken." } }
+                return
+            }
+        }
+        
+        hash.make: { text: $data.password, as: $hashedPassword }
+        
+        db.table: "users"
+        db.insert: {
+            name: $data.name,
+            email: $data.email,
+            password: $hashedPassword,
+            role: "user"
+        }
+        db.last: { as: $newUser }
+        
+        // Auto-login after registration
+        session.set: "user_id" { val: $newUser.id }
+        session.regenerate: true
+        
+        http.redirect: '/dashboard'
+    }
+}
+
+// Process Logout
+http.post: '/logout' {
+    middleware: ['auth']
+    do: {
+        session.destroy: true
+        http.redirect: '/'
+    }
+}

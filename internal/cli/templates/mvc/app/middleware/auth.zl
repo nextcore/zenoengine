@@ -1,0 +1,34 @@
+// app/middleware/auth.zl
+
+// The 'auth' middleware protects routes that require a logged-in user
+http.middleware: 'auth' {
+    do: {
+        session.get: "user_id" { as: $userId }
+        
+        if: $userId == null {
+            then: {
+                http.redirect: '/login' {
+                    flash: { error: "Please log in to access this page." }
+                }
+                return
+            }
+        }
+        
+        db.table: "users"
+        db.where: "id" { equals: $userId }
+        db.first: { as: $user }
+        
+        if: $user == null {
+            then: {
+                session.destroy: true
+                http.redirect: '/login'
+                return
+            }
+        }
+        
+        // Pass the authenticated user to the downstream request handler
+        var: $currentUser { val: $user }
+        
+        http.next: true
+    }
+}

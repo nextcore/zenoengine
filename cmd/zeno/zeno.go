@@ -45,6 +45,8 @@ func main() {
 		switch cmd {
 		case "check":
 			cli.HandleCheck(os.Args[2:])
+		case "new":
+			cli.HandleNew(os.Args[2:])
 		case "run":
 			cli.HandleRun(os.Args[2:])
 		case "migrate":

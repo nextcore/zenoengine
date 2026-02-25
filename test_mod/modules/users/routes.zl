@@ -1,0 +1,29 @@
+// modules/users/routes.zl
+// All routes related to User Management and Dashboards
+
+// Dashboard (Regular User)
+http.get: '/users' {
+    middleware: ['auth']
+    do: {
+        db.table: "users"
+        db.count: { as: $totalUsers }
+        
+        http.view: 'users/dashboard' {
+            user: $currentUser,
+            totalUsers: $totalUsers
+        }
+    }
+}
+
+// User Management (Admin Only)
+http.get: '/users/manage' {
+    middleware: ['auth', 'admin']
+    do: {
+        db.table: "users"
+        db.get: { as: $usersList }
+        
+        http.view: 'users/manage' {
+            users: $usersList
+        }
+    }
+}

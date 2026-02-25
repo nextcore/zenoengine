@@ -1,0 +1,27 @@
+<!-- resources/views/dashboard.blade.zl -->
+@extends('layouts.app')
+
+@section('content')
+<div class="card">
+    <h2 style="margin-top: 0">Welcome back, {{ $user->name }}!</h2>
+    
+    <p>You are logged in to the ZenoEngine MVC template.</p>
+    
+    <div style="background: #f8fafc; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
+        <h3>Your Account Information</h3>
+        <ul>
+            <li><strong>Name:</strong> {{ $user->name }}</li>
+            <li><strong>Email:</strong> {{ $user->email }}</li>
+            <li><strong>Role:</strong> <span style="background: {{ $user->role == 'admin' ? '#fef08a' : '#e2e8f0' }}; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; text-transform: uppercase;">{{ $user->role }}</span></li>
+        </ul>
+    </div>
+    
+    @if($user->role == 'admin')
+        <div style="margin-top: 2rem; border-top: 1px solid #e4e4e7; padding-top: 1rem;">
+            <h3>Admin Overview</h3>
+            <p>Total Registered Users: <strong>{{ $totalUsers }}</strong></p>
+            <a href="/admin/users" class="btn">Manage Users Directory &rarr;</a>
+        </div>
+    @endif
+</div>
+@endsection

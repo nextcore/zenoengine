@@ -1,0 +1,71 @@
+<!-- modules/core/layout.blade.zl -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeno Modular App</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; margin: 0; background: #f9fafb; color: #111827; }
+        .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+        .header { background: #1f2937; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .nav a { margin-left: 1rem; color: #d1d5db; text-decoration: none; font-weight: 500; }
+        .nav a:hover { color: #fff; }
+        .card { background: #fff; border-radius: 8px; padding: 2rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-top: 2rem; border: 1px solid #e5e7eb; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: #3b82f6; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; }
+        .btn:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; }
+        .btn-danger:hover { background: #dc2626; }
+        .alert { padding: 1rem; margin-bottom: 1rem; border-radius: 6px; }
+        .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input { width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
+        .form-group input:focus { outline: none; border-color: #3b82f6; ring: 2px solid #93c5fd; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 1rem; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f3f4f6; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div style="font-weight: bold; font-size: 1.2rem;">
+            Zeno Modular
+        </div>
+        <nav class="nav">
+            @if(isset($currentUser))
+                <a href="/users">Dashboard</a>
+                @if($currentUser->role == 'admin')
+                    <a href="/users/manage">Manage Users</a>
+                @endif
+                <form action="/auth/logout" method="POST" style="display:inline;">
+                    {{ csrf_field() }}
+                    <button type="submit" class="btn btn-danger" style="margin-left: 1rem;">Logout</button>
+                </form>
+            @else
+                <a href="/login">Login</a>
+                <a href="/register">Register</a>
+            @endif
+        </nav>
+    </header>
+
+    <div class="container">
+        @if(isset($flash['error']))
+            <div class="alert alert-error">
+                {{ $flash['error'] }}
+            </div>
+        @endif
+        
+        @if(isset($flash['success']))
+            <div class="alert alert-success">
+                {{ $flash['success'] }}
+            </div>
+        @endif
+
+        @yield('content')
+    </div>
+
+</body>
+</html>

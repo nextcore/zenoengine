@@ -1,0 +1,28 @@
+// app/controllers/DashboardController.zl
+
+http.get: '/dashboard' {
+    middleware: ['auth']
+    do: {
+        // Find how many users exist
+        db.table: "users"
+        db.count: { as: $totalUsers }
+        
+        http.view: 'dashboard' {
+            user: $currentUser,
+            totalUsers: $totalUsers
+        }
+    }
+}
+
+// User Management (Admin Only)
+http.get: '/admin/users' {
+    middleware: ['auth', 'admin']
+    do: {
+        db.table: "users"
+        db.get: { as: $usersList }
+        
+        http.view: 'admin/users' {
+            users: $usersList
+        }
+    }
+}

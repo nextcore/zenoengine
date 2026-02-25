@@ -1,0 +1,26 @@
+// ==========================================
+// ZENOENGINE MVC TEMPLATE
+// ==========================================
+
+log: "🚀 Starting ZenoEngine API & Web Server..."
+
+// Set the global views directory to 'resources/views'
+view.root: 'resources/views'
+
+// Serve static assets from 'public' directory at root URL
+http.static: 'public' { path: '/' }
+
+// Run Database Migrations
+include: 'database/migrations/001_create_users_table.zl'
+
+// Middleware
+include: 'app/middleware/auth.zl'
+include: 'app/middleware/admin.zl'
+
+// Controllers
+include: 'app/controllers/AuthController.zl'
+include: 'app/controllers/DashboardController.zl'
+
+// Routes
+include: 'routes/web.zl'
+include: 'routes/api.zl'

@@ -53,6 +53,45 @@ func viewRoot(scope *engine.Scope) string {
 func RegisterBladeSlots(eng *engine.Engine) {
 	RegisterLogicSlots(eng)
 
+	eng.Register("blade.render_string", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		var template string
+		if node.Value != nil {
+			template = coerce.ToString(resolveValue(node.Value, scope))
+		}
+
+		bindTarget := "output"
+		for _, c := range node.Children {
+			if c.Name == "template" {
+				template = coerce.ToString(resolveValue(c.Value, scope))
+			} else if c.Name == "as" {
+				bindTarget = coerce.ToString(c.Value)
+			} else {
+				val := parseNodeValue(c, scope)
+				scope.Set(c.Name, val)
+			}
+		}
+
+		if template == "" {
+			return fmt.Errorf("blade.render_string requires template content")
+		}
+
+		rootNode, err := transpileBladeNative(template)
+		if err != nil {
+			return err
+		}
+
+		rec := httptest.NewRecorder()
+		newCtx := context.WithValue(ctx, "httpWriter", rec)
+
+		err = eng.Execute(newCtx, rootNode, scope)
+		if err != nil {
+			return err
+		}
+
+		scope.Set(strings.TrimPrefix(bindTarget, "$"), rec.Body.String())
+		return nil
+	}, engine.SlotMeta{Description: "Renders a blade template string and saves HTML to scope"})
+
 	// 1. Helper Slot for Writing to Response (Internal)
 	eng.Register("__native_write", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)

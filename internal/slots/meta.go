@@ -240,6 +240,65 @@ func RegisterMetaSlots(eng *engine.Engine) {
 		Description: "Renders a Blade template into a string variable (useful for code generation).",
 		Example:     `meta.template: 'codegen/route' { resource: 'users'; as: $code }`,
 	})
+
+	// 6. engine.slots (Introspection: Get all registered slots and their metadata)
+	eng.Register("engine.slots", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		docs := eng.GetDocumentation()
+		sortedNames := eng.GetSortedSlotNames()
+
+		slotsList := make([]map[string]interface{}, 0, len(sortedNames))
+
+		for _, name := range sortedNames {
+			meta := docs[name]
+			slotInfo := make(map[string]interface{})
+			slotInfo["name"] = name
+			slotInfo["description"] = meta.Description
+			slotInfo["example"] = meta.Example
+
+			// Convert inputs map to something manageable for JSON
+			inputsInfo := make(map[string]interface{})
+			if meta.Inputs != nil {
+				for inputName, prop := range meta.Inputs {
+					propInfo := make(map[string]interface{})
+					propInfo["description"] = prop.Description
+					propInfo["required"] = prop.Required
+					propInfo["type"] = prop.Type
+					inputsInfo[inputName] = propInfo
+				}
+			}
+			slotInfo["inputs"] = inputsInfo
+
+			if meta.RequiredBlocks != nil {
+				slotInfo["required_blocks"] = meta.RequiredBlocks
+			} else {
+				slotInfo["required_blocks"] = []string{}
+			}
+
+			if meta.ValueType != "" {
+				slotInfo["value_type"] = meta.ValueType
+			}
+
+			slotsList = append(slotsList, slotInfo)
+		}
+
+		target := ""
+		for _, child := range node.Children {
+			if child.Name == "as" {
+				val := coerce.ToString(child.Value)
+				target = strings.TrimPrefix(val, "$")
+			}
+		}
+
+		if target != "" {
+			scope.Set(target, slotsList)
+		}
+
+		return nil
+
+	}, engine.SlotMeta{
+		Description: "Returns documentation metadata for all registered ZenoLang slots.",
+		Example:     `engine.slots: { as: $docs }`,
+	})
 }
 
 // Helper: Convert Node to Map

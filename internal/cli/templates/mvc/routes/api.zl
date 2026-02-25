@@ -1,0 +1,27 @@
+// routes/api.zl
+
+// Prefix all routes in this block with /api/v1
+http.group: '/api/v1' {
+    
+    // An example public API route
+    http.get: '/status' {
+        do: {
+            http.json: { "status": "online", "version": "1.0.0" }
+        }
+    }
+    
+    // An example protected API route (using auth middleware)
+    http.get: '/user' {
+        middleware: ['auth']
+        do: {
+            // $currentUser is injected by the auth middleware
+            http.json: { 
+                "id": $currentUser.id,
+                "name": $currentUser.name,
+                "email": $currentUser.email,
+                "role": $currentUser.role
+            }
+        }
+    }
+
+}

@@ -1,0 +1,22 @@
+// routes/web.zl
+
+// Welcome / Home Page
+http.get: '/' {
+    do: {
+        http.html: "
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>ZenoEngine MVC Boilerplate</title>
+                    <style>body { font-family: sans-serif; text-align: center; padding-top: 5rem; }</style>
+                </head>
+                <body>
+                    <h1>Welcome to ZenoEngine</h1>
+                    <p>A fast, elegant web framework powered by Go.</p>
+                    <a href='/login' style='padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 4px;'>Log In</a>
+                    <a href='/register' style='padding: 10px 20px; text-decoration: none; color: #2563eb;'>Create Account</a>
+                </body>
+            </html>
+        "
+    }
+}

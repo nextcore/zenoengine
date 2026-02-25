@@ -1,0 +1,17 @@
+import{_ as a,o as e,c as n,ag as i}from"./chunks/framework.ePeAWSvT.js";const b=JSON.parse('{"title":"Database Seeding","description":"","frontmatter":{},"headers":[],"relativePath":"database/seeding.md","filePath":"database/seeding.md"}'),p={name:"database/seeding.md"};function t(d,s,l,o,r,c){return e(),n("div",null,[...s[0]||(s[0]=[i(`<h1 id="database-seeding" tabindex="-1">Database Seeding <a class="header-anchor" href="#database-seeding" aria-label="Permalink to &quot;Database Seeding&quot;">​</a></h1><p>ZenoEngine includes the ability to seed your database with data using seed classes. All seed files are stored in the <code>database/seeders</code> directory.</p><h2 id="writing-seeders" tabindex="-1">Writing Seeders <a class="header-anchor" href="#writing-seeders" aria-label="Permalink to &quot;Writing Seeders&quot;">​</a></h2><p>A seeder is a simple ZenoLang script using the <code>db.seed</code> slot:</p><div class="language-zeno vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">zeno</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>db.seed {</span></span>
+<span class="line"><span>    db.table: &#39;users&#39;</span></span>
+<span class="line"><span>    db.insert {</span></span>
+<span class="line"><span>        name: &#39;Alice&#39;</span></span>
+<span class="line"><span>        email: &#39;alice@example.com&#39;</span></span>
+<span class="line"><span>        password: &#39;hashed_password&#39;</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>    db.table: &#39;users&#39;</span></span>
+<span class="line"><span>    db.insert {</span></span>
+<span class="line"><span>        name: &#39;Bob&#39;</span></span>
+<span class="line"><span>        email: &#39;bob@example.com&#39;</span></span>
+<span class="line"><span>        password: &#39;hashed_password&#39;</span></span>
+<span class="line"><span>    }</span></span>
+<span class="line"><span>}</span></span></code></pre></div><h2 id="running-seeders" tabindex="-1">Running Seeders <a class="header-anchor" href="#running-seeders" aria-label="Permalink to &quot;Running Seeders&quot;">​</a></h2><p>You can run the database seeder using the Zeno CLI:</p><div class="language-bash vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">bash</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;">zeno</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;"> db:seed</span></span></code></pre></div><h2 id="calling-additional-seeders" tabindex="-1">Calling Additional Seeders <a class="header-anchor" href="#calling-additional-seeders" aria-label="Permalink to &quot;Calling Additional Seeders&quot;">​</a></h2><p>You may wish to use the <code>db.seed</code> block to control which seeder classes are executed:</p><div class="language-zeno vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">zeno</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>db.seed {</span></span>
+<span class="line"><span>    // ZenoEngine will execute all registered seeders</span></span>
+<span class="line"><span>}</span></span></code></pre></div>`,11)])])}const g=a(p,[["render",t]]);export{b as __pageData,g as default};

@@ -1,0 +1,32 @@
+<!-- modules/users/dashboard.blade.zl -->
+@extends('core.layout')
+
+@section('content')
+<div class="card">
+    <h2 style="margin-top: 0">Welcome, {{ $user->name }}!</h2>
+    
+    <p>You are logged into the <strong>Modular</strong> ZenoEngine architecture.</p>
+    
+    <div style="background: #f9fafb; padding: 1.5rem; border-radius: 6px; margin-top: 1.5rem; border: 1px solid #e5e7eb;">
+        <h3>My Profile</h3>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 0.5rem;"><strong>ID:</strong> #{{ $user->id }}</li>
+            <li style="margin-bottom: 0.5rem;"><strong>Name:</strong> {{ $user->name }}</li>
+            <li style="margin-bottom: 0.5rem;"><strong>Email:</strong> {{ $user->email }}</li>
+            <li style="margin-bottom: 0.5rem;"><strong>Role:</strong> 
+                <span style="background: {{ $user->role == 'admin' ? '#fef08a' : '#e5e7eb' }}; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; text-transform: uppercase;">
+                    {{ $user->role }}
+                </span>
+            </li>
+        </ul>
+    </div>
+    
+    @if($user->role == 'admin')
+        <div style="margin-top: 2rem; border-top: 1px solid #e5e7eb; padding-top: 1.5rem;">
+            <h3>Admin Overview</h3>
+            <p>Total Registered Users: <strong>{{ $totalUsers }}</strong></p>
+            <a href="/users/manage" class="btn">Manage Users Directory &rarr;</a>
+        </div>
+    @endif
+</div>
+@endsection

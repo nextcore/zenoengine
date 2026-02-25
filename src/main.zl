@@ -8,8 +8,8 @@ include: src/tutorial/max/main.zl
 // ==========================================
 // 2. ZENOSTUDIO (Lowcode Tool — Laravel Style)
 // ==========================================
-include: src/zenostudio/routes/web.zl
-include: src/zenostudio/routes/api.zl
+// include: src/zenostudio/routes/web.zl
+// include: src/zenostudio/routes/api.zl
 
 
 
