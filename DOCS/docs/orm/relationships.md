@@ -26,7 +26,7 @@ db.get { as: $users }
 
 orm.model: 'users'
 orm.with: 'profile' {
-    set: $users { val: $users }
+    var: $users { val: $users }
 }
 
 // Each user now has a $user.profile object attached
@@ -82,7 +82,7 @@ db.get { as: $users }
 
 orm.model: 'users'
 orm.with: 'roles' {
-    set: $users { val: $users }
+    var: $users { val: $users }
 }
 
 // Each user now has $user.roles = [...roles array...]

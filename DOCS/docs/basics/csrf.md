@@ -26,3 +26,26 @@ This generates a hidden input field:
 ## Excluding URIs
 
 If you are building a pure API and handling authentication via JWT tokens, you may want to exclude certain routes from CSRF verification. API routes (`/api/...`) are excluded from CSRF protection by default.
+
+## Global Configuration
+
+ZenoEngine's CSRF configuration is fully manageable through your `.env` file, offering flexibility for API-centric architectures:
+
+```env
+# Enable/Disable CSRF entirely (Useful for stateless API servers)
+CSRF_ENABLED=true
+
+# Secure cookies (Only sent over HTTPS)
+CSRF_SECURE=false
+
+# Token key used by the engine
+CSRF_TOKEN=zenosuperspecialsecretonlyknown
+
+# SameSite policy (Lax | Strict | None)
+CSRF_SAMESITE=Lax
+
+# Comma-separated list of route prefixes to skip CSRF protection
+CSRF_EXCEPT="/api,/webhook,/health"
+```
+
+If `CSRF_ENABLED` is set to `false`, the middleware will transparently bypass CSRF checks across the entire routing tree.

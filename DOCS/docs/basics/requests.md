@@ -10,7 +10,7 @@ http.get: '/users' {
     // $request.url = full URL string
     // $request.path = "/users"
     // $request.query = map of query string params
-    print: $request.method
+    log: $request.method
 }
 ```
 
@@ -21,7 +21,7 @@ http.get: '/users' {
 ```zeno
 http.get: '/search' {
     // Access ?q=hello via $request.query
-    set: $term { val: $request.query.q }
+    var: $term { val: $request.query.q }
 }
 ```
 
@@ -30,8 +30,8 @@ http.get: '/search' {
 ```zeno
 http.post: '/login' {
     // $form contains submitted form fields
-    set: $email { val: $form.email }
-    set: $password { val: $form.password }
+    var: $email { val: $form.email }
+    var: $password { val: $form.password }
 }
 ```
 
@@ -40,7 +40,7 @@ http.post: '/login' {
 ```zeno
 http.post: '/api/users' {
     // $request.body contains the parsed JSON
-    set: $name { val: $request.body.name }
+    var: $name { val: $request.body.name }
 }
 ```
 

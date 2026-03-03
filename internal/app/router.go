@@ -88,26 +88,78 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 		}
 	}
 
-	CSRF := csrf.Protect(
-		[]byte(os.Getenv("CSRF_TOKEN")),
-		csrf.Secure(false),
-		csrf.Path("/"),
-		csrf.TrustedOrigins(trustedOrigins),
-		csrf.SameSite(csrf.SameSiteLaxMode),
-	)
+	// CSRF Configuration
+	csrfEnabled := true
+	if enabledStr := os.Getenv("CSRF_ENABLED"); enabledStr != "" {
+		csrfEnabled, _ = strconv.ParseBool(enabledStr)
+	}
 
-	// Apply CSRF but skip for /api and /health
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			path := req.URL.Path
-			if strings.HasPrefix(path, "/api") || path == "/health" {
-				next.ServeHTTP(w, req)
-				return
+	var CSRF func(http.Handler) http.Handler
+
+	if csrfEnabled {
+		// 1. Secure Token Padding (Must be 32 bytes)
+		tokenBytes := []byte(os.Getenv("CSRF_TOKEN"))
+		if len(tokenBytes) < 32 {
+			padded := make([]byte, 32)
+			copy(padded, tokenBytes)
+			tokenBytes = padded
+		} else if len(tokenBytes) > 32 {
+			tokenBytes = tokenBytes[:32]
+		}
+
+		// 2. Secure Cookie Option
+		csrfSecure := app.Env == "production" // Default to true in production
+		if secureStr := os.Getenv("CSRF_SECURE"); secureStr != "" {
+			csrfSecure, _ = strconv.ParseBool(secureStr)
+		}
+
+		// 3. SameSite Option
+		sameSite := csrf.SameSiteLaxMode
+		switch strings.ToLower(os.Getenv("CSRF_SAMESITE")) {
+		case "strict":
+			sameSite = csrf.SameSiteStrictMode
+		case "none":
+			sameSite = csrf.SameSiteNoneMode
+		}
+
+		// Configure Gorilla CSRF
+		CSRF = csrf.Protect(
+			tokenBytes,
+			csrf.Secure(csrfSecure),
+			csrf.Path("/"),
+			csrf.TrustedOrigins(trustedOrigins),
+			csrf.SameSite(sameSite),
+		)
+
+		// 4. Parse Exceptional Routes
+		exceptPaths := []string{"/api", "/health"}
+		if envExcept := os.Getenv("CSRF_EXCEPT"); envExcept != "" {
+			for _, p := range strings.Split(envExcept, ",") {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					exceptPaths = append(exceptPaths, p)
+				}
 			}
-			// CSRF middleware will automatically parse form data when needed
-			CSRF(next).ServeHTTP(w, req)
+		}
+
+		// Apply CSRF Middleware conditionally
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				path := req.URL.Path
+
+				// Check exclusions
+				for _, exempt := range exceptPaths {
+					if strings.HasPrefix(path, exempt) {
+						next.ServeHTTP(w, req)
+						return
+					}
+				}
+
+				// Apply CSRF
+				CSRF(next).ServeHTTP(w, req)
+			})
 		})
-	})
+	}
 
 	// Health Check (No CSRF)
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {

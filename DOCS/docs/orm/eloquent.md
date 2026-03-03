@@ -14,16 +14,29 @@ orm.model: 'users' {
 }
 ```
 
-### Mass Assignment
+### Mass Assignment Protection
 
-Notice that in the example above, we passed a `fillable` property to our model definition. The `$fillable` property serves as a "white list" of attributes that should be mass assignable.
+Notice that in the example above, we passed a `fillable` property to our model definition. The `fillable` property serves as a strict "white list" of attributes that are allowed to be mass assigned.
+
+> [!WARNING]
+> By default, ZenoEngine strictly enforces Mass Assignment protection. If you attempt to mass assign data using `orm.save` without defining a `fillable` array, ZenoEngine will proactively block the execution and throw an error to prevent malicious payload injections.
 
 ```zeno
 // 'is_admin' will be safely ignored if it is not in the fillable array
-orm.model: 'users'
+orm.model: 'users' {
+    fillable: 'name,email'
+}
 orm.save: $request.body
 ```
 
+If you wish to opt-out of this protection and intentionally allow all columns to be modified (for example, in internal admin scripts), you must explicitly pass `fillable: '*'` to consent to the risk.
+
+```zeno
+orm.model: 'users' {
+    fillable: '*'
+}
+orm.save: $request.body
+```
 ## Retrieving Models
 
 Once you have created a model and its associated database table, you are ready to start retrieving data from your database.
@@ -32,9 +45,12 @@ Once you have created a model and its associated database table, you are ready t
 orm.model: 'users'
 db.get { as: $users }
 
-@foreach($users as $user)
-    print: $user.name
-@endforeach
+foreach: $users {
+    as: $user
+    do: {
+        log: $user.name
+    }
+}
 ```
 
 ## Relationships
@@ -81,7 +97,7 @@ db.get { as: $users }
 
 orm.model: 'users'
 orm.with: 'posts' {
-    set: $users { val: $users }
+    var: $users { val: $users }
 }
 ```
 

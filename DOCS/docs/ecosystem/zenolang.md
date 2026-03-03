@@ -12,12 +12,12 @@ ZenoLang uses a **slot-based** syntax. Every statement is a `slot_name: value` p
 
 ```zeno
 // This is a comment
-set: $name { val: 'Alice' }
-print: $name
+var: $name { val: 'Alice' }
+log: $name
 
 // These are equivalent:
-set: $age { val: 30 }
-print: $age
+var: $age { val: 30 }
+log: $age
 ```
 
 ## Variables
@@ -25,16 +25,16 @@ print: $age
 All variables are prefixed with `$`. Assignment is done via `set`:
 
 ```zeno
-set: $name { val: 'Alice' }
-set: $age { val: 30 }
-set: $active { val: true }
+var: $name { val: 'Alice' }
+var: $age { val: 30 }
+var: $active { val: true }
 ```
 
 ## String Interpolation
 
 ```zeno
-set: $greeting { val: 'Hello, ' + $name + '!' }
-print: $greeting
+var: $greeting { val: 'Hello, ' + $name + '!' }
+log: $greeting
 ```
 
 ## Control Flow
@@ -43,27 +43,35 @@ print: $greeting
 
 ```zeno
 if: $age >= 18 {
-    print: 'Adult'
-} else: {
-    print: 'Minor'
+    then: {
+        log: 'Adult'
+    }
+    else: {
+        log: 'Minor'
+    }
 }
 ```
 
 ### Foreach Loop
 
 ```zeno
-foreach: $users as $user {
-    print: $user.name
+foreach: $users {
+    as: $user
+    do: {
+        log: $user.name
+    }
 }
 ```
 
 ### While Loop
 
 ```zeno
-set: $i { val: 0 }
+var: $i { val: 0 }
 while: $i < 10 {
-    print: $i
-    set: $i { val: $i + 1 }
+    do: {
+        log: $i
+        var: $i { val: $i + 1 }
+    }
 }
 ```
 
@@ -81,7 +89,7 @@ call: 'greet' {
     args: { name: 'Alice' }
     as: $result
 }
-print: $result
+log: $result
 ```
 
 ## Slots & Extensions

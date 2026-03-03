@@ -59,9 +59,11 @@ export default defineConfig({
             { text: 'Controllers', link: '/basics/controllers' },
             { text: 'Requests', link: '/basics/requests' },
             { text: 'Responses', link: '/basics/responses' },
+            { text: 'API Authentication', link: '/basics/authentication' },
+            { text: 'Mail & Notifications', link: '/basics/mail' },
             { text: 'Views (Blade)', link: '/views/blade' },
-            { text: 'Validation', link: '/basics/validation' },
-            { text: 'Authentication', link: '/basics/authentication' }
+            { text: 'Inertia.js SPA', link: '/views/inertia' },
+            { text: 'Validation', link: '/basics/validation' }
           ]
         },
         {
@@ -92,6 +94,7 @@ export default defineConfig({
             { text: 'Realtime SSE', link: '/advanced/realtime-sse' },
             { text: 'Background Jobs & Queues', link: '/advanced/jobs-queues' },
             { text: 'Web Server Gateway', link: '/advanced/gateway' },
+            { text: 'Edge Security (WAF/Bot)', link: '/advanced/edge-security' },
             { text: 'Filesystem & Uploads', link: '/advanced/filesystem' }
           ]
         },
@@ -100,7 +103,10 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'ZenoLang', link: '/ecosystem/zenolang' },
-            { text: 'Multi-App Architecture', link: '/ecosystem/multi-app' }
+            { text: 'Reporting Engine (PDF)', link: '/ecosystem/reporting-engine' },
+            { text: 'Stdlib API Reference', link: '/ecosystem/stdlib-reference' },
+            { text: 'Multi-App Architecture', link: '/ecosystem/multi-app' },
+            { text: 'WASM Plugins', link: '/ecosystem/wasm-plugins' }
           ]
         }
       ]

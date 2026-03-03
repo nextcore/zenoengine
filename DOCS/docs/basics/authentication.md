@@ -1,109 +1,43 @@
-# Authentication
+# Authentication (JWT)
 
-Building a secure login and registration system is one of the most common tasks when developing web applications. ZenoEngine provides built-in mechanisms for password hashing, session management, and middleware to make building authentication straightforward.
+ZenoEngine is designed from the ground up to support modern, stateless architectures. Its primary and native method for authentication is **JSON Web Tokens (JWT)**. 
 
-In this guide, we'll walk through building a complete, basic Authentication flow from scratch.
+By avoiding file-based or database-reliant sessions, ZenoEngine APIs can scale infinitely and serve multi-platform clients (Web, iOS, Android) seamlessly using Bearer tokens.
 
-## 1. Database Setup
+## 1. Environment Configuration
 
-First, you need a place to store your users. Create a table using the Query Builder `db.query` or the Schema Builder (if available). The minimum fields required are an identifier (like `email`) and a robust `password` field.
+Before issuing tokens, ensure your JWT Secret is configured in the `.env` file. This signature key is crucial to prevent token tampering.
 
-```zeno
-// In your database setup script or migration
-db.query: "
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-"
+```env
+# A secure, random 32+ character string
+JWT_SECRET="super_secret_zeno_jwt_key_that_is_very_long"
 ```
 
-## 2. The Login View (ZenoBlade)
+## 2. Generating Tokens (Login)
 
-Let's create the HTML form for users to enter their credentials. Create a file at `resources/views/auth/login.blade.zl`.
-
-Notice how we include a <code v-pre>{{ csrf_field() }}</code>. ZenoEngine requires all `POST` requests to have a CSRF token for security. We also use the `$errors` variable to display any validation or login failures.
-
-<div v-pre>
-
-```html
-<!-- resources/views/auth/login.blade.zl -->
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Login</title>
-</head>
-<body>
-    <main>
-        <h2>Sign In</h2>
-
-        <!-- Display authentication errors -->
-        @if(isset($errors['auth']))
-            <div style="color: red; padding: 10px;">
-                {{ $errors['auth'] }}
-            </div>
-        @endif
-
-        <form method="POST" action="/login">
-            {{ csrf_field() }}
-
-            <div>
-                <label>Email</label>
-                <input type="email" name="email" required>
-            </div>
-
-            <div>
-                <label>Password</label>
-                <input type="password" name="password" required>
-            </div>
-
-            <button type="submit">Log In</button>
-        </form>
-    </main>
-</body>
-</html>
-```
-</div>
-
-## 3. Handling the Routes (ZenoLang)
-
-Now, we need two routes: one `GET` route to display the form, and a `POST` route to process the submission.
+When a user submits their credentials (e.g., email and password), you verify them using ZenoEngine's built-in `hash` slots. If they are correct, you issue a JWT using `jwt.sign`.
 
 ```zeno
 // src/main.zl
 
-// 1. Show the Login Form
-http.get: '/login' {
+http.post: '/api/login' {
     do: {
-        http.view: 'auth/login'
-    }
-}
-
-// 2. Process the Login
-http.post: '/login' {
-    do: {
-        // Read the submitted form data
-        http.form: { as: $credentials }
+        http.json: { as: $credentials }
         
-        // Find the user in the database
+        // 1. Find the user
         db.table: "users"
         db.where: "email" { equals: $credentials.email }
         db.first: { as: $user }
         
-        // If user doesn't exist, redirect back with an error
         if: $user == null {
-            then: {
-                http.redirect: '/login' {
-                    flash: { error: "Invalid credentials." }
-                }
-                return
+            http.response: {
+                status: 401
+                json: { error: "Invalid credentials" }
             }
+            return
         }
         
-        // Verify the password using ZenoEngine's built-in Bcrypt hasher
+        // 2. Verify Bcrypt hash
         hash.verify: {
             text: $credentials.password
             hash: $user.password
@@ -111,98 +45,127 @@ http.post: '/login' {
         }
         
         if: $isValid == false {
-            then: {
-                http.redirect: '/login' {
-                    flash: { error: "Invalid credentials." }
-                }
-                return
+            http.response: {
+                status: 401
+                json: { error: "Invalid credentials" }
+            }
+            return
+        }
+        
+        // 3. Generate JWT Token
+        // Define your custom payload (claims). Never put sensitive data like passwords here.
+        var: $claims {
+            val: {
+                sub: $user.id,
+                email: $user.email,
+                role: "user"
             }
         }
         
-        // Password is correct! Log the user in by saving their ID to the session.
-        session.set: "user_id" { val: $user.id }
+        // Issue token expiring in 24 hours (86400 seconds)
+        jwt.sign: {
+            payload: $claims
+            expires_in: 86400
+            as: $token
+        }
         
-        // Regenerate the session ID to prevent Session Fixation attacks
-        session.regenerate: true
-        
-        // Redirect to the dashboard
-        http.redirect: '/dashboard'
+        // 4. Return to Client
+        http.response: {
+            json: {
+                message: "Login successful",
+                token: $token,
+                user: {
+                    id: $user.id,
+                    name: $user.name
+                }
+            }
+        }
     }
 }
 ```
 
-## 4. Protecting Routes with Middleware
+## 3. Protecting Routes (Middleware)
 
-Now that users can log in, we need to protect certain pages (like the `/dashboard`) so that only authenticated users can access them. We achieve this using **Middleware**.
-
-First, define the `auth` middleware logic. If the session does not contain a `user_id`, we redirect them back to the login page.
+To secure routes, create an authentication middleware that reads the `Authorization: Bearer <token>` header, verifies the signature, and injects the payload into the request scope.
 
 ```zeno
-// src/middleware/auth.zl
-http.middleware: 'auth' {
+// src/middleware/jwt_auth.zl
+
+http.middleware: 'auth.jwt' {
     do: {
-        session.get: "user_id" { as: $userId }
+        // 1. Extract Bearer token from header
+        http.header: "Authorization" { as: $authHeader }
         
-        // If no user_id is found in the session, deny access!
-        if: $userId == null {
-            then: {
-                http.redirect: '/login'
-                return
-            }
+        if: $authHeader == null {
+            http.response: { status: 401, json: { error: "Missing token" } }
+            return
         }
         
-        // Optional: Load the full user object and attach it to the request
-        db.table: "users"
-        db.where: "id" { equals: $userId }
-        db.first: { as: $authenticatedUser }
+        // (Assuming you strip the "Bearer " prefix logic here)
+        var: $token { val: str.replace($authHeader, "Bearer ", "") }
         
-        // Store it in the request scope so downstream controllers can use it
-        var: $currentUser { val: $authenticatedUser }
+        // 2. Verify the Token
+        jwt.verify: {
+            token: $token
+            as: $payload
+            error: $jwtError
+        }
         
-        // Continue to the intended route
+        if: $jwtError != null {
+            http.response: { status: 401, json: { error: "Invalid or expired token" } }
+            return
+        }
+        
+        // 3. Store the verified payload globally for downstream slots
+        var: $authUser { val: $payload }
+        
         http.next: true
     }
 }
 ```
 
-Then, apply this middleware to your protected routes:
+Apply the middleware to your private endpoints:
 
 ```zeno
 // src/main.zl
-include: 'src/middleware/auth.zl'
+include: 'src/middleware/jwt_auth.zl'
 
-http.get: '/dashboard' {
-    middleware: ['auth']
+http.get: '/api/me' {
+    middleware: ['auth.jwt']
     do: {
-        // Because the 'auth' middleware ran first, we know $currentUser exists here!
-        http.view: 'dashboard' {
-            user: $currentUser
+        // $authUser is securely injected by our middleware
+        http.response: {
+            json: $authUser
         }
     }
 }
 ```
 
-## 5. Logging Out
+## 4. Refreshing Tokens
 
-To log a user out, you clear their session data using `session.destroy` or `session.delete`.
+Tokens eventually expire. Instead of forcing the user to log in again, you can use `jwt.refresh` if the client holds a valid payload and you want to extend its life.
 
 ```zeno
-http.post: '/logout' {
-    middleware: ['auth']
+http.post: '/api/refresh' {
+    middleware: ['auth.jwt'] // Client must provide their current valid (or recently expired) token
     do: {
-        // Clear all session data
-        session.destroy: true
+        jwt.refresh: {
+            token: $token
+            expires_in: 86400 // another 24 hours
+            as: $newToken
+            error: $refreshErr
+        }
         
-        // Redirect back to the homepage
-        http.redirect: '/'
+        if: $refreshErr != null {
+            http.response: { status: 401, json: { error: "Cannot refresh token" } }
+            return
+        }
+        
+        http.response: {
+            json: { token: $newToken }
+        }
     }
 }
 ```
 
-## Summary
-
-You now have a fully functioning, secure authentication system! 
-- You safely store passwords using `hash.make` (when registering) and `hash.verify` (when logging in).
-- You prevent Cross-Site Request Forgery (CSRF) on your forms using <code v-pre>{{ csrf_field() }}</code>.
-- You protect against Session Fixation using `session.regenerate`.
-- You secure private routes using `http.middleware`.
+By relying heavily on JWT, your ZenoEngine backend becomes exceptionally fast and globally scalable out of the box.

@@ -79,6 +79,7 @@ func TestORMSlots(t *testing.T) {
 	t.Run("orm.save insert", func(t *testing.T) {
 		scope := engine.NewScope(nil)
 		eng.Execute(context.Background(), &engine.Node{Name: "orm.model", Value: "users"}, scope)
+		scope.Set("_schema_users_fillable", map[string]bool{"*": true})
 
 		data := map[string]interface{}{
 			"name":  "Bob",
@@ -106,6 +107,7 @@ func TestORMSlots(t *testing.T) {
 	t.Run("orm.save update", func(t *testing.T) {
 		scope := engine.NewScope(nil)
 		eng.Execute(context.Background(), &engine.Node{Name: "orm.model", Value: "users"}, scope)
+		scope.Set("_schema_users_fillable", map[string]bool{"*": true})
 
 		data := map[string]interface{}{
 			"id":   1,

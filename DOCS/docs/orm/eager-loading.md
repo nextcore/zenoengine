@@ -14,10 +14,13 @@ Imagine you have a post with authors:
 orm.model: 'posts'
 db.get { as: $posts }
 
-@foreach($posts as $post)
-    // This triggers a new DB query for EACH post!
-    print: $post.user.name
-@endforeach
+foreach: $posts {
+    as: $post
+    do: {
+        // This triggers a new DB query for EACH post!
+        log: $post.user.name
+    }
+}
 ```
 
 ## Solving N+1 with `orm.with`
@@ -42,13 +45,16 @@ db.get { as: $posts }
 // Step 3: Eager load authors in a SINGLE query
 orm.model: 'posts'
 orm.with: 'author' {
-    set: $posts { val: $posts }
+    var: $posts { val: $posts }
 }
 
 // Now each post has $post.author with no extra queries!
-@foreach($posts as $post)
-    print: $post.author.name
-@endforeach
+foreach: $posts {
+    as: $post
+    do: {
+        log: $post.author.name
+    }
+}
 ```
 
 ## How it Works Internally

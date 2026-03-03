@@ -50,5 +50,5 @@ You can read environment variables in your `.zl` scripts using the `env` slot:
 
 ```zeno
 env: 'APP_NAME' { as: $appName }
-print: $appName
+log: $appName
 ```

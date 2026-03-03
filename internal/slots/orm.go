@@ -146,7 +146,15 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			}
 		}
 
-		// Apply Fillable Filter if defined
+		// Security Check: Enforce Mass Assignment Protection (Opt-in Fillable)
+		fillableRaw, ok := scope.Get("_schema_" + qs.Table + "_fillable")
+		if !ok || fillableRaw == nil {
+			return fmt.Errorf("orm.save: mass assignment vulnerability blocked. Please define 'fillable' in the orm.model block, or set fillable: '*' to explicitly allow all columns")
+		}
+		fillMap := fillableRaw.(map[string]bool)
+		allowAll := fillMap["*"]
+
+		// Apply Fillable Filter
 		isFillable := func(key string) bool {
 			if key == primaryKey {
 				// We don't want to update primary keys usually, but for insert it shouldn't matter as it falls through
@@ -154,11 +162,9 @@ func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 				return false
 			}
 
-			fillableRaw, ok := scope.Get("_schema_" + qs.Table + "_fillable")
-			if !ok || fillableRaw == nil {
-				return true // No fillable defined, allow all
+			if allowAll {
+				return true
 			}
-			fillMap := fillableRaw.(map[string]bool)
 			return fillMap[key]
 		}
 		sanitizeValue := func(v interface{}) interface{} {
