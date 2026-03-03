@@ -1,0 +1,11 @@
+// ==========================================
+// TUTORIAL DATABASE CONFIGURATION
+// ==========================================
+// This file sets up the tutorial database connection
+// All tutorial modules should include this file
+
+// Note: Database "tutorial" is configured in .env as:
+// DB_TUTORIAL_DRIVER=sqlite
+// DB_TUTORIAL_NAME=./tutorial_max.db
+
+log: "📚 Tutorial database configured: tutorial_max.db"

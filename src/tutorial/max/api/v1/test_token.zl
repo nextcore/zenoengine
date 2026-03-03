@@ -1,0 +1,26 @@
+// ==========================================
+// TEST HELPER - TOKEN GENERATOR
+// ==========================================
+
+system.env: "JWT_SECRET" { as: $jwt_secret }
+coalesce: $jwt_secret { default: "ZENOLANG_DEMO_SECRET_KEY_2026"; as: $jwt_secret }
+
+http.get: /api/v1/test-token {
+    auth.login: {
+        username: "admin@demo.com"
+        password: "password123"
+        table: "tutorial_users"
+        db: "tutorial"
+        col_user: "email"
+        col_pass: "password"
+        secret: $jwt_secret
+        as: $token
+    }
+    
+    http.ok: {
+        token: $token
+        message: "Use this token in Authorization: Bearer header"
+    }
+}
+
+log: "🔧 Test Token endpoint loaded: GET /api/v1/test-token"

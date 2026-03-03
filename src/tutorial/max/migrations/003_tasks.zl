@@ -1,0 +1,28 @@
+// ==========================================
+// MIGRATION: Tasks Table
+// ==========================================
+// Creates the tasks table for task management
+// Using separate tutorial database
+
+log: "📦 Migration: Creating tasks table in tutorial database..."
+
+db.execute: "CREATE TABLE IF NOT EXISTS tutorial_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed')),
+    priority TEXT DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high')),
+    assigned_to INTEGER,
+    team_id INTEGER,
+    due_date DATETIME,
+    attachment TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    FOREIGN KEY (assigned_to) REFERENCES tutorial_users(id) ON DELETE SET NULL,
+    FOREIGN KEY (team_id) REFERENCES tutorial_teams(id) ON DELETE CASCADE
+)" {
+  db: tutorial
+}
+
+log: "✅ Tasks table created successfully in tutorial database"

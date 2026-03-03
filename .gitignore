@@ -36,4 +36,4 @@ wwwroot/dist/
 /examples/wasm-plugins/hello-rust/target
 
 # Other
-/node_modules
+node_modules/
