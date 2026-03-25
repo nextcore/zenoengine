@@ -1,0 +1,27 @@
+log: "=========================================="
+log: "🚀 MENGUJI CONTAINER BRIDGE (DOCKER RPC)"
+log: "=========================================="
+
+// 1. Uji docker.health (Cek Google sebagai simulasi Container)
+docker.health: "google.com" {
+    port: 80
+    as: $status_kesehatan
+}
+
+log: "1. Hasil Ping Container (Google Port 80):"
+dump: $status_kesehatan
+
+log: "------------------------------------------"
+
+// 2. Uji docker.call (Menerapkan HTTP Call Generic)
+docker.call: "google.com" {
+    port: 80
+    endpoint: "/"
+    method: "GET"
+    as: $respon_rpc
+}
+
+log: "2. Hasil Call RPC (Status HTTP Code):"
+dump: $respon_rpc.code
+log: "   Apakah berhasil masuk?"
+dump: $respon_rpc.success

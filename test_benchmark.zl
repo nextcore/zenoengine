@@ -1,0 +1,19 @@
+log: "Memulai kalkulasi CPU AST ZenoLang (Nested Loop 2.000.000 iterasi)..."
+
+date.now: { as: $start }
+
+$sum: 0
+
+for: "$i = 0; $i < 10000; $i++" {
+    do: {
+        math.calc: $sum + 1 { as: $sum }
+    }
+}
+
+date.now: { as: $end }
+$time_ms: $end - $start
+
+log: "----------------------------------------"
+log: "Hasil Kalkulasi: " + $sum
+log: "Waktu Dieksekusi AST ZenoLang: " + $time_ms + " ms"
+log: "----------------------------------------"

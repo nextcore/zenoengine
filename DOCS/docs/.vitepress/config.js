@@ -106,7 +106,8 @@ export default defineConfig({
             { text: 'Reporting Engine (PDF)', link: '/ecosystem/reporting-engine' },
             { text: 'Stdlib API Reference', link: '/ecosystem/stdlib-reference' },
             { text: 'Multi-App Architecture', link: '/ecosystem/multi-app' },
-            { text: 'WASM Plugins', link: '/ecosystem/wasm-plugins' }
+            { text: 'WASM Plugins', link: '/ecosystem/wasm-plugins' },
+            { text: 'Container Bridge (Docker)', link: '/ecosystem/container-bridge' }
           ]
         }
       ]
