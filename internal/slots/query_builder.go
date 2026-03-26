@@ -1008,6 +1008,18 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 			qs.Dialect.QuoteIdentifier(qs.Table), strings.Join(cols, ", "), strings.Join(placeholders, ", "))
 
+		// Fire before_insert & before_save hooks
+		data := make(map[string]interface{})
+		for _, c := range node.Children {
+			data[c.Name] = parseNodeValue(c, scope)
+		}
+		if err := fireHook(ctx, eng, qs.Table, HookBeforeSave, data, scope); err != nil {
+			return err
+		}
+		if err := fireHook(ctx, eng, qs.Table, HookBeforeInsert, data, scope); err != nil {
+			return err
+		}
+
 		executor, dialect, err := getExecutor(scope, dbMgr, qs.DBName)
 		if err != nil {
 			return err
@@ -1023,6 +1035,14 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		if dialect.Name() != "postgres" {
 			id, _ := res.LastInsertId()
 			scope.Set("db_last_id", id)
+		}
+
+		// Fire after_insert & after_save hooks
+		if err := fireHook(ctx, eng, qs.Table, HookAfterInsert, data, scope); err != nil {
+			return err
+		}
+		if err := fireHook(ctx, eng, qs.Table, HookAfterSave, data, scope); err != nil {
+			return err
 		}
 		return nil
 	}, engine.SlotMeta{Example: "db.insert\n  name: $name"})
@@ -1056,12 +1076,33 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		query := fmt.Sprintf("UPDATE %s SET %s%s", qs.Dialect.QuoteIdentifier(qs.Table), strings.Join(sets, ", "), whereClause)
+
+		// Fire before_update & before_save hooks
+		updateData := make(map[string]interface{})
+		for _, c := range node.Children {
+			updateData[c.Name] = parseNodeValue(c, scope)
+		}
+		if err := fireHook(ctx, eng, qs.Table, HookBeforeSave, updateData, scope); err != nil {
+			return err
+		}
+		if err := fireHook(ctx, eng, qs.Table, HookBeforeUpdate, updateData, scope); err != nil {
+			return err
+		}
+
 		executor, _, err := getExecutor(scope, dbMgr, qs.DBName)
 		if err != nil {
 			return err
 		}
 		_, err = executor.ExecContext(ctx, query, vals...)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Fire after_update & after_save hooks
+		if err := fireHook(ctx, eng, qs.Table, HookAfterUpdate, updateData, scope); err != nil {
+			return err
+		}
+		return fireHook(ctx, eng, qs.Table, HookAfterSave, updateData, scope)
 	}, engine.SlotMeta{Example: "db.update\n  status: 'active'"})
 
 	// DB.DELETE
@@ -1076,6 +1117,11 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			if c.Name == "as" {
 				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
+		}
+
+		// Fire before_delete hook
+		if err := fireHook(ctx, eng, qs.Table, HookBeforeDelete, nil, scope); err != nil {
+			return err
 		}
 
 		// Use BuildSQL
@@ -1093,7 +1139,9 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			count, _ := res.RowsAffected()
 			scope.Set(target, count)
 		}
-		return nil
+
+		// Fire after_delete hook
+		return fireHook(ctx, eng, qs.Table, HookAfterDelete, nil, scope)
 	}, engine.SlotMeta{Example: "db.delete\n  as: $count"})
 
 	// DB.COUNT

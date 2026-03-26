@@ -49,6 +49,9 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 	// Register Container Bridge slots (Docker RPC)
 	slots.RegisterContainerBridgeSlots(eng, r)
 
+	// Register DB Hook slots
+	slots.RegisterDBHookSlots(eng)
+
 	// Register Plugin slots
 	slots.RegisterPluginSlots(eng, r, dbMgr)
 }
