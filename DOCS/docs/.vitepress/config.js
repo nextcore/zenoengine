@@ -75,7 +75,8 @@ export default defineConfig({
             { text: 'Query Builder', link: '/database/query-builder' },
             { text: 'Pagination', link: '/database/pagination' },
             { text: 'Migrations', link: '/database/migrations' },
-            { text: 'Seeding', link: '/database/seeding' }
+            { text: 'Seeding', link: '/database/seeding' },
+            { text: 'Lifecycle Hooks', link: '/database/hooks' }
           ]
         },
         {
