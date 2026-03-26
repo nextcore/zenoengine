@@ -1,45 +1,60 @@
-# WASM Plugin Architecture
+# Plugins & Sidecar Architecture
 
-ZenoLang is an exceptionally fast interpreter, but there are times when your application requires CPU-intensive computations (such as image processing, cryptography, or heavy data crunching). For these scenarios, ZenoEngine supports a state-of-the-art **WebAssembly (WASM)** Plugin architecture.
+ZenoEngine dirancang untuk menjadi **Polyglot**. Meskipun ZenoLang sangat cepat, ada kalanya Anda membutuhkan komputasi berat atau pustaka dari bahasa lain. Ekosistem Zeno menyediakan dua mekanisme utama untuk ekstensi lokal: **WASM Plugins** dan **Native Sidecars**.
 
-## Zero CGO Engine
+## 1. WebAssembly (WASM) Plugins
 
-ZenoEngine uses [wazero](https://wazero.io), a zero CGO WebAssembly runtime. This means you do not need C-toolchains (like GCC/Clang) installed on your server to run or compile the ZenoEngine binary itself. The engine remains 100% portable across Windows, Linux, and macOS while still executing high-performance compiled plugins.
+Gunakan WASM jika Anda ingin kode tambahan berjalan dengan performa mendekati native di dalam memori ZenoEngine namun tetap terisolasi dalam *sandbox*.
 
-## Building Plugins
+### Zero CGO Engine
+ZenoEngine menggunakan [wazero](https://wazero.io), mesin WebAssembly tanpa CGO. Ini berarti Zeno tetap *portable* (single binary) tanpa membutuhkan toolchain C di server produksi.
 
-You can write your plugins in any language that compiles to WebAssembly (`.wasm`), including:
-- **Rust**
-- **C/C++**
-- **Go** (via TinyGo)
-- **AssemblyScript**
+### Build & Deploy
+Anda bisa menulis plugin dalam bahasa apapun yang mendukung komputasi ke `.wasm`:
+- **Rust**, **Go** (TinyGo), **AssemblyScript**, **Zig**, **C/C++**.
 
-Currently, plugins need to be placed securely in the `plugins/` directory of your ZenoEngine installation alongside a `manifest.yaml` configuration file.
+Tempatkan file `.wasm` di folder `plugins/` bersama `manifest.yaml`.
 
-### Sandboxing & Permissions
+---
 
-Security is paramount when executing third-party binaries. ZenoEngine employs strict sandboxing. The `manifest.yaml` file defines exactly what Host Functions your WASM code is allowed to access:
+## 2. Native Managed Sidecars
+
+Ini adalah fitur tingkat lanjut untuk menjalankan proses binari asli (native executable) yang dikelola langsung oleh ZenoEngine.
+
+### Cara Kerja
+ZenoEngine akan melakukan `spawn` proses tersebut dan berkomunikasi menggunakan **Standard I/O (JSON RPC)**. Ini sangat berguna jika Anda ingin menggunakan fitur bahasa yang tidak bisa di-compile ke WASM (misal: Python scripts atau PHP CLI).
+
+### Fitur Utama Sidecar:
+- **Lifecycle Management**: Zeno otomatis menjalankan sidecar saat startup dan mematikannya saat shutdown.
+- **Auto-Healing**: Jika proses sidecar *crash*, Zeno akan merestart-nya secara otomatis hingga 5 kali.
+- **Bi-directional RPC**: Sidecar bisa memanggil fungsi internal Zeno (database, scope, log) melalui protokol JSON khusus.
+
+---
+
+## Manifest Configuration (`manifest.yaml`)
+
+Baik WASM maupun Native Sidecar dikonfigurasi melalui manifes yang sama:
 
 ```yaml
-id: "image_processor_v1"
-name: "Image Processor Mutator"
+id: "my_extension"
+name: "Power Processor"
 version: "1.0.0"
-entrypoint: "process.wasm"
+type: "wasm" # Atau "sidecar"
+binary: "processor.wasm" # Atau "binary.exe"
 permissions:
   network: false
   filesystem: true
-  database: false
+  database: true
   scope: true
 ```
 
-If a WASM plugin attempts to execute a database query but lacks the `database: true` permission in its manifest, the execution will panic instantly.
+## Host Functions (The Bridge)
 
-## Host Functions
+Ekstensi Anda tidak berjalan "buta". Zeno menyediakan **Host Functions** agar kode Anda bisa berinteraksi dengan lingkungan:
+- `db_query`: Eksekusi SQL langsung.
+- `scope_get` / `scope_set`: Mengambil/mengubah variabel di skrip ZenoLang `.zl`.
+- `http_request`: Melakukan *outgoing call*.
+- `log`: Mengirim log ke terminal utama ZenoEngine.
 
-WASM plugins in ZenoEngine aren't just blind calculators. Through **Host Functions**, the engine extends bindings so your Rust/C code can interact with the engine environment:
-
-- `host_db_query`: Execute raw SQL queries using the active internal database connection.
-- `host_http_request`: Perform outgoing external API calls.
-- `host_scope_set` / `host_scope_get`: Read and write variables dynamically to the active ZenoLang HTTP Request scope!
-
-*Further examples and SDK scaffolding for writing ZenoEngine WASM plugins in Go/Rust will be provided in upcoming developer tools releases.*
+> [!TIP]
+> Baca panduan [Memilih Ekstensi](./choosing-extensions.md) untuk menentukan mana yang terbaik bagi proyek Anda.

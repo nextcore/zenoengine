@@ -38,7 +38,41 @@ log.info: $status_kesehatan
 // Jika mati, mengembalikan `{"status": "unhealthy", "error": "HTTP 502"}`
 ```
 
-### 2. `docker.call`
+---
+
+## 2. Load Balancing & Service Discovery (`docker.nodes`)
+
+ZenoEngine memiliki sistem *Service Discovery* bawaan. Anda bisa mendaftarkan node secara statis atau dinamis.
+
+### Registrasi Statis (di ZenoLang)
+```zeno
+docker.nodes: "payment_service" {
+    nodes: "10.0.0.1:8080, 10.0.0.2:8080"
+    weight: 200 # Node ini lebih kuat
+    check: "/health"
+}
+```
+
+### Registrasi Dinamis (Auto-Join API)
+Node eksternal (Python, Node, Go) bisa mendaftarkan dirinya sendiri ke ZenoEngine tanpa perlu menyentuh konfigurasi Zeno:
+
+```bash
+curl -X POST http://zeno-host:3000/api/zeno/register \
+  -d '{
+    "service": "ai_service",
+    "host": "10.0.5.20",
+    "port": 5000,
+    "weight": 100,
+    "ttl": 60
+  }'
+```
+
+- **Weight**: Mengatur pembagian beban (Weighted Round Robin).
+- **TTL**: Jika node tidak mengirim registrasi ulang dalam X detik, Zeno akan menghapusnya otomatis (*Self-Healing*).
+
+---
+
+## 3. `docker.call`
 Sang Panglima Utama. Mengirim RPC *(Remote Procedure Call)* otomatis bertipe JSON ke layanan mikro manapun terlepas dari bahasa perakitannya.
 
 ```zeno
@@ -50,7 +84,9 @@ docker.call: "php_legacy_payroll" {
         id_karyawan: 432
         data_absensi: $bulan_maret
     }
-    timeout: 30000 // Menunggu sampai 30 detik
+    timeout: 30000        // Menunggu sampai 30 detik
+    retry: 3              // [BARU] Coba lagi 3x jika gagal koneksi
+    circuit_breaker: true // [BARU] Aktifkan fail-fast jika servis mati total
     as: $hitung
 }
 
@@ -58,16 +94,24 @@ if: $hitung.success == true {
      log: "Sukses Menghitung. Total gaji:"
      log: $hitung.data.gaji_bersih
 } else {
-     log.error: "Peringatan! Service PHP tertidur. Pesan: " + $hitung.error
+     log.error: "Peringatan! Service bermasalah. Pesan: " + $hitung.error
+     if: $hitung.circuit_blocked {
+         log.warn: "Circuit Breaker aktif! Menghentikan sementara permintaan."
+     }
 }
 ```
 
+**Atribut Ketahanan (Resilience):**
+*   `retry` (Integer): Jumlah percobaan ulang otomatis jika terjadi kegagalan jaringan atau *timeout*.
+*   `circuit_breaker` (Boolean): Jika bernilai `true`, Zeno akan memantau kesehatan layanan tersebut secara otomatis. Jika terjadi 5 kali kegagalan berturut-turut, *circuit* akan terbuka selama 30 detik dan langsung memblokir semua permintaan berikutnya (`fail-fast`) untuk mencegah penumpukan beban pada server.
+
 **Hasil Objek (Balasan):**
-*   `success` (Boolean): Bernilai `true` murni apabila HTTP Code yang diterima berada di rentang 200 hingga 299.
-*   `code` (Integer): Kode asil angka HTTP (Contoh: `200`, `404`, `500`).
-*   `error` (String): Pesan putus koneksi murni (hanya ada jika DNS tidak mengenali *host container* atau koneksi melebih batas waktu / *timeout*).
-*   `data` (Object/Array): Otomatis mem-*parsing* teks balasan Container pekerja jika ia mengirim data bertipe *Valid JSON*.
-*   `raw` (String): Mengambil isi utuh balasan sekalipun itu bukan JSON (Cth: teks HTML/XML).
+*   `success` (Boolean): `true` jika HTTP Code 200-299.
+*   `code` (Integer): Kode HTTP asli.
+*   `error` (String): Pesan kesalahan koneksi atau "Circuit Breaker: Open".
+*   `circuit_blocked` (Boolean): Bernilai `true` jika permintaan dibatalkan oleh *Circuit Breaker*.
+*   `data` (Object/Array): Hasil parsing JSON otomatis.
+*   `raw` (String): Isi balasan utuh.
 
 ---
 
