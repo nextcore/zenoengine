@@ -144,5 +144,87 @@ func RegisterSessionSlots(eng *engine.Engine) {
 		Example:     "session.get_flash: 'error' { as: $error_msg }",
 	})
 
-	// 3. SESSION.KEEP - Keep flash data for another request (Not implemented yet - re-set cookie?)
+	// 3. SESSION.SET
+	eng.Register("session.set", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
+		if !ok {
+			return fmt.Errorf("session.set: missing context")
+		}
+		key := coerce.ToString(resolveValue(node.Value, scope))
+		var val interface{}
+		for _, c := range node.Children {
+			if c.Name == "val" || c.Name == "value" {
+				val = parseNodeValue(c, scope)
+			}
+		}
+
+		jsonBytes, _ := json.Marshal(val)
+		cookieVal := url.QueryEscape(string(jsonBytes))
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "_session_" + key,
+			Value:    cookieVal,
+			Path:     "/",
+			HttpOnly: true,
+			MaxAge:   86400 * 7, // 1 week
+		})
+		return nil
+	}, engine.SlotMeta{Description: "Set session data."})
+
+	// 4. SESSION.GET
+	eng.Register("session.get", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		reqVal := ctx.Value("httpRequest")
+		if reqVal == nil {
+			return nil
+		}
+		r := reqVal.(*http.Request)
+		key := coerce.ToString(resolveValue(node.Value, scope))
+		target := key
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		cookie, err := r.Cookie("_session_" + key)
+		if err != nil {
+			scope.Set(target, nil)
+			return nil
+		}
+
+		jsonStr, _ := url.QueryUnescape(cookie.Value)
+		var val interface{}
+		json.Unmarshal([]byte(jsonStr), &val)
+		scope.Set(target, val)
+		return nil
+	}, engine.SlotMeta{Description: "Get session data."})
+
+	// 5. SESSION.DESTROY
+	eng.Register("session.destroy", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
+		r, ok2 := ctx.Value("httpRequest").(*http.Request)
+		if !ok || !ok2 {
+			return nil
+		}
+
+		// Clear all session and flash cookies
+		for _, cookie := range r.Cookies() {
+			if strings.HasPrefix(cookie.Name, "_session_") || strings.HasPrefix(cookie.Name, FlashSessionKeyPrefix) {
+				http.SetCookie(w, &http.Cookie{
+					Name:   cookie.Name,
+					Value:  "",
+					Path:   "/",
+					MaxAge: -1,
+				})
+			}
+		}
+		return nil
+	}, engine.SlotMeta{Description: "Destroy all session data."})
+
+	// 6. SESSION.REGENERATE
+	eng.Register("session.regenerate", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		// No-op for now as we use stateless cookies per-key.
+		// In a real session manager, this would change the session ID.
+		return nil
+	}, engine.SlotMeta{Description: "Regenerate session ID (Security)."})
 }

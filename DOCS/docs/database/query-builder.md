@@ -30,14 +30,60 @@ db.first { as: $user }
 
 ### Basic Where Clauses
 
+### `db.where`
+
+Add a WHERE filter to the query. You can use the explicit format or the shorthand syntax.
+
+**Explicit Format:**
 ```zeno
-db.table: 'users'
-db.where {
-    col: 'votes'
-    op: '>'
-    val: 100
+db.where: {
+    col: "email"
+    op: "LIKE"
+    val: "%@gmail.com"
 }
-db.get { as: $users }
+```
+
+**Shorthand Syntax:**
+```zeno
+// Default operator is "="
+db.where: "email" { equals: "test@example.com" }
+
+// Or even more concise
+db.where: { email: "test@example.com" }
+
+// Multiple conditions
+db.where: { role: "admin", status: "active" }
+```
+
+### `db.first`
+
+Retrieve the first row that matches the current query state.
+
+```zeno
+db.table: "users"
+db.where: "id" { equals: 1 }
+db.first: { as: $user }
+
+if: $user != null {
+    then: {
+        dump: "User found: " + $user.name
+    }
+}
+```
+
+### `db.last` [NEW]
+
+Retrieve the last row (ordered by `id DESC`) that matches the query.
+
+```zeno
+db.table: "logs"
+db.last: { as: $latestLog }
+
+if: $latestLog != null {
+    then: {
+        dump: "Last log: " + $latestLog.message
+    }
+}
 ```
 
 ### Or Where Clauses

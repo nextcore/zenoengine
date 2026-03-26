@@ -14,6 +14,32 @@ http.get: '/api/users' {
 }
 ```
 
+### Redirecting with Flash Data
+
+You can pass temporary "flash" data during a redirect. This data will be available in the next request's session (perfect for notifications).
+
+```zeno
+http.post: '/login' {
+    do: {
+        // ... authentication logic ...
+        if: $authFailed == true {
+            then: {
+                http.redirect: '/login' {
+                    flash: { error: "Invalid credentials." }
+                }
+                return
+            }
+        }
+    }
+}
+```
+
+On the login page, you can retrieve the flash message:
+
+```zeno
+session.get_flash: 'error' { as: $errorMessage }
+```
+
 ### Redirect Responses
 
 ```zeno

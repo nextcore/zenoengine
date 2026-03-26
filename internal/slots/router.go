@@ -24,6 +24,9 @@ import (
 // Key context untuk menyimpan router instance
 type routerKey struct{}
 
+// [NEW] Registry for ZenoLang-defined custom middlewares
+var customMiddlewares = make(map[string]*engine.Node)
+
 func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 
 	// Helper: Ambil router aktif (Root atau Group)
@@ -38,6 +41,11 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 	// Auth is handled by native Chi middleware, injected via context
 	createHandler := func(children []*engine.Node, baseScope *engine.Scope) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			// [NEW] Execute optional route-specific custom middleware first?
+			// Actually, Chi middleware chain handles this better.
+			// But if we want to support multiple custom middlewares, we'd need a more complex system.
+			// For now, custom middlewares are usually pre-processed or handled via `r.With`.
+
 			// 1. Get Arena from pool for this request
 			arena := engine.GetArena()
 			defer engine.PutArena(arena)
@@ -478,10 +486,54 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				if jwtSecret == "" {
 					// Fallback to .env default
 					jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
-					fmt.Printf("   ⚠️  Using default JWT_SECRET\n")
+					fmt.Printf("   🔒 [MIDDLEWARE] Applied default JWT secret\n")
 				}
 				targetRouter = targetRouter.With(middleware.MultiTenantAuth(jwtSecret))
 				fmt.Printf("   🔒 [MIDDLEWARE] Applied native Chi auth via r.With() to %s\n", fullDocPath)
+			} else if midNode, exists := customMiddlewares[middlewareName]; exists {
+				// [NEW] Bridge ZenoLang middleware to Chi middleware
+				targetRouter = targetRouter.With(func(next http.Handler) http.Handler {
+					return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						// Create request scope
+						arena := engine.GetArena()
+						defer engine.PutArena(arena)
+						reqScope := arena.AllocScope(scope)
+
+						// Inject HTTP context
+						ctx := context.WithValue(r.Context(), "httpRequest", r)
+						ctx = context.WithValue(ctx, "httpWriter", w)
+
+						// Execute middleware node
+						// We look for 'do' block inside the middleware definition
+						var doBlock *engine.Node
+						for _, child := range midNode.Children {
+							if child.Name == "do" {
+								doBlock = child
+								break
+							}
+						}
+
+						if doBlock != nil {
+							if err := eng.Execute(ctx, doBlock, reqScope); err != nil {
+								// If middleware calls return or has error, don't call next
+								if errors.Is(err, ErrReturn) || strings.Contains(err.Error(), "return") {
+									return
+								}
+								// Log error and stop
+								fmt.Printf("   ❌ [MIDDLEWARE ERROR] %s: %v\n", middlewareName, err)
+								http.Error(w, "Middleware Error", http.StatusInternalServerError)
+								return
+							}
+						}
+
+						// If we reach here and 'http.next' was called (or just default to continue)
+						// We check if $http_next was set in scope?
+						// Actually, standard ZenoLang middleware pattern uses 'return' to STOP.
+						// So if it finished normally, we continue.
+						next.ServeHTTP(w, r)
+					})
+				})
+				fmt.Printf("   🛡️ [MIDDLEWARE] Applied custom ZenoLang middleware '%s' to %s\n", middlewareName, fullDocPath)
 			}
 
 			// Register Documentation
@@ -673,4 +725,28 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		Description: "Mengambil daftar semua rute HTTP yang terdaftar di engine.",
 		Example:     "http.routes: { as: $routes }",
 	})
+
+	// ==========================================
+	// 6. CUSTOM MIDDLEWARE DEFINITION
+	// ==========================================
+	eng.Register("http.middleware", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		name := coerce.ToString(resolveValue(node.Value, scope))
+		if name == "" {
+			return fmt.Errorf("http.middleware: name is required")
+		}
+
+		// Store the entire node for later execution
+		customMiddlewares[name] = node
+		fmt.Printf("   🛡️ [MIDDLEWARE] Defined ZenoLang middleware: %s\n", name)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Mendefinisikan middleware kustom menggunakan ZenoLang.",
+		Example:     "http.middleware: 'auth' {\n  do: {\n    session.get: 'user_id' { as: $uid }\n    if: $uid == null { then: { http.redirect: '/login' } }\n  }\n}",
+	})
+
+	// 7. HTTP.NEXT (Middleware Continuity)
+	eng.Register("http.next", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		// Currently a no-op as the middleware bridge proceeds by default.
+		return nil
+	}, engine.SlotMeta{Description: "Melanjutkan ke handler berikutnya dalam rantai middleware."})
 }

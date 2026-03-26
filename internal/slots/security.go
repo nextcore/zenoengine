@@ -115,6 +115,12 @@ func RegisterSecuritySlots(eng *engine.Engine) {
 		scope.Set(target, isValid)
 		return nil
 	}, engine.SlotMeta{Example: "crypto.verify_aspnet\n  hash: $db_hash\n  password: $input_pass"})
+
+	// ==========================================
+	// ALIASES FOR TEMPLATE COMPATIBILITY
+	// ==========================================
+	eng.Register("hash.make", eng.Registry["crypto.hash"], eng.Docs["crypto.hash"])
+	eng.Register("hash.verify", eng.Registry["crypto.verify"], eng.Docs["crypto.verify"])
 }
 
 // VerifyAspNetHash verifies ASP.NET Identity V3 password hashes

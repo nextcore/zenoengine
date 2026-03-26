@@ -25,6 +25,25 @@ http.get: '/search' {
 }
 ```
 
+### Capturing All Form Data
+
+If you want to capture the entire form data as a map (object), use `http.form` without a specific key.
+
+```zeno
+http.post: '/register' {
+    do: {
+        http.form: { as: $formData }
+        
+        db.table: "users"
+        db.insert: {
+            name: $formData.name,
+            email: $formData.email,
+            password: $formData.password
+        }
+    }
+}
+```
+
 ### Form Data (POST)
 
 ```zeno

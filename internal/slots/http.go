@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"zeno/pkg/engine"
 	"zeno/pkg/fastjson"
@@ -71,20 +72,42 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 			return fmt.Errorf("http.redirect: not in http context")
 		}
 
-		url := coerce.ToString(resolveValue(node.Value, scope))
-		if url == "" {
+		urlStr := coerce.ToString(resolveValue(node.Value, scope))
+		if urlStr == "" {
 			for _, c := range node.Children {
 				if c.Name == "to" || c.Name == "url" {
-					url = coerce.ToString(parseNodeValue(c, scope))
+					urlStr = coerce.ToString(parseNodeValue(c, scope))
 				}
 			}
 		}
 
-		if url == "" {
+		if urlStr == "" {
 			return fmt.Errorf("http.redirect: url is required")
 		}
 
-		http.Redirect(w, r, url, http.StatusFound)
+		// [NEW] Support for Flash Data: http.redirect: '/login' { flash: { error: 'msg' } }
+		for _, c := range node.Children {
+			if c.Name == "flash" {
+				flashData := parseNodeValue(c, scope)
+				if m, ok := flashData.(map[string]interface{}); ok {
+					// We leverage session.flash functionality manually here
+					for k, v := range m {
+						// Delegate to session.flash logic (but since we don't want cyclic dependency or complex lookups, we use the cookie logic directly)
+						jsonBytes, _ := json.Marshal(v)
+						cookieVal := url.QueryEscape(string(jsonBytes))
+						http.SetCookie(w, &http.Cookie{
+							Name:     "_flash_" + k,
+							Value:    cookieVal,
+							Path:     "/",
+							HttpOnly: true,
+							MaxAge:   300,
+						})
+					}
+				}
+			}
+		}
+
+		http.Redirect(w, r, urlStr, http.StatusFound)
 		return ErrReturn
 	}, engine.SlotMeta{Example: "http.redirect: '/home'"})
 
@@ -126,7 +149,10 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 
 	// 4. HTTP.FORM
 	eng.Register("http.form", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		key := coerce.ToString(resolveValue(node.Value, scope))
+		key := ""
+		if node.Value != nil {
+			key = coerce.ToString(resolveValue(node.Value, scope))
+		}
 		target := key
 
 		for _, c := range node.Children {
@@ -136,17 +162,25 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 		}
 
 		// Get form data injected by Router
-		if formData, ok := scope.Get("form"); ok {
-			if m, ok := formData.(map[string]interface{}); ok {
-				if val, exists := m[key]; exists {
-					scope.Set(target, val)
-					return nil
-				}
-			}
+		formDataRaw, ok := scope.Get("form")
+		if !ok || formDataRaw == nil {
+			scope.Set(target, nil)
+			return nil
+		}
+		formData := formDataRaw.(map[string]interface{})
+
+		// [NEW] If no key was provided, return the entire form map
+		if key == "" {
+			scope.Set(target, formData)
+			return nil
 		}
 
-		// If not present, set empty string
-		scope.Set(target, "")
+		if val, exists := formData[key]; exists {
+			scope.Set(target, val)
+		} else {
+			scope.Set(target, "")
+		}
+
 		return nil
 	}, engine.SlotMeta{Example: "http.form: 'email'\n  as: $email"})
 

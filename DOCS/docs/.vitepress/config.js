@@ -58,6 +58,7 @@ export default defineConfig({
             { text: 'CSRF Protection', link: '/basics/csrf' },
             { text: 'Controllers', link: '/basics/controllers' },
             { text: 'Requests', link: '/basics/requests' },
+            { text: 'Sessions', link: '/basics/sessions' },
             { text: 'Responses', link: '/basics/responses' },
             { text: 'API Authentication', link: '/basics/authentication' },
             { text: 'Mail & Notifications', link: '/basics/mail' },

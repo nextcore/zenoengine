@@ -558,18 +558,69 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		op := "="
 		var val interface{}
 
+		// [FIX] Support for shorthand: db.where: "email" { equals: $val }
+		// Or: db.where: { email: $val }
+		if node.Value != nil {
+			col = coerce.ToString(resolveValue(node.Value, scope))
+		}
+
 		if len(node.Children) > 0 {
+			// Check for 'col', 'op', 'val' explicitly first
+			hasExplicit := false
 			for _, c := range node.Children {
-				if c.Name == "col" {
-					// [STANDARDIZATION] Use parseNodeValue so quotes are stripped & variables supported
-					col = coerce.ToString(parseNodeValue(c, scope))
+				if c.Name == "col" || c.Name == "op" || c.Name == "val" {
+					hasExplicit = true
+					break
 				}
-				if c.Name == "op" {
-					// [STANDARDIZATION] Same, so op: "LIKE" and op: LIKE are both valid
-					op = coerce.ToString(parseNodeValue(c, scope))
+			}
+
+			if hasExplicit {
+				for _, c := range node.Children {
+					if c.Name == "col" {
+						col = coerce.ToString(parseNodeValue(c, scope))
+					}
+					if c.Name == "op" {
+						op = coerce.ToString(parseNodeValue(c, scope))
+					}
+					if c.Name == "val" {
+						val = parseNodeValue(c, scope)
+					}
 				}
-				if c.Name == "val" {
-					val = parseNodeValue(c, scope)
+			} else {
+				// Shorthand mode: iterate all children
+				// Example 1: db.where: "id" { equals: 1 } -> col="id", op="=", val=1 (if child name is 'equals')
+				// Example 2: db.where { id: 1 } -> col="id", op="=", val=1
+				for _, c := range node.Children {
+					childVal := parseNodeValue(c, scope)
+					if col == "" {
+						col = c.Name
+						val = childVal
+					} else {
+						// If col is already set (from node.Value), then child name might be the operator
+						// e.g. db.where: "id" { equals: 1 } or { not: 1 }
+						switch strings.ToLower(c.Name) {
+						case "equals", "eq", "is":
+							op = "="
+							val = childVal
+						case "not", "neq", "is_not":
+							op = "!="
+							val = childVal
+						case "gt", "greater_than":
+							op = ">"
+							val = childVal
+						case "lt", "less_than":
+							op = "<"
+							val = childVal
+						case "contains", "like":
+							op = "LIKE"
+							val = childVal
+						default:
+							// Handle nested object as value if it's the only child?
+							// For now, assume child name is column and child value is val
+							col = c.Name
+							val = childVal
+						}
+					}
 				}
 			}
 		}
@@ -858,6 +909,82 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		Inputs: map[string]engine.InputMeta{
 			"as": {Description: "Variable name to store result", Required: true},
 		},
+	})
+
+	// DB.LAST
+	eng.Register("db.last", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		qsVal, ok := scope.Get("_query_state")
+		if !ok {
+			return fmt.Errorf("db.last called without db.table")
+		}
+		qs := qsVal.(*QueryState)
+		target := "row"
+		for _, c := range node.Children {
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		// Save old state
+		oldOrderBy := qs.OrderBy
+		oldLimit := qs.Limit
+
+		// Guess PK if not established? Usually 'id DESC'
+		if qs.OrderBy == "" {
+			qs.OrderBy = "id DESC"
+		} else if !strings.Contains(strings.ToUpper(qs.OrderBy), "DESC") {
+			// If user specified order by but not DESC, it's ambiguous.
+			// But for db.last we FORCE DESC on the first column of order by?
+			// Simple fallback: if no DESC, add it.
+			qs.OrderBy = qs.OrderBy + " DESC"
+		}
+		qs.Limit = 1
+
+		query, args := qs.BuildSQL("SELECT")
+
+		// Restore
+		qs.OrderBy = oldOrderBy
+		qs.Limit = oldLimit
+
+		executor, _, err := getExecutor(scope, dbMgr, qs.DBName)
+		if err != nil {
+			return err
+		}
+
+		rows, err := executor.QueryContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		cols, _ := rows.Columns()
+		if rows.Next() {
+			columns := make([]interface{}, len(cols))
+			columnPointers := make([]interface{}, len(cols))
+			for i := range columns {
+				columnPointers[i] = &columns[i]
+			}
+			rows.Scan(columnPointers...)
+			m := make(map[string]interface{})
+			for i, colName := range cols {
+				val := columns[i]
+				b, ok := val.([]byte)
+				if ok {
+					m[colName] = string(b)
+				} else {
+					m[colName] = val
+				}
+			}
+			scope.Set(target, m)
+			scope.Set(target+"_found", true)
+		} else {
+			scope.Set(target, nil)
+			scope.Set(target+"_found", false)
+		}
+		return nil
+	}, engine.SlotMeta{
+		Description: "Retrieve the last row (ordered by 'id DESC') from the database.",
+		Example:     "db.last\n  as: $user",
 	})
 
 	// DB.INSERT

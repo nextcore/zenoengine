@@ -162,6 +162,14 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	})
 
 	// ==========================================
+	// SLOT: VAR (Standard variable definition)
+	// ==========================================
+	eng.Register("var", eng.Registry["scope.set"], engine.SlotMeta{
+		Description: "Standard variable definition/assignment slot.",
+		Example:     "var: $user { val: $data }",
+	})
+
+	// ==========================================
 	// SLOT: LOGIC.COMPARE
 	// ==========================================
 	eng.Register("logic.compare", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
