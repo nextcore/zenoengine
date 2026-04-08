@@ -18,6 +18,13 @@ func NewScope(parent *Scope) *Scope {
 	}
 }
 
+// SetParent updates the parent of the scope
+func (s *Scope) SetParent(parent *Scope) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.parent = parent
+}
+
 // Set menyimpan variabel dengan aman (Thread-Safe)
 func (s *Scope) Set(key string, val interface{}) {
 	s.mu.Lock()
