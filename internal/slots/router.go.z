@@ -46,11 +46,12 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			// But if we want to support multiple custom middlewares, we'd need a more complex system.
 			// For now, custom middlewares are usually pre-processed or handled via `r.With`.
 
-			// 1. Get Scope from pool for this request (avoids Arena GC pointer hiding issues)
-			reqScope := engine.GetScope()
-			reqScope.Reset() // Ensure clean state
-			reqScope.SetParent(baseScope)
-			defer engine.PutScope(reqScope)
+			// 1. Get Arena from pool for this request
+			arena := engine.GetArena()
+			defer engine.PutArena(arena)
+
+			// 2. Create Request Scope in the Arena
+			reqScope := arena.AllocScope(baseScope)
 
 			// 2. Inject URL Params (e.g., /news/{id} -> $id)
 			rctx := chi.RouteContext(r.Context())
@@ -493,11 +494,10 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 				// [NEW] Bridge ZenoLang middleware to Chi middleware
 				targetRouter = targetRouter.With(func(next http.Handler) http.Handler {
 					return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						// Create request scope from pool
-						reqScope := engine.GetScope()
-						reqScope.Reset()
-						reqScope.SetParent(scope)
-						defer engine.PutScope(reqScope)
+						// Create request scope
+						arena := engine.GetArena()
+						defer engine.PutArena(arena)
+						reqScope := arena.AllocScope(scope)
 
 						// Inject HTTP context
 						ctx := context.WithValue(r.Context(), "httpRequest", r)
