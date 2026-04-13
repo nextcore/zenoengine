@@ -40,7 +40,7 @@ func RegisterCaptchaSlots(eng *engine.Engine, r *chi.Mux) {
 			val := parseNodeValue(c, scope)
 			switch c.Name {
 			case "as":
-				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+				target = strings.TrimPrefix(coerce.ToString(val), "$")
 			case "length":
 				if l, err := coerce.ToInt(val); err == nil && l > 0 {
 					length = l
@@ -50,6 +50,7 @@ func RegisterCaptchaSlots(eng *engine.Engine, r *chi.Mux) {
 
 		id := captcha.NewLen(length)
 		scope.Set(target, id)
+		// fmt.Printf("   [DEBUG] captcha.new: target=%s, id=%s\n", target, id)
 		return nil
 	}, engine.SlotMeta{
 		Description: "Membuat captcha baru dan menyimpan ID-nya ke scope.",
@@ -190,10 +191,16 @@ func RegisterCaptchaSlots(eng *engine.Engine, r *chi.Mux) {
 			prefix = "/" + prefix
 		}
 
+		if r == nil {
+			fmt.Printf("   ⚠️  [CAPTCHA] Skip captcha.serve: router is nil (worker mode?)\n")
+			return nil
+		}
+
 		// Daftarkan handler ke router
 		handler := captcha.Server(captcha.StdWidth, captcha.StdHeight)
 		r.Handle(prefix+"/*", http.StripPrefix(prefix, handler))
 
+		fmt.Printf("   ➕ [CAPTCHA] Serving at %s/*\n", prefix)
 		return nil
 	}, engine.SlotMeta{
 		Description: "Mendaftarkan route handler captcha ke router. Melayani PNG dan WAV secara otomatis.",
