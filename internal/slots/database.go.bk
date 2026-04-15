@@ -31,7 +31,16 @@ func buildQuery(node *engine.Node, scope *engine.Scope) (string, string, []inter
 		if c.Name == "db" || c.Name == "connection" {
 			dbName = coerce.ToString(parseNodeValue(c, scope))
 		}
-
+		if c.Name == "val" {
+			val := parseNodeValue(c, scope)
+			args = append(args, val)
+		}
+		if c.Name == "params" {
+			val := parseNodeValue(c, scope)
+			if list, err := coerce.ToSlice(val); err == nil {
+				args = append(args, list...)
+			}
+		}
 		// Add support for 'bind' parameter
 		if c.Name == "bind" {
 			// Check if bind has children (any keyname is allowed, order is preserved)
@@ -44,46 +53,6 @@ func buildQuery(node *engine.Node, scope *engine.Scope) (string, string, []inter
 		}
 	}
 	return query, dbName, args, nil
-}
-
-// replacePlaceholders replaces positional '?' with dialect-specific placeholders
-func replacePlaceholders(query string, dialect dbmanager.Dialect) string {
-	var result strings.Builder
-	placeholderCount := 0
-	inSingleQuote := false
-	inDoubleQuote := false
-	inBackTick := false
-
-	for i := 0; i < len(query); i++ {
-		char := query[i]
-		switch char {
-		case '\'':
-			if !inDoubleQuote && !inBackTick {
-				inSingleQuote = !inSingleQuote
-			}
-			result.WriteByte(char)
-		case '"':
-			if !inSingleQuote && !inBackTick {
-				inDoubleQuote = !inDoubleQuote
-			}
-			result.WriteByte(char)
-		case '`':
-			if !inSingleQuote && !inDoubleQuote {
-				inBackTick = !inBackTick
-			}
-			result.WriteByte(char)
-		case '?':
-			if !inSingleQuote && !inDoubleQuote && !inBackTick {
-				placeholderCount++
-				result.WriteString(dialect.Placeholder(placeholderCount))
-			} else {
-				result.WriteByte(char)
-			}
-		default:
-			result.WriteByte(char)
-		}
-	}
-	return result.String()
 }
 
 func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
@@ -114,20 +83,17 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			return err
 		}
 
-		// Normalize placeholders for the current dialect
-		query = replacePlaceholders(query, dialect)
+		// [OPTIONAL] We could use dialect here to transform query placeholders if needed
+		// for now we just pass it through.
+		_ = dialect
 
 		rows, err := executor.QueryContext(ctx, query, args...)
 		if err != nil {
-			return fmt.Errorf("db.select execution error: %w", err)
+			return err
 		}
 		defer rows.Close()
 
-		cols, err := rows.Columns()
-		if err != nil {
-			return fmt.Errorf("db.select columns error: %w", err)
-		}
-
+		cols, _ := rows.Columns()
 		var results []map[string]interface{}
 
 		for rows.Next() {
@@ -154,11 +120,6 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			results = append(results, m)
 		}
 
-		if err := rows.Err(); err != nil {
-			return fmt.Errorf("db.select iteration error: %w", err)
-		}
-
-
 		if onlyFirst {
 			if len(results) > 0 {
 				scope.Set(target, results[0])
@@ -180,6 +141,8 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			"first":  {Description: "Return only the first row as a map (Default: false)", Required: false, Type: "bool"},
 			"db":     {Description: "Database connection name", Required: false, Type: "string"},
 			"bind":   {Description: "Bind parameters container", Required: false, Type: "any"},
+			"val":    {Description: "Single bind value", Required: false, Type: "any"},
+			"params": {Description: "List of bind values", Required: false, Type: "list"},
 		},
 	})
 	eng.Register("mysql.select", handlerSelect, engine.SlotMeta{Description: "Alias for db.select"})
@@ -196,22 +159,18 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			return fmt.Errorf("db.execute: query cannot be empty")
 		}
 
-		executor, dialect, err := getExecutor(scope, dbMgr, dbName)
+		executor, _, err := getExecutor(scope, dbMgr, dbName)
 		if err != nil {
 			return err
 		}
 
-		// Normalize placeholders
-		query = replacePlaceholders(query, dialect)
-
 		res, err := executor.ExecContext(ctx, query, args...)
 		if err != nil {
-			return fmt.Errorf("db.execute execution error: %w", err)
+			return err
 		}
 
 		affected, _ := res.RowsAffected()
 		lastId, _ := res.LastInsertId()
-
 
 		scope.Set("db_affected", affected)
 		scope.Set("db_last_id", lastId)
@@ -226,6 +185,8 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		Inputs: map[string]engine.InputMeta{
 			"db":     {Description: "Database connection name", Required: false, Type: "string"},
 			"bind":   {Description: "Bind parameters container", Required: false, Type: "any"},
+			"val":    {Description: "Single bind value", Required: false, Type: "any"},
+			"params": {Description: "List of bind values", Required: false, Type: "list"},
 		},
 	})
 	eng.Register("mysql.execute", handlerExecute, engine.SlotMeta{Description: "Alias for db.execute"})
