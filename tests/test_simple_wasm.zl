@@ -1,8 +1,0 @@
-// Simple test for Rust WASM plugin
-
-rust.greet {
-    name: "World"
-}
-
-log.info: "Result:"
-log.info: $message
