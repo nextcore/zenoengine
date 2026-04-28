@@ -1,0 +1,10 @@
+log: "Starting Minimalist ZenoEngine..."
+
+http.get: "/hello" {
+    log: "Someone visited /hello"
+    body: "Hello from Minimalist ZenoEngine!"
+}
+
+http.get: "/about" {
+    body: "This is a minimalist version of the complex ZenoEngine."
+}
