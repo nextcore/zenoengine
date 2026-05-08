@@ -3,6 +3,12 @@ log: "🚀 ZenoEngine Started..."
 
 
 
+view.root: 'views'
+
+http.get: '/' {
+    view.blade: 'welcome'
+}
+
 // 404 Handler
 http.get: /* {
   do: {

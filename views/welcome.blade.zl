@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to ZenoEngine</title>
+    <link rel="stylesheet" href="/public/css/welcome.css">
+</head>
+<body>
+    <div class="container">
+        <div class="glass-card">
+            <div class="badge">Clean Install</div>
+            <div class="logo">ZENO</div>
+            <h1>Welcome to ZenoEngine</h1>
+            <p>The high-performance, Laravel-like engine for Go. Build fast, scalable web applications with the simplicity of ZenoLang.</p>
+            <a href="https://github.com/nextcore/zenoengine" class="btn" target="_blank">Explore Documentation</a>
+            <div class="footer">
+                &copy; 2026 ZenoEngine. All rights reserved.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
