@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"strings"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 	"zeno/pkg/utils/coerce"
 
 	"html"
@@ -51,7 +52,7 @@ func viewRoot(scope *engine.Scope) string {
 }
 
 func RegisterBladeSlots(eng *engine.Engine) {
-	RegisterLogicSlots(eng)
+	slots.RegisterLogicSlots(eng)
 
 	eng.Register("blade.render_string", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		var template string
@@ -2372,4 +2373,18 @@ func findEndCannot(s string) int {
 		}
 	}
 	return -1
+}
+
+// Exported wrappers for use by other packages
+
+func ViewRoot(scope *engine.Scope) string {
+	return viewRoot(scope)
+}
+
+func EnsureBladeExt(path string) string {
+	return ensureBladeExt(path)
+}
+
+func GetCachedOrParse(fullPath string) (*engine.Node, error) {
+	return getCachedOrParse(fullPath)
 }

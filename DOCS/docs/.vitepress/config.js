@@ -105,6 +105,7 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'ZenoLang', link: '/ecosystem/zenolang' },
+            { text: 'Embedding ZenoLang', link: '/ecosystem/embed' },
             { text: 'Stdlib API Reference', link: '/ecosystem/stdlib-reference' },
             { text: 'Multi-App Architecture', link: '/ecosystem/multi-app' },
             { text: 'Container Bridge (Docker)', link: '/ecosystem/container-bridge' }

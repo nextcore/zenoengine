@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -8,13 +8,14 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 )
 
 func TestBladeXSSProtection(t *testing.T) {
 	// Setup Engine
 	eng := engine.NewEngine()
 	RegisterBladeSlots(eng)
-	RegisterLogicSlots(eng)
+	slots.RegisterLogicSlots(eng)
 
 	// Create view with both escaped and unescaped echo
 	viewContent := `

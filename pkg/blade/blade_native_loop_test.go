@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -8,13 +8,14 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 )
 
 func TestNativeLoopVariable(t *testing.T) {
 	// 1. Setup Engine
 	eng := engine.NewEngine()
 	RegisterBladeSlots(eng) // Native
-	RegisterLogicSlots(eng) // For loop
+	slots.RegisterLogicSlots(eng) // For loop
 	
 	// 2. Mock View
 	os.Mkdir("views", 0755)

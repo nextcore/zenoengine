@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -8,13 +8,14 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 )
 
 func TestNativeRenderer(t *testing.T) {
 	// 1. Setup Engine
 	eng := engine.NewEngine()
 	RegisterBladeSlots(eng) // Updated function name
-	RegisterLogicSlots(eng)
+	slots.RegisterLogicSlots(eng)
 	
 	// 2. Create Temp View File
 	viewContent := `<h1>Hello {{ $name }}</h1>

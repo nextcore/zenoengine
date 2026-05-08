@@ -2215,15 +2215,15 @@ Eager load a relationship.
 
 ## Schema
 
-### `schema.create`
+### `db.create_table`
 
 Create a new database table using fluent schema builder.
 
 **Example:**
 ```zeno
-schema.create: 'users' {
-  column.id: 'id'
-  column.string: 'name'
+db.create_table: 'users' {
+  db.id: 'id'
+  db.string: 'name'
 }
 ```
 

@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 	"zeno/pkg/engine"
+	pkgslots "zeno/pkg/slots"
 )
 
 func TestFunctionSlots(t *testing.T) {
 	eng := engine.NewEngine()
 	RegisterFunctionSlots(eng)
-	RegisterLogicSlots(eng)
+	pkgslots.RegisterLogicSlots(eng)
 
 	t.Run("fn_and_call", func(t *testing.T) {
 		scope := engine.NewScope(nil)

@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 )
 
 func TestNativeCanDirective(t *testing.T) {
 	// Setup
 	eng := engine.NewEngine()
-	RegisterLogicSlots(eng)
+	slots.RegisterLogicSlots(eng)
 	RegisterBladeSlots(eng)
 	
 	os.MkdirAll("views", 0755)

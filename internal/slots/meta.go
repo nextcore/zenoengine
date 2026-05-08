@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"zeno/pkg/blade"
 	"zeno/pkg/engine"
 	"zeno/pkg/utils/coerce"
 )
@@ -207,8 +208,8 @@ func RegisterMetaSlots(eng *engine.Engine) {
 		}
 
 		// 4. Load Template (Using shared helpers from blade.go)
-		fullPath := filepath.Join(viewRoot(scope), ensureBladeExt(viewFile))
-		programNode, err := getCachedOrParse(fullPath)
+		fullPath := filepath.Join(blade.ViewRoot(scope), blade.EnsureBladeExt(viewFile))
+		programNode, err := blade.GetCachedOrParse(fullPath)
 		if err != nil {
 			return err
 		}

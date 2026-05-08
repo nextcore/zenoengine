@@ -18,7 +18,7 @@ import (
 	"time"
 	"zeno/internal/app"
 	"zeno/internal/cli"
-	"zeno/internal/slots"
+	"zeno/pkg/blade"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
 	hostPkg "zeno/pkg/host"
@@ -370,7 +370,7 @@ func startWatcher(appCtx *app.AppContext) {
 			lastReload = time.Now()
 
 			// Clear Blade Template Cache
-			slots.ClearBladeCache()
+			blade.ClearBladeCache()
 
 			livereload.Broadcast()
 		}

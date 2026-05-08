@@ -182,3 +182,26 @@ If `view.root:` is not set, it defaults to `views/`.
 See the [Multi-App Architecture](/ecosystem/multi-app) guide for a complete example of hosting multiple apps with isolated views, routes, and static assets.
 :::
 
+## Penggunaan di Projek Go Murni
+
+Zeno Blade kini dapat digunakan di projek Go murni secara independen tanpa harus menggunakan seluruh framework ZenoEngine.
+
+### Instalasi
+Import paket `blade` dan `slots` dari ZenoEngine:
+```go
+import (
+    "zeno/pkg/engine"
+    "zeno/pkg/blade"
+)
+```
+
+### Inisialisasi
+Daftarkan slot Blade ke Engine Zeno:
+```go
+eng := engine.NewEngine()
+blade.RegisterBladeSlots(eng)
+// RegisterBladeSlots otomatis mendaftarkan slots.RegisterLogicSlots juga!
+```
+
+Sekarang Anda dapat mengeksekusi file Blade langsung dari kode Go Anda dengan memanggil `eng.Execute` atau menggunakan slot yang tersedia!
+

@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 )
 
 func TestBladeLaravelFeatures(t *testing.T) {
 	eng := engine.NewEngine()
 	RegisterBladeSlots(eng)
-	RegisterLogicSlots(eng)
-	RegisterUtilSlots(eng)
+	slots.RegisterLogicSlots(eng)
 
 	tests := []struct {
 		name     string

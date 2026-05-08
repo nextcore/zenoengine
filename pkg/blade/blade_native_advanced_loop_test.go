@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 )
 
 func TestNativeAdvancedLoops(t *testing.T) {
 	// 1. Setup Engine
 	eng := engine.NewEngine()
-	RegisterLogicSlots(eng) // Ensure logic.go slots (with break/continue support) are loaded
+	slots.RegisterLogicSlots(eng) // Ensure logic.go slots (with break/continue support) are loaded
 	RegisterBladeSlots(eng) // Registers blade specific slots
 
 	os.Mkdir("views", 0755)

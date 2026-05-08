@@ -12,6 +12,7 @@ import (
 	"zeno/pkg/engine"
 	"zeno/pkg/fastjson"
 	"zeno/pkg/utils/coerce"
+	pkgslots "zeno/pkg/slots"
 )
 
 func RegisterHTTPServerSlots(eng *engine.Engine) {
@@ -108,7 +109,7 @@ func RegisterHTTPServerSlots(eng *engine.Engine) {
 		}
 
 		http.Redirect(w, r, urlStr, http.StatusFound)
-		return ErrReturn
+		return pkgslots.ErrReturn
 	}, engine.SlotMeta{Example: "http.redirect: '/home'"})
 
 	// 3. COOKIE.SET

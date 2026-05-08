@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"zeno/internal/app"
-	"zeno/internal/slots"
+	pkgslots "zeno/pkg/slots"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
 	"zeno/pkg/logger"
@@ -149,7 +149,7 @@ func HandleRun(args []string) {
 	if err := eng.Execute(ctx, root, scope); err != nil {
 		// Ignore control flow signals at the root level (return, break, continue)
 		// These are used by slots like 'return' to halt execution gracefully.
-		if errors.Is(err, slots.ErrReturn) || errors.Is(err, slots.ErrBreak) || errors.Is(err, slots.ErrContinue) {
+		if errors.Is(err, pkgslots.ErrReturn) || errors.Is(err, pkgslots.ErrBreak) || errors.Is(err, pkgslots.ErrContinue) {
 			os.Exit(0)
 		}
 		fmt.Printf("❌ Execution Error: %v\n", err)

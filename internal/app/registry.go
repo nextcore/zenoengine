@@ -2,6 +2,8 @@ package app
 
 import (
 	"zeno/internal/slots"
+	pkgslots "zeno/pkg/slots"
+	"zeno/pkg/blade"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
 	"zeno/pkg/worker"
@@ -20,7 +22,7 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 // RegisterCoreSlots mendaftarkan slot dasar (Logic, Math, Time, dll)
 func RegisterCoreSlots(eng *engine.Engine) {
 	slots.RegisterUtilSlots(eng)
-	slots.RegisterLogicSlots(eng)
+	pkgslots.RegisterLogicSlots(eng)
 	slots.RegisterMathSlots(eng)
 	slots.RegisterTimeSlots(eng)
 	slots.RegisterFunctionSlots(eng)
@@ -32,7 +34,7 @@ func RegisterCoreSlots(eng *engine.Engine) {
 // RegisterWebSlots mendaftarkan slot untuk kebutuhan web (Routing, View, Session, dll)
 func RegisterWebSlots(eng *engine.Engine, r *chi.Mux) {
 	slots.RegisterRouterSlots(eng, r)
-	slots.RegisterBladeSlots(eng)
+	blade.RegisterBladeSlots(eng)
 	slots.RegisterInertiaSlots(eng)
 	slots.RegisterHTTPServerSlots(eng)
 	slots.RegisterSessionSlots(eng)

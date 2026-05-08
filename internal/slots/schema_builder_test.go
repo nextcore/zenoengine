@@ -24,12 +24,12 @@ func TestSchemaSlots(t *testing.T) {
 	t.Run("schema.create table", func(t *testing.T) {
 		scope := engine.NewScope(nil)
 		node := &engine.Node{
-			Name: "schema.create",
+			Name: "db.create_table",
 			Value: "products",
 			Children: []*engine.Node{
-				{Name: "column.id", Value: "id"},
-				{Name: "column.string", Value: "name"},
-				{Name: "column.integer", Value: "price"},
+				{Name: "db.id", Value: "id"},
+				{Name: "db.string", Value: "name"},
+				{Name: "db.integer", Value: "price"},
 			},
 		}
 

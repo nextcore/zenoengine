@@ -1,4 +1,4 @@
-package slots
+package blade
 
 import (
 	"context"
@@ -8,13 +8,14 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/engine"
+	"zeno/pkg/slots"
 )
 
 func TestNativeBladeFeatures(t *testing.T) {
 	// 1. Setup Engine
 	eng := engine.NewEngine()
 	RegisterBladeSlots(eng)
-	RegisterLogicSlots(eng) // For if/else/for
+	slots.RegisterLogicSlots(eng) // For if/else/for
 
 	// 2. Mock View Content
 	// Issues to test:
@@ -55,7 +56,7 @@ END`
 		// Actually `resolveValue` is in blade_native logic, not exported?
 		// But here we are in same package `slots`.
 		// But wait, `resolveValue` (lowercase) is unexported in `slots` package.
-		// So we CAN use it in test if test is `package slots`. Yes it is.
+		// So we CAN use it in test if test is `package blade`. Yes it is.
 		
 		val1 := resolveValue(node.Children[0].Value, scope)
 		val2 := resolveValue(node.Children[1].Value, scope)

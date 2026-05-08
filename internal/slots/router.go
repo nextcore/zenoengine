@@ -17,6 +17,7 @@ import (
 	hostPkg "zeno/pkg/host"
 	"zeno/pkg/middleware"
 	"zeno/pkg/utils/coerce"
+	pkgslots "zeno/pkg/slots"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -173,7 +174,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 			for _, child := range children {
 				if err := eng.Execute(timeoutCtx, child, reqScope); err != nil {
 					// [NEW] Handle ErrReturn (Normal Halt)
-					if errors.Is(err, ErrReturn) || strings.Contains(err.Error(), "return") {
+					if errors.Is(err, pkgslots.ErrReturn) || strings.Contains(err.Error(), "return") {
 						return
 					}
 
@@ -516,7 +517,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 						if doBlock != nil {
 							if err := eng.Execute(ctx, doBlock, reqScope); err != nil {
 								// If middleware calls return or has error, don't call next
-								if errors.Is(err, ErrReturn) || strings.Contains(err.Error(), "return") {
+								if errors.Is(err, pkgslots.ErrReturn) || strings.Contains(err.Error(), "return") {
 									return
 								}
 								// Log error and stop
