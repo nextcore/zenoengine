@@ -40,7 +40,7 @@ func RegisterCaptchaSlots(eng *engine.Engine, r *chi.Mux) {
 			val := parseNodeValue(c, scope)
 			switch c.Name {
 			case "as":
-				target = strings.TrimPrefix(coerce.ToString(val), "$")
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			case "length":
 				if l, err := coerce.ToInt(val); err == nil && l > 0 {
 					length = l

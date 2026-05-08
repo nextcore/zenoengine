@@ -1,0 +1,17 @@
+name: php-native
+version: 1.3.0
+type: sidecar
+binary: ./php_bridge.exe  # Zig: zig build-exe main.zig -O ReleaseSafe
+# binary: ./rust-src/target/release/php-native-bridge.exe # Rust: cargo build --release
+
+sidecar:
+  protocol: json-rpc
+  auto_start: true
+  keep_alive: true
+
+permissions:
+  filesystem:
+    - ./app
+    - ./vendor
+  network:
+    - "*"

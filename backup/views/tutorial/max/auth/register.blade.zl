@@ -1,0 +1,47 @@
+@extends('tutorial/max/layout')
+
+@section('content')
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h1>Create Account</h1>
+            <p>Join ZenoLang Demo</p>
+        </div>
+        
+        @if($error)
+        <div class="alert alert-danger" style="background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+            {{ $error }}
+        </div>
+        @endif
+        
+        <form action="/tutorial/max/auth/register" method="POST" enctype="multipart/form-data" class="auth-form">
+            @csrf
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="avatar">Avatar (Optional)</label>
+                <input type="file" id="avatar" name="avatar" class="form-control" accept="image/*">
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+        </form>
+        
+        <div class="auth-footer">
+            <p>Already have an account? <a href="/tutorial/max/login">Sign in here</a></p>
+        </div>
+    </div>
+</div>
+@endsection

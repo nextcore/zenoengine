@@ -1,0 +1,15 @@
+name: hello-rust
+version: 1.0.0
+author: ZenoEngine Team
+description: Hello World plugin written in Rust
+license: MIT
+binary: hello.wasm
+
+permissions:
+  scope:
+    - read
+    - write
+  network: []
+  filesystem: []
+  database: []
+  env: []

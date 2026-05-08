@@ -6,7 +6,12 @@ http.group: '/api/v1' {
     // An example public API route
     http.get: '/status' {
         do: {
-            http.json: { "status": "online", "version": "1.0.0" }
+            http.response: 200 {
+                data: {
+                    status: "online"
+                    version: "1.0.0"
+                }
+            }
         }
     }
     
@@ -15,11 +20,13 @@ http.group: '/api/v1' {
         middleware: ['auth']
         do: {
             // $currentUser is injected by the auth middleware
-            http.json: { 
-                "id": $currentUser.id,
-                "name": $currentUser.name,
-                "email": $currentUser.email,
-                "role": $currentUser.role
+            http.response: 200 {
+                data: { 
+                    id: $currentUser.id
+                    name: $currentUser.name
+                    email: $currentUser.email
+                    role: $currentUser.role
+                }
             }
         }
     }

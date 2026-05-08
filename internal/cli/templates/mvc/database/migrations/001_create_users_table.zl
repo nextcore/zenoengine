@@ -14,7 +14,6 @@ CREATE TABLE IF NOT EXISTS users (
 );
 "
 
-// Seed an initial Admin user if table is empty
 db.table: "users"
 db.count: { as: $userCount }
 
@@ -22,13 +21,13 @@ if: $userCount == 0 {
     then: {
         log: "Seeding: Initial admin user..."
         
-        hash.make: { text: "password123", as: $hashedPassword }
+        $hashedPassword: "$2a$10$vI8sb1zqlKGOfkeDS7uSfe7m68G5tK25G3L29gW9X9eS8/6Yf7p.G"
         
         db.table: "users"
         db.insert: {
-            name: "Admin Super",
-            email: "admin@zeno",
-            password: $hashedPassword,
+            name: "Admin Super"
+            email: "admin@zeno"
+            password: $hashedPassword
             role: "admin"
         }
     }

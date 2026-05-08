@@ -1,0 +1,22 @@
+// ==========================================
+// MIGRATION: Users Table
+// ==========================================
+// Creates the users table for authentication and user management
+// Using separate database for tutorial
+
+log: "📦 Migration: Creating users table in tutorial database..."
+
+db.execute: "CREATE TABLE IF NOT EXISTS tutorial_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    avatar TEXT,
+    role TEXT DEFAULT 'member' CHECK(role IN ('admin', 'member')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)" {
+  db: tutorial
+}
+
+log: "✅ Users table created successfully in tutorial database"

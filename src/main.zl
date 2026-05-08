@@ -1,42 +1,11 @@
 log: "🚀 ZenoEngine Started..."
 
-// ==========================================
-// 1. ZENOLANG MAX DEMO (Full Feature Demo)
-// ==========================================
-include: src/tutorial/max/main.zl
-
-// ==========================================
-// 2. ZENOSTUDIO (Lowcode Tool — Laravel Style)
-// ==========================================
-// include: src/zenostudio/routes/web.zl
-// include: src/zenostudio/routes/api.zl
 
 
 
 // 404 Handler
 http.get: /* {
   do: {
-    // If accessing root, /max, or /max/, redirect to the tutorial dashboard
-    if: $path == "/" {
-        then: {
-             http.redirect: "/tutorial/max"
-             return
-        }
-    }
-
-    if: $path == "/max" {
-        then: {
-             http.redirect: "/tutorial/max"
-             return
-        }
-    }
-
-    if: $path == "/max/" {
-        then: {
-             http.redirect: "/tutorial/max"
-             return
-        }
-    }
 
     http.not_found: {
       body: "Halaman tidak ditemukan."

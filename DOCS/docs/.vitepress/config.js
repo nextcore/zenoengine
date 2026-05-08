@@ -105,12 +105,9 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'ZenoLang', link: '/ecosystem/zenolang' },
-            { text: 'Reporting Engine (PDF)', link: '/ecosystem/reporting-engine' },
             { text: 'Stdlib API Reference', link: '/ecosystem/stdlib-reference' },
             { text: 'Multi-App Architecture', link: '/ecosystem/multi-app' },
-            { text: 'Plugins & Sidecars', link: '/ecosystem/wasm-plugins' },
-            { text: 'Container Bridge (Docker)', link: '/ecosystem/container-bridge' },
-            { text: 'Choosing an Extension', link: '/ecosystem/choosing-extensions' }
+            { text: 'Container Bridge (Docker)', link: '/ecosystem/container-bridge' }
           ]
         }
       ]

@@ -24,7 +24,11 @@ http.post: '/login' {
             }
         }
         
-        hash.verify: { text: $creds.password, hash: $user.password, as: $valid }
+        hash.verify: {
+          text: $creds.password
+          hash: $user.password
+          as: $valid
+        }
         
         if: $valid == false {
             then: {
@@ -73,13 +77,16 @@ http.post: '/register' {
             }
         }
         
-        hash.make: { text: $data.password, as: $hashedPassword }
+        hash.make: {
+          text: $data.password
+          as: $hashedPassword
+        }
         
         db.table: "users"
         db.insert: {
-            name: $data.name,
-            email: $data.email,
-            password: $hashedPassword,
+            name: $data.name
+            email: $data.email
+            password: $hashedPassword
             role: "user"
         }
         db.last: { as: $newUser }

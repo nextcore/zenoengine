@@ -1,0 +1,117 @@
+// ==========================================
+// REAL-TIME NOTIFICATIONS - SSE Stream
+// ==========================================
+// Using separate tutorial database
+
+system.env: "JWT_SECRET" { as: $jwt_secret }
+coalesce: $jwt_secret { default: "ZENOLANG_DEMO_SECRET_KEY_2026"; as: $jwt_secret }
+
+http.get: /tutorial/max/notifications/stream {
+  do: {
+    auth.middleware: {
+      secret: $jwt_secret
+      do: {
+        auth.user: { as: $current_user }
+        
+        // Start SSE stream
+        sse.stream: {
+          // Send welcome message
+          sse.send: {
+            event: "connected"
+            data: "Connected to notification stream"
+          }
+          
+          // Stream notifications in a loop
+          sse.loop: {
+            interval: 3000
+            do: {
+              // Get unread notifications
+              db.table: tutorial_notifications {
+                db: tutorial
+              }
+              db.where: {
+
+                col: "user_id"
+
+                val: $current_user.user_id
+
+              }
+              db.where: {
+
+                col: "is_read"
+
+                val: 0
+
+              }
+              db.order_by: "created_at DESC"
+              db.limit: 10
+              db.get: { as: $notifications }
+              
+              // Send notifications
+              forelse: $notifications {
+                as: $notif
+                do: {
+                  json.stringify: $notif { as: $notif_json }
+                  
+                  sse.send: {
+                    event: "notification"
+                    data: $notif_json
+                  }
+                }
+                empty: {
+                  // Send heartbeat
+                  sse.send: {
+                    event: "heartbeat"
+                    data: "ping"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// ==========================================
+// MARK NOTIFICATION AS READ
+// ==========================================
+http.post: '/tutorial/max/notifications/:id/read' {
+  do: {
+    auth.middleware: {
+      secret: $jwt_secret
+      do: {
+        auth.user: { as: $current_user }
+        http.param: "id" { as: $notif_id }
+        
+        db.table: tutorial_notifications {
+          db: tutorial
+        }
+        db.where: {
+
+          col: "id"
+
+          val: $notif_id
+
+        }
+        db.where: {
+
+          col: "user_id"
+
+          val: $current_user.user_id
+
+        }
+        db.update: {
+          is_read: 1
+        }
+        
+        http.ok: {
+          message: "Notification marked as read"
+        }
+      }
+    }
+  }
+}
+
+log: "✅ Real-time notification routes loaded (using tutorial database)"

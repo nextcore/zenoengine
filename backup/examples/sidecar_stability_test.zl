@@ -1,0 +1,25 @@
+// Sidecar Stability & Concurrency Test
+
+log: "🚀 Starting Stability Test..."
+
+for: "$i=1; $i<=5; $i++" {
+    do: {
+        log: "Test Iteration #" + $i
+
+        // 1. Health check
+        php.health { as: $h }
+        if: $h.status == "healthy" {
+            then: { log: "✅ Sidecar Healthy" }
+            else: { log: "❌ Sidecar Unhealthy"; dd: $h }
+        }
+
+        // 2. Call Laravel Mock
+        php.laravel: "test:command" { as: $l }
+        log: $l.output
+
+        // 3. Short sleep to simulate real-world pacing
+        sleep: 100
+    }
+}
+
+log: "🎉 All tests passed. Sidecar system is stable."

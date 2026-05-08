@@ -3,6 +3,11 @@
 
 http.get: '/api/v1/status' {
     do: {
-        http.json: { "status": "online", "modular": true }
+        http.response: 200 {
+            data: {
+                status: "online"
+                modular: true
+            }
+        }
     }
 }

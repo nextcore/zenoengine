@@ -17,7 +17,6 @@ require (
 )
 
 require (
-	github.com/SebastiaanKlippert/go-wkhtmltopdf v1.9.3
 	github.com/dchest/captcha v1.1.0
 	github.com/expr-lang/expr v1.17.7
 	github.com/goccy/go-json v0.10.5
@@ -26,9 +25,6 @@ require (
 	github.com/microsoft/go-mssqldb v1.9.6
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
-	github.com/tetratelabs/wazero v1.11.0
-	github.com/xuri/excelize/v2 v2.10.0
-	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.41.0
 )
 
@@ -47,16 +43,12 @@ require (
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/richardlehane/mscfb v1.0.4 // indirect
-	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
-	github.com/tiendc/go-deepcopy v1.7.1 // indirect
-	github.com/xuri/efp v0.0.1 // indirect
-	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.66.10 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

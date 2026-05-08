@@ -1,0 +1,21 @@
+// ==========================================
+// MIGRATION: Teams Table
+// ==========================================
+// Creates the teams table for team collaboration
+// Using separate tutorial database
+
+log: "📦 Migration: Creating teams table in tutorial database..."
+
+db.execute: "CREATE TABLE IF NOT EXISTS tutorial_teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    owner_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_id) REFERENCES tutorial_users(id) ON DELETE CASCADE
+)" {
+  db: tutorial
+}
+
+log: "✅ Teams table created successfully in tutorial database"

@@ -1380,23 +1380,7 @@ Returns documentation metadata for all registered ZenoLang slots.
 engine.slots: { as: $docs }
 ```
 
----
 
-## Excel
-
-### `excel.from_template`
-
-Generate Excel from template with marker support
-
-**Example:**
-```zeno
-excel.from_template: 'template.xlsx'
-  data:
-    title: "Report"
-    users: $user_list
-```
-
----
 
 ## Http
 
@@ -2227,54 +2211,7 @@ Eager load a relationship.
 
 ---
 
-## Pdf
 
-### `pdf.download`
-
-Generates a PDF from an HTML string and directly triggers a file download to the client's browser.
-
-**Inputs:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `filename` | `string` | **Yes** | The name of the file to be downloaded (e.g. 'report.pdf'). |
-| `html` | `string` | **Yes** | The HTML structure to render. |
-| `orientation` | `string` | No | Page orientation (Portrait/Landscape). |
-| `page_size` | `string` | No | Page size (A4, Letter). |
-
-**Example:**
-```zeno
-pdf.download:
-  html: $invoice_html
-  filename: 'Invoice-101.pdf'
-```
-
----
-
-### `pdf.generate`
-
-Convert HTML string to PDF bytes using wkhtmltopdf.
-
-**Inputs:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `as` | `any` | **Yes** | Variable to store the resulting PDF byte array. |
-| `error` | `any` | No | Variable to store any conversion errors. |
-| `html` | `string` | **Yes** | The raw HTML string to convert. |
-| `orientation` | `string` | No | Page orientation: 'Portrait' or 'Landscape' (Default: Portrait). |
-| `page_size` | `string` | No | Page size dimension: 'A4', 'Letter', etc (Default: A4). |
-
-**Example:**
-```zeno
-pdf.generate:
-  html: $html_body
-  orientation: 'Landscape'
-  as: $pdf_bytes
-  error: $pdf_error
-```
-
----
 
 ## Schema
 

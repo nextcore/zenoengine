@@ -1,0 +1,21 @@
+// ==========================================
+// MIGRATION: Notifications Table
+// ==========================================
+// Creates the notifications table for real-time alerts
+// Using separate tutorial database
+
+log: "📦 Migration: Creating notifications table in tutorial database..."
+
+db.execute: "CREATE TABLE IF NOT EXISTS tutorial_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES tutorial_users(id) ON DELETE CASCADE
+)" {
+  db: tutorial
+}
+
+log: "✅ Notifications table created successfully in tutorial database"

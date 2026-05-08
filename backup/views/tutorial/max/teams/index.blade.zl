@@ -1,0 +1,80 @@
+@extends('tutorial/max/layout')
+
+@section('content')
+<div class="container">
+    <div class="page-header">
+        <h1>Teams</h1>
+        <button onclick="showCreateTeamModal()" class="btn btn-primary">+ New Team</button>
+    </div>
+    
+    <div class="teams-grid">
+        @if($teams_count > 0)
+            @foreach($teams as $team)
+                <div class="team-card">
+                    <div class="team-header">
+                        <h3>{{ $team.name }}</h3>
+                        @if($team.owner_id == $current_user.user_id || $current_user.role == 'admin')
+                            <form action="/tutorial/max/teams/{{ $team.id }}/delete" method="POST" style="display: inline;">
+                                @csrf
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this team?')">Delete</button>
+                            </form>
+                        @endif
+                    </div>
+                    
+                    @if($team.description)
+                        <p class="team-description">{{ $team.description }}</p>
+                    @endif
+                    
+                    <div class="team-meta">
+                        <span>👤 Owner ID: {{ $team.owner_id }}</span>
+                    </div>
+                </div>
+            @endforeach
+        @else
+            <div class="empty-state">
+                <h3>No teams yet</h3>
+                <p>Create your first team to get started!</p>
+                <button onclick="showCreateTeamModal()" class="btn btn-primary">Create Team</button>
+            </div>
+        @endif
+    </div>
+</div>
+
+<!-- Create Team Modal -->
+<div id="createTeamModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create New Team</h2>
+            <button onclick="hideCreateTeamModal()" class="btn-close">×</button>
+        </div>
+        
+        <form action="/tutorial/max/teams/store" method="POST">
+            @csrf
+            <div class="form-group">
+                <label for="name">Team Name *</label>
+                <input type="text" id="name" name="name" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" class="form-control" rows="3"></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create Team</button>
+                <button type="button" onclick="hideCreateTeamModal()" class="btn btn-secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function showCreateTeamModal() {
+    document.getElementById('createTeamModal').style.display = 'flex';
+}
+
+function hideCreateTeamModal() {
+    document.getElementById('createTeamModal').style.display = 'none';
+}
+</script>
+@endsection

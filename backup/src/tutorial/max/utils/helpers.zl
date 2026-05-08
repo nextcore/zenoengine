@@ -1,0 +1,124 @@
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+// Reusable utility functions for the application
+
+// ==========================================
+// 1. FORMAT DATE - Human Readable Dates
+// ==========================================
+fn: format_date {
+  param: $date_input
+  param: $format_type
+  
+  do: {
+    // Default format if not specified
+    coalesce: $format_type { default: "Human"; as: $format_type }
+    
+    date.format: $date_input {
+      layout: $format_type
+      as: $formatted_date
+    }
+    
+    return: $formatted_date
+  }
+}
+
+// ==========================================
+// 2. CHECK PERMISSION - RBAC Helper
+// ==========================================
+fn: check_permission {
+  param: $required_role
+  param: $user_role
+  
+  do: {
+    // Admin has all permissions
+    if: $user_role == "admin" {
+      then: {
+        return: true
+      }
+      else: {
+        // Check if roles match
+        if: $user_role == $required_role {
+          then: {
+            return: true
+          }
+          else: {
+            return: false
+          }
+        }
+      }
+    }
+  }
+}
+
+// ==========================================
+// 3. SEND NOTIFICATION - Create Notification
+// ==========================================
+fn: send_notification {
+  param: $user_id
+  param: $type
+  param: $message
+  
+  do: {
+    db.table: notifications
+    db.insert: {
+      user_id: $user_id
+      type: $type
+      message: $message
+      is_read: 0
+    }
+    
+    log: "📬 Notification sent to user " + $user_id
+  }
+}
+
+// ==========================================
+// 4. UPLOAD FILE - File Upload Wrapper
+// ==========================================
+fn: upload_file {
+  param: $field_name
+  param: $destination
+  
+  do: {
+    http.upload: {
+      field: $field_name
+      dest: $destination
+      as: $uploaded_filename
+    }
+    
+    return: $uploaded_filename
+  }
+}
+
+// ==========================================
+// 5. GET CURRENT USER - Extract User from JWT
+// ==========================================
+fn: get_current_user {
+  do: {
+    auth.user: { as: $current_user }
+    return: $current_user
+  }
+}
+
+// ==========================================
+// 6. VALIDATE TASK DATA
+// ==========================================
+fn: validate_task {
+  param: $task_data
+  
+  do: {
+    validate: $task_data {
+      rules: {
+        title: "required|min:3"
+        description: "required"
+        priority: "required"
+        status: "required"
+      }
+      as: $validation_errors
+    }
+    
+    return: $validation_errors
+  }
+}
+
+log: "✅ Helper functions loaded"
