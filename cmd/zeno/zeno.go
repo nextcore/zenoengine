@@ -51,6 +51,8 @@ func main() {
 			cli.HandleRun(os.Args[2:])
 		case "migrate":
 			cli.HandleMigrate()
+		case "migrate:rollback":
+			cli.HandleRollback()
 		case "test":
 			cli.HandleTest(os.Args[2:])
 		case "make:auth":

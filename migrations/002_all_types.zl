@@ -1,0 +1,14 @@
+db.create_table: 'all_types_table' {
+    db.id: 'id'
+    db.string: 'name' { limit: 50 }
+    db.integer: 'age'
+    db.boolean: 'is_active'
+    db.text: 'bio'
+    db.decimal: 'salary' {
+        precision: 12
+        scale: 2
+    }
+    db.date: 'birth_date'
+    db.json: 'meta_data'
+    db.timestamp: 'created_at'
+}

@@ -58,5 +58,7 @@ func RegisterExtraSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManag
 	slots.RegisterMailSlots(eng)
 	slots.RegisterCacheSlots(eng, nil)
 	slots.RegisterJobSlots(eng, queue, setConfig)
-	slots.RegisterContainerBridgeSlots(eng, r)
+	if r != nil {
+		slots.RegisterContainerBridgeSlots(eng, r)
+	}
 }

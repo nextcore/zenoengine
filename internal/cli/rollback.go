@@ -13,7 +13,7 @@ import (
 	"zeno/pkg/worker"
 )
 
-func HandleMigrate() {
+func HandleRollback() {
 	logger.Setup("development")
 	dbMgr := dbmanager.NewDBManager()
 	dbDriver := os.Getenv("DB_DRIVER")
@@ -40,7 +40,6 @@ func HandleMigrate() {
 	}
 
 	eng := engine.NewEngine()
-	// Init DBQueue for migration logic
 	queue := worker.NewDBQueue(dbMgr, "default")
 	app.RegisterAllSlots(eng, nil, dbMgr, queue, nil)
 
@@ -54,8 +53,8 @@ func HandleMigrate() {
 	}
 
 	mig := migrator.New(eng, dbMgr, migrationDir)
-	if err := mig.Run(); err != nil {
-		slog.Error("❌ Migration Failed", "error", err)
+	if err := mig.Rollback(); err != nil {
+		slog.Error("❌ Rollback Failed", "error", err)
 		os.Exit(1)
 	}
 	os.Exit(0)
