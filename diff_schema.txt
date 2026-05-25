@@ -1,0 +1,129 @@
+diff --git a/internal/slots/schema_builder.go b/internal/slots/schema_builder.go
+index 9c603f5..dc36fef 100644
+--- a/internal/slots/schema_builder.go
++++ b/internal/slots/schema_builder.go
+@@ -48,7 +48,10 @@ func RegisterSchemaSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			}
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Description: "Execute block only during up migration"})
++	}, engine.SlotMeta{
++		Description: "Execute child blocks only during the forward ('up') migration process.",
++		Example:     "up {\n  db.create_table: 'users' { ... }\n}",
++	})
+ 
+ 	// DOWN Slot
+ 	eng.Register("down", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -62,7 +65,10 @@ func RegisterSchemaSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			}
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Description: "Execute block only during down migration"})
++	}, engine.SlotMeta{
++		Description: "Execute child blocks only during the rollback ('down') migration process.",
++		Example:     "down {\n  db.drop_table: 'users'\n}",
++	})
+ 
+ 	// DB.CREATE_TABLE
+ 	eng.Register("db.create_table", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -133,7 +139,15 @@ func RegisterSchemaSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 
+ 		_, err = db.ExecContext(ctx, sql)
+ 		return err
+-	}, engine.SlotMeta{Description: "Create a database table with schema builder"})
++	}, engine.SlotMeta{
++		Description: "Create a new database table using a fluent schema building definition.",
++		Example:     "db.create_table: 'posts' {\n  db.id: 'id'\n  db.string: 'title'\n  db.text: 'body'\n}",
++		ValueType:   "string",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The name of the table to create", Required: true, Type: "string"},
++			"db":      {Description: "The database connection name (Default: 'default')", Required: false, Type: "string"},
++		},
++	})
+ 
+ 	// DB.DROP_TABLE
+ 	eng.Register("db.drop_table", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -161,7 +175,15 @@ func RegisterSchemaSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 
+ 		_, err := db.ExecContext(ctx, sql)
+ 		return err
+-	}, engine.SlotMeta{Description: "Drop a database table"})
++	}, engine.SlotMeta{
++		Description: "Drop a database table if it exists.",
++		Example:     "db.drop_table: 'users'",
++		ValueType:   "string",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The name of the table to drop", Required: true, Type: "string"},
++			"db":      {Description: "The database connection name (Default: 'default')", Required: false, Type: "string"},
++		},
++	})
+ 
+ 	// DB.FOREIGN
+ 	eng.Register("db.foreign", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -196,7 +218,17 @@ func RegisterSchemaSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		})
+ 
+ 		return nil
+-	}, engine.SlotMeta{Description: "Define foreign key constraint"})
++	}, engine.SlotMeta{
++		Description: "Define a foreign key constraint for a column inside a db.create_table block.",
++		Example:     "db.foreign: 'user_id' {\n  references: 'users'\n  on: 'id'\n  on_delete: 'CASCADE'\n}",
++		ValueType:   "string",
++		Inputs: map[string]engine.InputMeta{
++			"(value)":    {Description: "The local column name to apply the foreign key to", Required: true, Type: "string"},
++			"references": {Description: "The parent table name reference", Required: true, Type: "string"},
++			"on":         {Description: "The referenced parent column name (Default: 'id')", Required: false, Type: "string"},
++			"on_delete":  {Description: "Action on parent record deletion (e.g., CASCADE, SET NULL)", Required: false, Type: "string"},
++		},
++	})
+ 
+ 	// Column slots
+ 	registerColumnSlot(eng, "db.id", "id")
+@@ -211,6 +243,38 @@ func RegisterSchemaSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ }
+ 
+ func registerColumnSlot(eng *engine.Engine, slotName, colType string) {
++	description := fmt.Sprintf("Add a %s column to the table schema.", colType)
++	if colType == "id" {
++		description = "Add an auto-incrementing primary key column to the table schema."
++	}
++
++	inputs := map[string]engine.InputMeta{
++		"(value)":  {Description: "The name of the column", Required: true, Type: "string"},
++		"unique":   {Description: "Whether the column values must be unique (Default: false)", Required: false, Type: "bool"},
++		"nullable": {Description: "Whether the column allows NULL values (Default: true)", Required: false, Type: "bool"},
++	}
++
++	example := fmt.Sprintf("%s: 'column_name'", slotName)
++
++	if colType == "string" {
++		inputs["limit"] = engine.InputMeta{Description: "Maximum length of the string (Default: 255)", Required: false, Type: "int"}
++		inputs["length"] = engine.InputMeta{Description: "Alias for limit", Required: false, Type: "int"}
++		example = fmt.Sprintf("%s: 'name' {\n  limit: 100\n  unique: true\n}", slotName)
++	} else if colType == "decimal" {
++		inputs["precision"] = engine.InputMeta{Description: "Total number of digits (Default: 10)", Required: false, Type: "int"}
++		inputs["scale"] = engine.InputMeta{Description: "Number of digits to the right of decimal point (Default: 2)", Required: false, Type: "int"}
++		example = fmt.Sprintf("%s: 'price' {\n  precision: 12\n  scale: 4\n}", slotName)
++	} else if colType == "id" {
++		example = fmt.Sprintf("%s: 'id'", slotName)
++	}
++
++	meta := engine.SlotMeta{
++		Description: description,
++		Example:     example,
++		Inputs:      inputs,
++		ValueType:   "string",
++	}
++
+ 	eng.Register(slotName, func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+ 		stateVal, ok := scope.Get("_schema_state")
+ 		if !ok {
+@@ -254,7 +318,7 @@ func registerColumnSlot(eng *engine.Engine, slotName, colType string) {
+ 		})
+ 
+ 		return nil
+-	}, engine.SlotMeta{})
++	}, meta)
+ }
+ 
+ func (s *SchemaState) BuildSQL() (string, error) {

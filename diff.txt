@@ -1,0 +1,366 @@
+diff --git a/internal/slots/query_builder.go b/internal/slots/query_builder.go
+index 6c92254..944e150 100644
+--- a/internal/slots/query_builder.go
++++ b/internal/slots/query_builder.go
+@@ -371,7 +371,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		}
+ 		qs.Columns = cols
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.columns: ['id', 'name']"})
++	}, engine.SlotMeta{
++		Description: "Specify the column(s) to retrieve in the query. Can be a single string or an array of strings.",
++		Example:     "db.columns: ['id', 'name']",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "A single column name or array of column names", Required: false, Type: "any"},
++		},
++	})
+ 
+ 	// DB.JOIN / LEFT_JOIN
+ 	joinHandler := func(joinType string) func(context.Context, *engine.Node, *engine.Scope) error {
+@@ -420,9 +426,30 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			return nil
+ 		}
+ 	}
+-	eng.Register("db.join", joinHandler("INNER"), engine.SlotMeta{Example: "db.join {\n  table: posts\n  on: ['users.id', '=', 'posts.user_id']\n}"})
+-	eng.Register("db.left_join", joinHandler("LEFT"), engine.SlotMeta{Example: "db.left_join ..."})
+-	eng.Register("db.right_join", joinHandler("RIGHT"), engine.SlotMeta{})
++	eng.Register("db.join", joinHandler("INNER"), engine.SlotMeta{
++		Description: "Perform an INNER JOIN operation with another table.",
++		Example:     "db.join {\n  table: 'posts'\n  on: ['users.id', '=', 'posts.user_id']\n}",
++		Inputs: map[string]engine.InputMeta{
++			"table": {Description: "The table to join", Required: true, Type: "string"},
++			"on":    {Description: "Array representing ['left_col', 'operator', 'right_col']", Required: true, Type: "list"},
++		},
++	})
++	eng.Register("db.left_join", joinHandler("LEFT"), engine.SlotMeta{
++		Description: "Perform a LEFT OUTER JOIN operation with another table.",
++		Example:     "db.left_join {\n  table: 'posts'\n  on: ['users.id', '=', 'posts.user_id']\n}",
++		Inputs: map[string]engine.InputMeta{
++			"table": {Description: "The table to join", Required: true, Type: "string"},
++			"on":    {Description: "Array representing ['left_col', 'operator', 'right_col']", Required: true, Type: "list"},
++		},
++	})
++	eng.Register("db.right_join", joinHandler("RIGHT"), engine.SlotMeta{
++		Description: "Perform a RIGHT OUTER JOIN operation with another table.",
++		Example:     "db.right_join {\n  table: 'posts'\n  on: ['users.id', '=', 'posts.user_id']\n}",
++		Inputs: map[string]engine.InputMeta{
++			"table": {Description: "The table to join", Required: true, Type: "string"},
++			"on":    {Description: "Array representing ['left_col', 'operator', 'right_col']", Required: true, Type: "list"},
++		},
++	})
+ 
+ 	// DB.WHERE_IN
+ 	eng.Register("db.where_in", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -448,7 +475,14 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "IN", Value: val})
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.where_in {\n  col: id\n  val: [1, 2, 3]\n}"})
++	}, engine.SlotMeta{
++		Description: "Add an 'AND WHERE IN' filter constraint to the query.",
++		Example:     "db.where_in {\n  col: 'status'\n  val: ['active', 'pending']\n}",
++		Inputs: map[string]engine.InputMeta{
++			"col": {Description: "Column name", Required: true, Type: "string"},
++			"val": {Description: "Array or slice of allowed values", Required: true, Type: "list"},
++		},
++	})
+ 
+ 	// DB.WHERE_NULL
+ 	eng.Register("db.where_null", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -462,7 +496,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "NULL", Value: nil})
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.where_null: deleted_at"})
++	}, engine.SlotMeta{
++		Description: "Add a 'WHERE column IS NULL' constraint to the query.",
++		Example:     "db.where_null: 'deleted_at'",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The column name to check", Required: true, Type: "string"},
++		},
++	})
+ 
+ 	// DB.WHERE_NOT_NULL
+ 	eng.Register("db.where_not_null", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -476,7 +516,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "NOT NULL", Value: nil})
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.where_not_null: created_at"})
++	}, engine.SlotMeta{
++		Description: "Add a 'WHERE column IS NOT NULL' constraint to the query.",
++		Example:     "db.where_not_null: 'created_at'",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The column name to check", Required: true, Type: "string"},
++		},
++	})
+ 
+ 	// DB.WHERE_NOT_IN
+ 	eng.Register("db.where_not_in", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -502,7 +548,14 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			qs.Where = append(qs.Where, WhereCond{Column: col, Op: "NOT IN", Value: val})
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.where_not_in {\n  col: status\n  val: ['archived', 'deleted']\n}"})
++	}, engine.SlotMeta{
++		Description: "Add an 'AND WHERE NOT IN' filter constraint to the query.",
++		Example:     "db.where_not_in {\n  col: 'role'\n  val: ['admin', 'moderator']\n}",
++		Inputs: map[string]engine.InputMeta{
++			"col": {Description: "Column name", Required: true, Type: "string"},
++			"val": {Description: "Array or slice of values to exclude", Required: true, Type: "list"},
++		},
++	})
+ 
+ 	// DB.GROUP_BY
+ 	eng.Register("db.group_by", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -516,7 +569,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			qs.GroupBy = append(qs.GroupBy, coerce.ToString(resolveValue(node.Value, scope)))
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.group_by: 'status'"})
++	}, engine.SlotMeta{
++		Description: "Add a GROUP BY clause to the query.",
++		Example:     "db.group_by: 'status'",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "Column name to group by", Required: true, Type: "string"},
++		},
++	})
+ 
+ 	// DB.HAVING
+ 	eng.Register("db.having", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -544,7 +603,15 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			qs.Having = append(qs.Having, WhereCond{Column: col, Op: op, Value: val})
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.having {\n  col: count\n  op: '>'\n  val: 5\n}"})
++	}, engine.SlotMeta{
++		Description: "Add a HAVING clause filter to the query (typically used with GROUP BY).",
++		Example:     "db.having {\n  col: 'count'\n  op: '>'\n  val: 5\n}",
++		Inputs: map[string]engine.InputMeta{
++			"col": {Description: "Column or aggregate field name", Required: true, Type: "string"},
++			"op":  {Description: "Comparison operator (Default: '>')", Required: false, Type: "string"},
++			"val": {Description: "Value to compare against", Required: true, Type: "any"},
++		},
++	})
+ 
+ 	// DB.WHERE
+ 	eng.Register("db.where", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -672,8 +739,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		}
+ 		return nil
+ 	}, engine.SlotMeta{
+-		Description: "Add an OR WHERE filter to the query.",
++		Description: "Add an OR WHERE filter constraint to the query.",
+ 		Example:     "db.or_where\n  col: role\n  val: 'admin'",
++		Inputs: map[string]engine.InputMeta{
++			"col": {Description: "Column name", Required: true, Type: "string"},
++			"op":  {Description: "Comparison operator (Default: '=')", Required: false, Type: "string"},
++			"val": {Description: "Filter value", Required: true, Type: "any"},
++		},
+ 	})
+ 
+ 	// DB.WHERE_BETWEEN
+@@ -701,8 +773,12 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		}
+ 		return nil
+ 	}, engine.SlotMeta{
+-		Description: "Add a WHERE BETWEEN filter to the query.",
++		Description: "Add a WHERE BETWEEN constraint to filter a range of values.",
+ 		Example:     "db.where_between\n  col: age\n  val: [18, 30]",
++		Inputs: map[string]engine.InputMeta{
++			"col": {Description: "Column name", Required: true, Type: "string"},
++			"val": {Description: "Array representing the lower and upper bounds: [min, max]", Required: true, Type: "list"},
++		},
+ 	})
+ 
+ 	// DB.WHERE_NOT_BETWEEN
+@@ -730,8 +806,12 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		}
+ 		return nil
+ 	}, engine.SlotMeta{
+-		Description: "Add a WHERE NOT BETWEEN filter to the query.",
++		Description: "Add a WHERE NOT BETWEEN constraint to exclude a range of values.",
+ 		Example:     "db.where_not_between\n  col: age\n  val: [18, 30]",
++		Inputs: map[string]engine.InputMeta{
++			"col": {Description: "Column name", Required: true, Type: "string"},
++			"val": {Description: "Array representing the lower and upper bounds: [min, max]", Required: true, Type: "list"},
++		},
+ 	})
+ 
+ 	// DB.ORDER_BY
+@@ -747,7 +827,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			qs.OrderBy = coerce.ToString(resolveValue(node.Value, scope))
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.order_by: 'id DESC'"})
++	}, engine.SlotMeta{
++		Description: "Add an ORDER BY sorting clause to the query.",
++		Example:     "db.order_by: 'id DESC'",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "Sorting expression (e.g. 'created_at DESC')", Required: true, Type: "string"},
++		},
++	})
+ 
+ 	// DB.LIMIT
+ 	eng.Register("db.limit", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -761,7 +847,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		limit, _ := coerce.ToInt(val)
+ 		qs.Limit = limit
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.limit: $limit"})
++	}, engine.SlotMeta{
++		Description: "Set a LIMIT on the number of rows retrieved in the query.",
++		Example:     "db.limit: 10",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "Maximum number of rows to retrieve", Required: true, Type: "int"},
++		},
++	})
+ 
+ 	// DB.OFFSET
+ 	eng.Register("db.offset", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -775,7 +867,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		offset, _ := coerce.ToInt(val)
+ 		qs.Offset = offset
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.offset: $offset"})
++	}, engine.SlotMeta{
++		Description: "Set an OFFSET to skip a number of rows in the query.",
++		Example:     "db.offset: 20",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "Number of rows to skip", Required: true, Type: "int"},
++		},
++	})
+ 
+ 	// =========================================================================
+ 	// EXECUTION SLOTS
+@@ -1045,7 +1143,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			return err
+ 		}
+ 		return nil
+-	}, engine.SlotMeta{Example: "db.insert\n  name: $name"})
++	}, engine.SlotMeta{
++		Description: "Perform an INSERT database operation. Insert data specified in the children block.",
++		Example:     "db.insert\n  name: 'John Doe'\n  email: 'john@example.com'",
++		Inputs: map[string]engine.InputMeta{
++			"*(any)": {Description: "Column name and the value to insert", Required: false, Type: "any"},
++		},
++	})
+ 
+ 	// DB.UPDATE
+ 	eng.Register("db.update", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -1103,7 +1207,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 			return err
+ 		}
+ 		return fireHook(ctx, eng, qs.Table, HookAfterSave, updateData, scope)
+-	}, engine.SlotMeta{Example: "db.update\n  status: 'active'"})
++	}, engine.SlotMeta{
++		Description: "Perform an UPDATE database operation. Update columns specified in the children block based on query where constraints.",
++		Example:     "db.update\n  status: 'active'\n  updated_at: 'NOW()'",
++		Inputs: map[string]engine.InputMeta{
++			"*(any)": {Description: "Column name and the new value to update", Required: false, Type: "any"},
++		},
++	})
+ 
+ 	// DB.DELETE
+ 	eng.Register("db.delete", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -1142,7 +1252,13 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 
+ 		// Fire after_delete hook
+ 		return fireHook(ctx, eng, qs.Table, HookAfterDelete, nil, scope)
+-	}, engine.SlotMeta{Example: "db.delete\n  as: $count"})
++	}, engine.SlotMeta{
++		Description: "Perform a DELETE database operation based on query where constraints.",
++		Example:     "db.delete\n  as: $count",
++		Inputs: map[string]engine.InputMeta{
++			"as": {Description: "Variable to store the count of deleted rows", Required: false, Type: "string"},
++		},
++	})
+ 
+ 	// DB.COUNT
+ 	eng.Register("db.count", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -1215,6 +1331,9 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 	}, engine.SlotMeta{
+ 		Description: "Check if at least one row exists based on the current query state.",
+ 		Example:     "db.exists\n  as: $has_users",
++		Inputs: map[string]engine.InputMeta{
++			"as": {Description: "Variable name to store the boolean result", Required: true, Type: "string"},
++		},
+ 	})
+ 
+ 	// DB.DOESNT_EXIST
+@@ -1253,6 +1372,9 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 	}, engine.SlotMeta{
+ 		Description: "Check if no rows exist based on the current query state.",
+ 		Example:     "db.doesnt_exist\n  as: $is_empty",
++		Inputs: map[string]engine.InputMeta{
++			"as": {Description: "Variable name to store the boolean result", Required: true, Type: "string"},
++		},
+ 	})
+ 
+ 	// AGGREGATE HANDLER GENERATOR
+@@ -1306,10 +1428,38 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 		}
+ 	}
+ 
+-	eng.Register("db.sum", aggregateHandler("SUM"), engine.SlotMeta{Example: "db.sum: 'price'\n  as: $total_price"})
+-	eng.Register("db.avg", aggregateHandler("AVG"), engine.SlotMeta{Example: "db.avg: 'rating'\n  as: $average"})
+-	eng.Register("db.min", aggregateHandler("MIN"), engine.SlotMeta{Example: "db.min: 'age'\n  as: $youngest"})
+-	eng.Register("db.max", aggregateHandler("MAX"), engine.SlotMeta{Example: "db.max: 'age'\n  as: $oldest"})
++	eng.Register("db.sum", aggregateHandler("SUM"), engine.SlotMeta{
++		Description: "Calculate the SUM of a specific column based on the query state.",
++		Example:     "db.sum: 'price'\n  as: $total_price",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The column name to sum", Required: true, Type: "string"},
++			"as":      {Description: "Variable name to store the result", Required: true, Type: "string"},
++		},
++	})
++	eng.Register("db.avg", aggregateHandler("AVG"), engine.SlotMeta{
++		Description: "Calculate the AVG (average) of a specific column based on the query state.",
++		Example:     "db.avg: 'rating'\n  as: $average",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The column name to average", Required: true, Type: "string"},
++			"as":      {Description: "Variable name to store the result", Required: true, Type: "string"},
++		},
++	})
++	eng.Register("db.min", aggregateHandler("MIN"), engine.SlotMeta{
++		Description: "Retrieve the MIN (minimum value) of a specific column based on the query state.",
++		Example:     "db.min: 'age'\n  as: $youngest",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The column name to find the minimum of", Required: true, Type: "string"},
++			"as":      {Description: "Variable name to store the result", Required: true, Type: "string"},
++		},
++	})
++	eng.Register("db.max", aggregateHandler("MAX"), engine.SlotMeta{
++		Description: "Retrieve the MAX (maximum value) of a specific column based on the query state.",
++		Example:     "db.max: 'age'\n  as: $oldest",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The column name to find the maximum of", Required: true, Type: "string"},
++			"as":      {Description: "Variable name to store the result", Required: true, Type: "string"},
++		},
++	})
+ 
+ 	// DB.PLUCK
+ 	eng.Register("db.pluck", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+@@ -1375,6 +1525,11 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 	}, engine.SlotMeta{
+ 		Description: "Retrieve a single column's values as a flat array.",
+ 		Example:     "db.pluck: 'id'\n  as: $user_ids",
++		Inputs: map[string]engine.InputMeta{
++			"(value)": {Description: "The column name to pluck", Required: false, Type: "string"},
++			"col":     {Description: "Alias for column name", Required: false, Type: "string"},
++			"as":      {Description: "Variable name to store the array result", Required: true, Type: "string"},
++		},
+ 	})
+ 
+ 	// DB.PAGINATE
+@@ -1484,5 +1639,10 @@ func RegisterDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
+ 	}, engine.SlotMeta{
+ 		Description: "Retrieve rows paginated with metadata.",
+ 		Example:     "db.paginate\n  page: 1\n  per_page: 20\n  as: $users_paginator",
++		Inputs: map[string]engine.InputMeta{
++			"as":       {Description: "Variable name to store the paginator object containing data and meta", Required: true, Type: "string"},
++			"page":     {Description: "Current page number (Default: 1)", Required: false, Type: "int"},
++			"per_page": {Description: "Number of rows per page (Default: 15)", Required: false, Type: "int"},
++		},
+ 	})
+ }

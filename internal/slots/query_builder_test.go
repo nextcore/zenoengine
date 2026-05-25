@@ -183,21 +183,30 @@ func TestDBQuery(t *testing.T) {
 		{
 			name: "Basic Block Query",
 			script: `db.query: 'users' {
-				where { col: 'status' val: 'active' }
+				where {
+					col: 'status'
+					val: 'active'
+				}
 				limit: 10
 			}`,
 		},
 		{
 			name: "Exists Query",
 			script: `db.query: 'orders' {
-				where { col: 'id' val: 5 }
+				where {
+					col: 'id'
+					val: 5
+				}
 				exists: { as: $is_found }
 			}`,
 		},
 		{
 			name: "Doesnt Exist Query",
 			script: `db.query: 'orders' {
-				where { col: 'id' val: 5 }
+				where {
+					col: 'id'
+					val: 5
+				}
 				doesnt_exist: { as: $is_empty }
 			}`,
 		},
@@ -213,55 +222,85 @@ func TestDBQuery(t *testing.T) {
 		{
 			name: "Pluck Query",
 			script: `db.query: 'users' {
-				where { col: 'status' val: 'active' }
+				where {
+					col: 'status'
+					val: 'active'
+				}
 				pluck: 'id' { as: $user_ids }
 			}`,
 		},
 		{
 			name: "Paginate Query",
 			script: `db.query: 'logs' {
-				where { col: 'level' val: 'error' }
-				paginate { page: 2 per_page: 50 as: $results }
+				where {
+					col: 'level'
+					val: 'error'
+				}
+				paginate {
+					page: 2
+					per_page: 50
+					as: $results
+				}
 			}`,
 		},
 		{
 			name: "Insert Query",
 			script: `db.query: 'users' {
-				insert { name: 'Alice' role: 'admin' }
+				insert {
+					name: 'Alice'
+					role: 'admin'
+				}
 			}`,
 		},
 		{
 			name: "Update Query",
 			script: `db.query: 'users' {
-				where { col: 'id' val: 1 }
-				update { status: 'inactive' }
+				where {
+					col: 'id'
+					val: 1
+				}
+				update {
+					status: 'inactive'
+				}
 			}`,
 		},
 		{
 			name: "Delete Query",
 			script: `db.query: 'users' {
-				where { col: 'status' val: 'deleted' }
+				where {
+					col: 'status'
+					val: 'deleted'
+				}
 				delete { as: $deleted_count }
 			}`,
 		},
 		{
 			name: "Get Query",
 			script: `db.query: 'users' {
-				where { col: 'role' val: 'user' }
+				where {
+					col: 'role'
+					val: 'user'
+				}
 				get { as: $users }
 			}`,
 		},
 		{
 			name: "First Query",
 			script: `db.query: 'users' {
-				where { col: 'id' val: 1 }
+				where {
+					col: 'id'
+					val: 1
+				}
 				first { as: $user }
 			}`,
 		},
 		{
 			name: "Count Query",
 			script: `db.query: 'users' {
-				where { col: 'status' val: 'active' }
+				where {
+					col: 'status'
+					val: 'active'
+				}
 				count { as: $active_count }
 			}`,
 		},

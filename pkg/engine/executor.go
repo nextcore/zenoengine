@@ -130,9 +130,24 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 		if node.cachedMeta != nil {
 			// 1. Cek Atribut Tak Dikenal (Hanya jika Inputs didefinisikan)
 			if node.cachedMeta.Inputs != nil {
+				// Check if wildcard input is allowed
+				allowAny := false
+				if _, allowed := node.cachedMeta.Inputs["*"]; allowed {
+					allowAny = true
+				} else if _, allowed := node.cachedMeta.Inputs["*(any)"]; allowed {
+					allowAny = true
+				}
+
 				for _, child := range node.Children {
 					if child.Name == "do" || child.Name == "then" || child.Name == "else" || child.Name == "catch" || child.Name == "" || child.Name == "__native_write" || child.Name == "__native_write_safe" {
 						continue // Blok spesial diabaikan dari validasi atribut
+					}
+					// If the child name contains a dot, it's a nested slot/decorator (e.g. db.id inside db.create_table)
+					if strings.Contains(child.Name, ".") {
+						continue
+					}
+					if allowAny {
+						continue
 					}
 					if _, allowed := node.cachedMeta.Inputs[child.Name]; !allowed {
 						allowedKeys := make([]string, 0, len(node.cachedMeta.Inputs))
@@ -154,6 +169,30 @@ func (e *Engine) Execute(ctx context.Context, node *Node, scope *Scope) (err err
 
 			// 2. Cek Atribut Wajib
 			for name, input := range node.cachedMeta.Inputs {
+				if name == "(value)" {
+					if input.Required {
+						if node.Value == nil || fmt.Sprintf("%v", node.Value) == "" {
+							return Diagnostic{
+								Type:     "error",
+								Message:  fmt.Sprintf("validation error: missing required main value for slot '%s'", node.Name),
+								Filename: node.Filename,
+								Line:     node.Line,
+								Col:      node.Col,
+								Slot:     node.Name,
+							}
+						}
+					}
+					// Verify main value type if it exists and type is specified
+					if input.Type != "" && input.Type != "any" && node.Value != nil && fmt.Sprintf("%v", node.Value) != "" {
+						tempNode := &Node{Value: node.Value}
+						val := e.ResolveShorthandValue(tempNode, scope)
+						if err := e.ValidateValueType(val, input.Type, node, node.Name); err != nil {
+							return err
+						}
+					}
+					continue
+				}
+
 				if input.Required {
 					found := false
 					var attrNode *Node
@@ -341,7 +380,7 @@ func (e *Engine) ValidateValueType(val interface{}, expectedType string, node *N
 		}
 	case "list", "array":
 		actualTypeLower := strings.ToLower(actualType)
-		isValid = strings.Contains(actualTypeLower, "slice") || strings.Contains(actualTypeLower, "array")
+		isValid = strings.Contains(actualTypeLower, "slice") || strings.Contains(actualTypeLower, "array") || strings.HasPrefix(actualTypeLower, "[")
 		if !isValid {
 			if s, ok := val.(string); ok && (s == "[]" || s == "[[]]" || strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
 				isValid = true

@@ -45,7 +45,16 @@ func RegisterSecuritySlots(eng *engine.Engine) {
 
 		scope.Set(target, string(bytes))
 		return nil
-	}, engine.SlotMeta{Example: "crypto.hash: $pass\n  as: $hashed"})
+	}, engine.SlotMeta{
+		Description: "Hash a plain-text password using bcrypt (cost: 10).",
+		Example:     "crypto.hash: $pass\n  as: $hashed",
+		Inputs: map[string]engine.InputMeta{
+			"(value)": {Description: "Shorthand input for the password string to hash", Required: false, Type: "string"},
+			"text":    {Description: "Alternative parameter to provide the password string", Required: false, Type: "string"},
+			"val":     {Description: "Alternative parameter to provide the password string", Required: false, Type: "string"},
+			"as":      {Description: "Variable name to store the generated hash result (Default: 'hash_result')", Required: false, Type: "string"},
+		},
+	})
 
 	// 2. CRYPTO.VERIFY
 	eng.Register("crypto.verify", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -69,7 +78,15 @@ func RegisterSecuritySlots(eng *engine.Engine) {
 		isValid := (err == nil)
 		scope.Set(target, isValid)
 		return nil
-	}, engine.SlotMeta{Example: "crypto.verify\n  hash: $h\n  text: $p"})
+	}, engine.SlotMeta{
+		Description: "Verify a plain-text password against a bcrypt hash.",
+		Example:     "crypto.verify\n  hash: $h\n  text: $p\n  as: $is_valid",
+		Inputs: map[string]engine.InputMeta{
+			"hash": {Description: "The bcrypt hash string to compare against", Required: true, Type: "string"},
+			"text": {Description: "The plain-text password to verify", Required: true, Type: "string"},
+			"as":   {Description: "Variable name to store the boolean result (Default: 'verify_result')", Required: false, Type: "string"},
+		},
+	})
 
 	// 3. SEC.CSRF_TOKEN
 	eng.Register("sec.csrf_token", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -87,7 +104,13 @@ func RegisterSecuritySlots(eng *engine.Engine) {
 
 		scope.Set(target, token)
 		return nil
-	}, engine.SlotMeta{Example: "sec.csrf_token: $token"})
+	}, engine.SlotMeta{
+		Description: "Retrieve the CSRF token for the current HTTP request context.",
+		Example:     "sec.csrf_token: $token",
+		Inputs: map[string]engine.InputMeta{
+			"(value)": {Description: "Variable name to store the CSRF token (Default: 'csrf_token')", Required: false, Type: "string"},
+		},
+	})
 
 	// 4. CRYPTO.VERIFY_ASPNET (Identity V3)
 	eng.Register("crypto.verify_aspnet", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -114,7 +137,15 @@ func RegisterSecuritySlots(eng *engine.Engine) {
 		isValid := VerifyAspNetHash(hash, password)
 		scope.Set(target, isValid)
 		return nil
-	}, engine.SlotMeta{Example: "crypto.verify_aspnet\n  hash: $db_hash\n  password: $input_pass"})
+	}, engine.SlotMeta{
+		Description: "Verify a plain-text password against an ASP.NET Identity V3 PBKDF2/HMAC-SHA256 hash.",
+		Example:     "crypto.verify_aspnet\n  hash: $db_hash\n  password: $input_pass\n  as: $is_valid",
+		Inputs: map[string]engine.InputMeta{
+			"hash":     {Description: "The ASP.NET Identity V3 hash string (base64 encoded)", Required: true, Type: "string"},
+			"password": {Description: "The plain-text password to verify", Required: true, Type: "string"},
+			"as":       {Description: "Variable name to store the boolean result (Default: 'verify_result')", Required: false, Type: "string"},
+		},
+	})
 
 	// ==========================================
 	// ALIASES FOR TEMPLATE COMPATIBILITY

@@ -132,7 +132,18 @@ auth.middleware {
 
 ### `auth.user`
 
-Retrieve current logged-in user data.
+Retrieve user data from current session.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `any` | No | Variable to store user data |
+
+**Example:**
+```zeno
+auth.user: $current_user
+```
 
 ---
 
@@ -265,50 +276,6 @@ collections.get: $list { index: 0; as: $item }
 
 ---
 
-## Column
-
-### `column.boolean`
-
-No description available.
-
----
-
-### `column.datetime`
-
-No description available.
-
----
-
-### `column.id`
-
-No description available.
-
----
-
-### `column.integer`
-
-No description available.
-
----
-
-### `column.string`
-
-No description available.
-
----
-
-### `column.text`
-
-No description available.
-
----
-
-### `column.timestamps`
-
-No description available.
-
----
-
 ## Cookie
 
 ### `cookie.set`
@@ -413,6 +380,19 @@ Continue to next iteration. Supports conditional: `continue: $i % 2 == 0`
 ### `dd`
 
 Dump and Die. Display variable content and stop script immediately.
+
+---
+
+### `down`
+
+Execute child blocks only during the rollback ('down') migration process.
+
+**Example:**
+```zeno
+down {
+  db.drop_table: 'users'
+}
+```
 
 ---
 
@@ -693,6 +673,19 @@ Reverse of IF. Execute block if condition is FALSE.
 
 ---
 
+### `up`
+
+Execute child blocks only during the forward ('up') migration process.
+
+**Example:**
+```zeno
+up {
+  db.create_table: 'users' { ... }
+}
+```
+
+---
+
 ### `validate`
 
 No description available.
@@ -712,21 +705,11 @@ validate: $form
 
 ### `var`
 
-Membuat atau mengubah nilai variabel dalam scope saat ini.
-
-**Inputs:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `type` | `string` | No | Tipe data (opsional) |
-| `val` | `any` | No | Nilai variabel |
-| `value` | `any` | No | Alias untuk val |
+Standard variable definition/assignment slot.
 
 **Example:**
 ```zeno
-var: $count
-  val: 10
-  type: 'int'
+var: $user { val: $data }
 ```
 
 ---
@@ -742,46 +725,6 @@ While loop
 | `do` | `any` | No | Code block to execute |
 
 **Required Blocks:** `do`
-
----
-
-## Crypto
-
-### `crypto.hash`
-
-No description available.
-
-**Example:**
-```zeno
-crypto.hash: $pass
-  as: $hashed
-```
-
----
-
-### `crypto.verify`
-
-No description available.
-
-**Example:**
-```zeno
-crypto.verify
-  hash: $h
-  text: $p
-```
-
----
-
-### `crypto.verify_aspnet`
-
-No description available.
-
-**Example:**
-```zeno
-crypto.verify_aspnet
-  hash: $db_hash
-  password: $input_pass
-```
 
 ---
 
@@ -895,7 +838,14 @@ date.parse: '2023-12-25' { as: $tgl_obj }
 
 ### `db.avg`
 
-No description available.
+Calculate the AVG (average) of a specific column based on the query state.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The column name to average |
+| `as` | `string` | **Yes** | Variable name to store the result |
 
 **Example:**
 ```zeno
@@ -905,9 +855,36 @@ db.avg: 'rating'
 
 ---
 
+### `db.boolean`
+
+Add a boolean column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.boolean: 'column_name'
+```
+
+---
+
 ### `db.columns`
 
-No description available.
+Specify the column(s) to retrieve in the query. Can be a single string or an array of strings.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `any` | No | A single column name or array of column names |
 
 **Example:**
 ```zeno
@@ -934,9 +911,86 @@ db.count
 
 ---
 
+### `db.create_table`
+
+Create a new database table using a fluent schema building definition.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the table to create |
+| `db` | `string` | No | The database connection name (Default: 'default') |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.create_table: 'posts' {
+  db.id: 'id'
+  db.string: 'title'
+  db.text: 'body'
+}
+```
+
+---
+
+### `db.date`
+
+Add a date column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.date: 'column_name'
+```
+
+---
+
+### `db.decimal`
+
+Add a decimal column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `precision` | `int` | No | Total number of digits (Default: 10) |
+| `scale` | `int` | No | Number of digits to the right of decimal point (Default: 2) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.decimal: 'price' {
+  precision: 12
+  scale: 4
+}
+```
+
+---
+
 ### `db.delete`
 
-No description available.
+Perform a DELETE database operation based on query where constraints.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable to store the count of deleted rows |
 
 **Example:**
 ```zeno
@@ -950,10 +1004,36 @@ db.delete
 
 Check if no rows exist based on the current query state.
 
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | **Yes** | Variable name to store the boolean result |
+
 **Example:**
 ```zeno
 db.doesnt_exist
   as: $is_empty
+```
+
+---
+
+### `db.drop_table`
+
+Drop a database table if it exists.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the table to drop |
+| `db` | `string` | No | The database connection name (Default: 'default') |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.drop_table: 'users'
 ```
 
 ---
@@ -968,8 +1048,6 @@ Execute a raw SQL query (INSERT, UPDATE, DELETE, etc.).
 |------|------|----------|-------------|
 | `bind` | `any` | No | Bind parameters container |
 | `db` | `string` | No | Database connection name |
-| `params` | `list` | No | List of bind values |
-| `val` | `any` | No | Single bind value |
 
 **Main Value Type:** `string`
 
@@ -983,6 +1061,12 @@ db.execute: 'UPDATE users SET x=1'
 ### `db.exists`
 
 Check if at least one row exists based on the current query state.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | **Yes** | Variable name to store the boolean result |
 
 **Example:**
 ```zeno
@@ -1010,6 +1094,32 @@ db.first
 
 ---
 
+### `db.foreign`
+
+Define a foreign key constraint for a column inside a db.create_table block.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The local column name to apply the foreign key to |
+| `on` | `string` | No | The referenced parent column name (Default: 'id') |
+| `on_delete` | `string` | No | Action on parent record deletion (e.g., CASCADE, SET NULL) |
+| `references` | `string` | **Yes** | The parent table name reference |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.foreign: 'user_id' {
+  references: 'users'
+  on: 'id'
+  on_delete: 'CASCADE'
+}
+```
+
+---
+
 ### `db.get`
 
 Retrieve multiple rows from the database based on the current query state.
@@ -1030,7 +1140,13 @@ db.get
 
 ### `db.group_by`
 
-No description available.
+Add a GROUP BY clause to the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | Column name to group by |
 
 **Example:**
 ```zeno
@@ -1041,12 +1157,20 @@ db.group_by: 'status'
 
 ### `db.having`
 
-No description available.
+Add a HAVING clause filter to the query (typically used with GROUP BY).
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `col` | `string` | **Yes** | Column or aggregate field name |
+| `op` | `string` | No | Comparison operator (Default: '>') |
+| `val` | `any` | **Yes** | Value to compare against |
 
 **Example:**
 ```zeno
 db.having {
-  col: count
+  col: 'count'
   op: '>'
   val: 5
 }
@@ -1054,57 +1178,203 @@ db.having {
 
 ---
 
+### `db.hook`
+
+Register lifecycle hooks for a database table (before/after insert, update, delete, save).
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `after_delete` | `any` | No | Code block executed after a DELETE |
+| `after_insert` | `any` | No | Code block executed after an INSERT |
+| `after_save` | `any` | No | Code block executed after INSERT or UPDATE |
+| `after_update` | `any` | No | Code block executed after an UPDATE |
+| `before_delete` | `any` | No | Code block executed before a DELETE |
+| `before_insert` | `any` | No | Code block executed before an INSERT |
+| `before_save` | `any` | No | Code block executed before INSERT or UPDATE |
+| `before_update` | `any` | No | Code block executed before an UPDATE |
+
+**Example:**
+```zeno
+db.hook: 'posts' {
+  before_insert: {
+    var: $data.slug slug($data.title)
+  }
+  after_save: {
+    cache.forget: "posts_list"
+  }
+  after_update: {
+    db.insert: activity_log { action: "updated" table: "posts" }
+  }
+}
+```
+
+---
+
+### `db.id`
+
+Add an auto-incrementing primary key column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.id: 'id'
+```
+
+---
+
 ### `db.insert`
 
-No description available.
+Perform an INSERT database operation. Insert data specified in the children block.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `*(any)` | `any` | No | Column name and the value to insert |
 
 **Example:**
 ```zeno
 db.insert
-  name: $name
+  name: 'John Doe'
+  email: 'john@example.com'
+```
+
+---
+
+### `db.integer`
+
+Add a integer column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.integer: 'column_name'
 ```
 
 ---
 
 ### `db.join`
 
-No description available.
+Perform an INNER JOIN operation with another table.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `on` | `list` | **Yes** | Array representing ['left_col', 'operator', 'right_col'] |
+| `table` | `string` | **Yes** | The table to join |
 
 **Example:**
 ```zeno
 db.join {
-  table: posts
+  table: 'posts'
   on: ['users.id', '=', 'posts.user_id']
 }
 ```
 
 ---
 
-### `db.left_join`
+### `db.json`
 
-No description available.
+Add a json column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
 
 **Example:**
 ```zeno
-db.left_join ...
+db.json: 'column_name'
+```
+
+---
+
+### `db.last`
+
+Retrieve the last row (ordered by 'id DESC') from the database.
+
+**Example:**
+```zeno
+db.last
+  as: $user
+```
+
+---
+
+### `db.left_join`
+
+Perform a LEFT OUTER JOIN operation with another table.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `on` | `list` | **Yes** | Array representing ['left_col', 'operator', 'right_col'] |
+| `table` | `string` | **Yes** | The table to join |
+
+**Example:**
+```zeno
+db.left_join {
+  table: 'posts'
+  on: ['users.id', '=', 'posts.user_id']
+}
 ```
 
 ---
 
 ### `db.limit`
 
-No description available.
+Set a LIMIT on the number of rows retrieved in the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `int` | **Yes** | Maximum number of rows to retrieve |
 
 **Example:**
 ```zeno
-db.limit: $limit
+db.limit: 10
 ```
 
 ---
 
 ### `db.max`
 
-No description available.
+Retrieve the MAX (maximum value) of a specific column based on the query state.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The column name to find the maximum of |
+| `as` | `string` | **Yes** | Variable name to store the result |
 
 **Example:**
 ```zeno
@@ -1116,7 +1386,14 @@ db.max: 'age'
 
 ### `db.min`
 
-No description available.
+Retrieve the MIN (minimum value) of a specific column based on the query state.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The column name to find the minimum of |
+| `as` | `string` | **Yes** | Variable name to store the result |
 
 **Example:**
 ```zeno
@@ -1128,18 +1405,32 @@ db.min: 'age'
 
 ### `db.offset`
 
-No description available.
+Set an OFFSET to skip a number of rows in the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `int` | **Yes** | Number of rows to skip |
 
 **Example:**
 ```zeno
-db.offset: $offset
+db.offset: 20
 ```
 
 ---
 
 ### `db.or_where`
 
-Add an OR WHERE filter to the query.
+Add an OR WHERE filter constraint to the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `col` | `string` | **Yes** | Column name |
+| `op` | `string` | No | Comparison operator (Default: '=') |
+| `val` | `any` | **Yes** | Filter value |
 
 **Example:**
 ```zeno
@@ -1152,7 +1443,13 @@ db.or_where
 
 ### `db.order_by`
 
-No description available.
+Add an ORDER BY sorting clause to the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | Sorting expression (e.g. 'created_at DESC') |
 
 **Example:**
 ```zeno
@@ -1164,6 +1461,14 @@ db.order_by: 'id DESC'
 ### `db.paginate`
 
 Retrieve rows paginated with metadata.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | **Yes** | Variable name to store the paginator object containing data and meta |
+| `page` | `int` | No | Current page number (Default: 1) |
+| `per_page` | `int` | No | Number of rows per page (Default: 15) |
 
 **Example:**
 ```zeno
@@ -1178,6 +1483,14 @@ db.paginate
 ### `db.pluck`
 
 Retrieve a single column's values as a flat array.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | No | The column name to pluck |
+| `as` | `string` | **Yes** | Variable name to store the array result |
+| `col` | `string` | No | Alias for column name |
 
 **Example:**
 ```zeno
@@ -1195,7 +1508,22 @@ Alias for db.select
 
 ### `db.right_join`
 
-No description available.
+Perform a RIGHT OUTER JOIN operation with another table.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `on` | `list` | **Yes** | Array representing ['left_col', 'operator', 'right_col'] |
+| `table` | `string` | **Yes** | The table to join |
+
+**Example:**
+```zeno
+db.right_join {
+  table: 'posts'
+  on: ['users.id', '=', 'posts.user_id']
+}
+```
 
 ---
 
@@ -1217,8 +1545,6 @@ Perform a SELECT query and retrieve multiple rows.
 | `bind` | `any` | No | Bind parameters container |
 | `db` | `string` | No | Database connection name |
 | `first` | `bool` | No | Return only the first row as a map (Default: false) |
-| `params` | `list` | No | List of bind values |
-| `val` | `any` | No | Single bind value |
 
 **Main Value Type:** `string`
 
@@ -1230,9 +1556,42 @@ db.select: 'SELECT * FROM users'
 
 ---
 
+### `db.string`
+
+Add a string column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `length` | `int` | No | Alias for limit |
+| `limit` | `int` | No | Maximum length of the string (Default: 255) |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.string: 'name' {
+  limit: 100
+  unique: true
+}
+```
+
+---
+
 ### `db.sum`
 
-No description available.
+Calculate the SUM of a specific column based on the query state.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The column name to sum |
+| `as` | `string` | **Yes** | Variable name to store the result |
 
 **Example:**
 ```zeno
@@ -1260,14 +1619,63 @@ db.table: 'users'
 
 ---
 
+### `db.text`
+
+Add a text column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.text: 'column_name'
+```
+
+---
+
+### `db.timestamp`
+
+Add a timestamp column to the table schema.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The name of the column |
+| `nullable` | `bool` | No | Whether the column allows NULL values (Default: true) |
+| `unique` | `bool` | No | Whether the column values must be unique (Default: false) |
+
+**Main Value Type:** `string`
+
+**Example:**
+```zeno
+db.timestamp: 'column_name'
+```
+
+---
+
 ### `db.update`
 
-No description available.
+Perform an UPDATE database operation. Update columns specified in the children block based on query where constraints.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `*(any)` | `any` | No | Column name and the new value to update |
 
 **Example:**
 ```zeno
 db.update
   status: 'active'
+  updated_at: 'NOW()'
 ```
 
 ---
@@ -1295,7 +1703,14 @@ db.where
 
 ### `db.where_between`
 
-Add a WHERE BETWEEN filter to the query.
+Add a WHERE BETWEEN constraint to filter a range of values.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `col` | `string` | **Yes** | Column name |
+| `val` | `list` | **Yes** | Array representing the lower and upper bounds: [min, max] |
 
 **Example:**
 ```zeno
@@ -1308,13 +1723,20 @@ db.where_between
 
 ### `db.where_in`
 
-No description available.
+Add an 'AND WHERE IN' filter constraint to the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `col` | `string` | **Yes** | Column name |
+| `val` | `list` | **Yes** | Array or slice of allowed values |
 
 **Example:**
 ```zeno
 db.where_in {
-  col: id
-  val: [1, 2, 3]
+  col: 'status'
+  val: ['active', 'pending']
 }
 ```
 
@@ -1322,7 +1744,14 @@ db.where_in {
 
 ### `db.where_not_between`
 
-Add a WHERE NOT BETWEEN filter to the query.
+Add a WHERE NOT BETWEEN constraint to exclude a range of values.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `col` | `string` | **Yes** | Column name |
+| `val` | `list` | **Yes** | Array representing the lower and upper bounds: [min, max] |
 
 **Example:**
 ```zeno
@@ -1335,13 +1764,20 @@ db.where_not_between
 
 ### `db.where_not_in`
 
-No description available.
+Add an 'AND WHERE NOT IN' filter constraint to the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `col` | `string` | **Yes** | Column name |
+| `val` | `list` | **Yes** | Array or slice of values to exclude |
 
 **Example:**
 ```zeno
 db.where_not_in {
-  col: status
-  val: ['archived', 'deleted']
+  col: 'role'
+  val: ['admin', 'moderator']
 }
 ```
 
@@ -1349,22 +1785,102 @@ db.where_not_in {
 
 ### `db.where_not_null`
 
-No description available.
+Add a 'WHERE column IS NOT NULL' constraint to the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The column name to check |
 
 **Example:**
 ```zeno
-db.where_not_null: created_at
+db.where_not_null: 'created_at'
 ```
 
 ---
 
 ### `db.where_null`
 
-No description available.
+Add a 'WHERE column IS NULL' constraint to the query.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | **Yes** | The column name to check |
 
 **Example:**
 ```zeno
-db.where_null: deleted_at
+db.where_null: 'deleted_at'
+```
+
+---
+
+## Docker
+
+### `docker.call`
+
+Call an external docker container microservice with resilience (retry & circuit breaker).
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `any` | No | Variable to store result |
+| `circuit_breaker` | `any` | No | Enable circuit breaker protection (default false) |
+| `endpoint` | `any` | No | HTTP Path (default /) |
+| `method` | `any` | No | HTTP Method (default POST) |
+| `payload` | `any` | No | JSON array/object to send |
+| `port` | `any` | No | Port (default 80) |
+| `retry` | `any` | No | Number of retries on failure (default 0) |
+| `timeout` | `any` | No | Timeout in ms (default 15000) |
+
+**Example:**
+```zeno
+docker.call: 'php_worker' {
+  endpoint: '/calculate'
+  payload: { data: 1 }
+  retry: 3
+  circuit_breaker: true
+  as: $res
+}
+```
+
+---
+
+### `docker.health`
+
+Check health of a docker sidecar HTTP service.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `any` | No | Variable to store result |
+| `host` | `any` | No | Hostname of the container |
+| `port` | `any` | No | Port of the container |
+
+**Example:**
+```zeno
+docker.health: 'php_worker' {
+  port: 8000
+  as: $h
+}
+```
+
+---
+
+### `docker.nodes`
+
+Register a pool of nodes for a service name (Load Balancing).
+
+**Example:**
+```zeno
+docker.nodes: 'payment_service' {
+  nodes: ['10.0.0.1', '10.0.0.2']
+  check: '/status'
+}
 ```
 
 ---
@@ -1380,7 +1896,7 @@ Returns documentation metadata for all registered ZenoLang slots.
 engine.slots: { as: $docs }
 ```
 
-
+---
 
 ## Http
 
@@ -1439,18 +1955,6 @@ http.created: {
 ### `http.delete`
 
 No description available.
-
----
-
-### `http.fetch`
-
-No description available.
-
-**Example:**
-```zeno
-http.fetch: $api_url
-  as: $response
-```
 
 ---
 
@@ -1522,6 +2026,28 @@ No description available.
 ```zeno
 http.json_body { as: $data }
 ```
+
+---
+
+### `http.middleware`
+
+Mendefinisikan middleware kustom menggunakan ZenoLang.
+
+**Example:**
+```zeno
+http.middleware: 'auth' {
+  do: {
+    session.get: 'user_id' { as: $uid }
+    if: $uid == null { then: { http.redirect: '/login' } }
+  }
+}
+```
+
+---
+
+### `http.next`
+
+Melanjutkan ke handler berikutnya dalam rantai middleware.
 
 ---
 
@@ -1715,34 +2241,6 @@ http.validation_error: {
   message: "Validation failed"
   errors: $errors
 }
-```
-
----
-
-## Image
-
-### `image.info`
-
-No description available.
-
-**Example:**
-```zeno
-image.info
-  path: 'uploads/foto.jpg'
-```
-
----
-
-### `image.resize`
-
-Mengubah ukuran atau format gambar (Placeholder implementasi).
-
-**Example:**
-```zeno
-image.resize
-  source: "input.jpg"
-  dest: "output_thumb.jpg"
-  width: 100
 ```
 
 ---
@@ -2211,24 +2709,6 @@ Eager load a relationship.
 
 ---
 
-
-
-## Schema
-
-### `db.create_table`
-
-Create a new database table using fluent schema builder.
-
-**Example:**
-```zeno
-db.create_table: 'users' {
-  db.id: 'id'
-  db.string: 'name'
-}
-```
-
----
-
 ## Scope
 
 ### `scope.set`
@@ -2252,19 +2732,6 @@ scope.set: $my_var
 
 ---
 
-## Sec
-
-### `sec.csrf_token`
-
-No description available.
-
-**Example:**
-```zeno
-sec.csrf_token: $token
-```
-
----
-
 ## Section
 
 ### `section.define`
@@ -2281,6 +2748,12 @@ Yield a layout section
 
 ## Session
 
+### `session.destroy`
+
+Destroy all session data.
+
+---
+
 ### `session.flash`
 
 Flash data to the session (cookie) for the next request.
@@ -2292,6 +2765,12 @@ session.flash: { key: 'error', val: 'Invalid credentials' }
 
 ---
 
+### `session.get`
+
+Get session data.
+
+---
+
 ### `session.get_flash`
 
 Retrieve flash data and remove it from session.
@@ -2300,6 +2779,18 @@ Retrieve flash data and remove it from session.
 ```zeno
 session.get_flash: 'error' { as: $error_msg }
 ```
+
+---
+
+### `session.regenerate`
+
+Regenerate session ID (Security).
+
+---
+
+### `session.set`
+
+Set session data.
 
 ---
 
