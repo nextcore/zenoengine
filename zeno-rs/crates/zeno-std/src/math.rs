@@ -1,10 +1,8 @@
-use crate::diagnostic::Diagnostic;
-use crate::executor::{Engine, InputMeta, SlotMeta};
-use crate::scope::Value;
+use zenocore::{Diagnostic, Engine, InputMeta, SlotMeta, Value};
+use zenocore::slots::resolve_node_value;
 use evalexpr::{ContextWithMutableFunctions, ContextWithMutableVariables};
 use std::collections::HashMap;
 use std::sync::Arc;
-use super::resolve_node_value;
 
 pub fn register(engine: &mut Engine) {
     // ==========================================

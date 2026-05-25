@@ -2,6 +2,8 @@ package apidoc
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 )
@@ -126,4 +128,33 @@ func (r *APIRegistry) GetRoutes() []*RouteDoc {
 		routes = append(routes, doc)
 	}
 	return routes
+}
+
+// SwaggerUIHandler returns an http.HandlerFunc that serves Swagger UI HTML,
+// configured to fetch the OpenAPI JSON specification from the given URL.
+func SwaggerUIHandler(swaggerJSONURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>API Documentation</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+<script>
+window.onload = function() {
+  window.ui = SwaggerUIBundle({
+    url: "%s",
+    dom_id: '#swagger-ui',
+  });
+};
+</script>
+</body>
+</html>`, swaggerJSONURL)
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(html))
+	}
 }

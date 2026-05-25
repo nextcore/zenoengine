@@ -22,6 +22,7 @@ export default defineConfig({
       {
         text: 'Ecosystem', items: [
           { text: 'ZenoLang', link: '/ecosystem/zenolang' },
+          { text: 'API Documentation (apidoc)', link: '/ecosystem/apidoc' },
           { text: 'Multi-App Architecture', link: '/ecosystem/multi-app' },
           { text: 'Blade Engine', link: '/views/blade' },
           { text: 'ORM', link: '/orm/eloquent' }
@@ -108,6 +109,7 @@ export default defineConfig({
           items: [
             { text: 'ZenoLang', link: '/ecosystem/zenolang' },
             { text: 'Embedding ZenoLang', link: '/ecosystem/embed' },
+            { text: 'API Documentation (apidoc)', link: '/ecosystem/apidoc' },
             { text: 'Stdlib API Reference', link: '/ecosystem/stdlib-reference' },
             { text: 'Multi-App Architecture', link: '/ecosystem/multi-app' },
             { text: 'Container Bridge (Docker)', link: '/ecosystem/container-bridge' }

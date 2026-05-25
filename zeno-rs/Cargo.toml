@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/zenocore",
+    "crates/zeno-std",
+    "crates/zeno-apidoc"
+]
+resolver = "2"
