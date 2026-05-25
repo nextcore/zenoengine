@@ -3,6 +3,7 @@ package logger
 import (
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -10,6 +11,9 @@ import (
 
 // Middleware returns a middleware that logs HTTP requests using slog.
 func Middleware(next http.Handler) http.Handler {
+	if os.Getenv("DISABLE_REQUEST_LOGGING") == "true" {
+		return next
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
