@@ -2,13 +2,13 @@
 
 If you are migrating an existing C# ASP.NET Core application to ZenoEngine, you can reuse your existing database (containing user credentials hashed with ASP.NET Core Identity) without forcing your users to reset their passwords.
 
-ZenoEngine provides a native high-performance module slot called `auth.aspnet_login` that is fully compatible with the ASP.NET Core Identity database schema and password hashing standard (Identity V3 PBKDF2).
+ZenoEngine provides a dedicated native high-performance slot group `aspnet.*` that is fully compatible with the ASP.NET Core Identity database schema and password hashing standard (Identity V3 PBKDF2).
 
 ---
 
 ## The ASP.NET Core Identity Schema
 
-By default, ASP.NET Core Identity stores user data in the `AspNetUsers` table. The `auth.aspnet_login` slot expects this table to contain at least the following columns:
+By default, ASP.NET Core Identity stores user data in the `AspNetUsers` table. The `aspnet.login` slot expects this table to contain at least the following columns:
 
 | Column Name | Type | Description |
 | :--- | :--- | :--- |
@@ -21,14 +21,14 @@ By default, ASP.NET Core Identity stores user data in the `AspNetUsers` table. T
 
 ---
 
-## Using `auth.aspnet_login` in ZenoLang
+## Using `aspnet.login` in ZenoLang
 
-The `auth.aspnet_login` slot performs the lookup on `AspNetUsers` using a case-insensitive check against `NormalizedUserName` and `NormalizedEmail` to match either username or email. It then validates the password using the ASP.NET Identity V3 format (PBKDF2 with HMAC-SHA256) and issues a JWT token.
+The `aspnet.login` slot performs the lookup on `AspNetUsers` using a case-insensitive check against `NormalizedUserName` and `NormalizedEmail` to match either username or email. It then validates the password using the ASP.NET Identity V3 format (PBKDF2 with HMAC-SHA256) and issues a JWT token.
 
 ### Syntax Reference
 
 ```zl
-auth.aspnet_login
+aspnet.login
   username: $input_username_or_email
   password: $input_password
   [fields: ['TenantId', 'FullName']]
@@ -65,7 +65,7 @@ http.post: '/api/auth/login' {
   }
 
   # 2. Authenticate using C# AspNetUsers schema with a custom 'TenantId' column
-  auth.aspnet_login
+  aspnet.login
     username: $request.username
     password: $request.password
     fields: ['TenantId']
@@ -80,6 +80,34 @@ http.post: '/api/auth/login' {
     tenant: $current_user.TenantId
   }
 }
+```
+
+---
+
+## Creating New Users (Password Hashing)
+
+If you need to create/register new users within ZenoEngine and want to save their passwords in the compatible ASP.NET Identity V3 format (so legacy C# microservices or applications can still verify them), use the `aspnet.hash` slot:
+
+```zl
+aspnet.hash: $plain_password {
+  [iterations: 10000]
+  as: $db_hash
+}
+```
+
+This slot generates a cryptographically secure 16-byte random salt, performs PBKDF2 hashing with HMAC-SHA256, and formats the output as a Base64 binary blob fully compatible with Microsoft Identity.
+
+---
+
+## Verifying Password Manually
+
+If you need to verify a legacy hash without generating a JWT token or loading a database row, use the `aspnet.verify` slot:
+
+```zl
+aspnet.verify
+  hash: $db_hash
+  password: $plain_password
+  as: $is_valid
 ```
 
 ---

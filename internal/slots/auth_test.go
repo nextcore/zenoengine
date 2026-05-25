@@ -2,9 +2,6 @@ package slots
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
 	"testing"
 	"zeno/pkg/dbmanager"
 	"zeno/pkg/engine"
@@ -12,7 +9,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 func TestAuthSlots(t *testing.T) {
@@ -38,17 +34,7 @@ func TestAuthSlots(t *testing.T) {
 		t.Fatalf("Failed to insert user: %v", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE AspNetUsers (Id TEXT PRIMARY KEY, UserName TEXT, NormalizedUserName TEXT, Email TEXT, NormalizedEmail TEXT, PasswordHash TEXT, TenantId TEXT, FullName TEXT)`)
-	if err != nil {
-		t.Fatalf("Failed to create AspNetUsers table: %v", err)
-	}
 
-	aspnetHash := generateAspNetHash("AspPass123!")
-	_, err = db.Exec(`INSERT INTO AspNetUsers (Id, UserName, NormalizedUserName, Email, NormalizedEmail, PasswordHash, TenantId, FullName) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"asp-user-uuid-999", "AspUser", "ASPUSER", "asp@example.com", "ASP@EXAMPLE.COM", aspnetHash, "tenant-abc", "ASP.NET Migrated User")
-	if err != nil {
-		t.Fatalf("Failed to insert aspnet user: %v", err)
-	}
 
 	eng := engine.NewEngine()
 	RegisterAuthSlots(eng, dbMgr)
@@ -142,54 +128,4 @@ func TestAuthSlots(t *testing.T) {
 		uMap := u.(map[string]interface{})
 		assert.Equal(t, 1, uMap["user_id"])
 	})
-
-	t.Run("auth.aspnet_login success", func(t *testing.T) {
-		scope := engine.NewScope(nil)
-		node := &engine.Node{
-			Name: "auth.aspnet_login",
-			Children: []*engine.Node{
-				{Name: "username", Value: "asp@example.com"}, // match via email
-				{Name: "password", Value: "AspPass123!"},
-				{Name: "fields", Value: []interface{}{"TenantId", "FullName"}},
-				{Name: "as", Value: "$token"},
-				{Name: "user_as", Value: "$usr"},
-			},
-		}
-
-		err := eng.Execute(context.Background(), node, scope)
-		assert.NoError(t, err)
-
-		token, ok := scope.Get("token")
-		assert.True(t, ok)
-		assert.NotEmpty(t, token)
-
-		usrRaw, ok := scope.Get("usr")
-		assert.True(t, ok)
-		usr, ok := usrRaw.(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "asp-user-uuid-999", usr["id"])
-		assert.Equal(t, "AspUser", usr["username"])
-		assert.Equal(t, "asp@example.com", usr["email"])
-		assert.Equal(t, "tenant-abc", usr["TenantId"])
-		assert.Equal(t, "ASP.NET Migrated User", usr["FullName"])
-	})
-}
-
-func generateAspNetHash(password string) string {
-	salt := make([]byte, 16)
-	for i := range salt {
-		salt[i] = byte(i)
-	}
-	iterCount := 10000
-	subkey := pbkdf2.Key([]byte(password), salt, iterCount, 32, sha256.New)
-
-	blob := make([]byte, 1+4+4+4+16+32)
-	blob[0] = 0x01                          // Version V3
-	binary.BigEndian.PutUint32(blob[1:5], 1) // PRF = SHA256
-	binary.BigEndian.PutUint32(blob[5:9], uint32(iterCount))
-	binary.BigEndian.PutUint32(blob[9:13], 16) // saltLen = 16
-	copy(blob[13:29], salt)
-	copy(blob[29:], subkey)
-
-	return base64.StdEncoding.EncodeToString(blob)
 }

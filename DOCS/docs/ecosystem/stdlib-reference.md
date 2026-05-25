@@ -61,9 +61,31 @@ arrays.length: $users
 
 ---
 
-## Auth
+## Aspnet
 
-### `auth.aspnet_login`
+### `aspnet.hash`
+
+Hash a plain-text password using the legacy ASP.NET Identity V3 PBKDF2/HMAC-SHA256 format.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | No | The plain-text password to hash |
+| `as` | `string` | No | Variable name to store the generated hash result (Default: 'hash_result') |
+| `iterations` | `int` | No | Iteration count (Default: 10000) |
+| `password` | `string` | No | The plain-text password to hash |
+
+**Example:**
+```zeno
+aspnet.hash: $input_pass
+  iterations: 10000
+  as: $db_hash
+```
+
+---
+
+### `aspnet.login`
 
 Authenticate user using legacy ASP.NET Core Identity AspNetUsers table schema and PBKDF2 hashing.
 
@@ -82,7 +104,7 @@ Authenticate user using legacy ASP.NET Core Identity AspNetUsers table schema an
 
 **Example:**
 ```zeno
-auth.aspnet_login:
+aspnet.login:
   username: $input_user
   password: $input_pass
   fields: ['TenantId', 'FullName']
@@ -91,6 +113,30 @@ auth.aspnet_login:
 ```
 
 ---
+
+### `aspnet.verify`
+
+Verify a plain-text password against an ASP.NET Identity V3 PBKDF2/HMAC-SHA256 hash.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store the boolean result (Default: 'verify_result') |
+| `hash` | `string` | **Yes** | The ASP.NET Identity V3 hash string (base64 encoded) |
+| `password` | `string` | **Yes** | The plain-text password to verify |
+
+**Example:**
+```zeno
+aspnet.verify
+  hash: $db_hash
+  password: $input_pass
+  as: $is_valid
+```
+
+---
+
+## Auth
 
 ### `auth.check`
 
@@ -754,6 +800,51 @@ While loop
 | `do` | `any` | No | Code block to execute |
 
 **Required Blocks:** `do`
+
+---
+
+## Crypto
+
+### `crypto.hash`
+
+Hash a plain-text password using bcrypt (cost: 10).
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | No | Shorthand input for the password string to hash |
+| `as` | `string` | No | Variable name to store the generated hash result (Default: 'hash_result') |
+| `text` | `string` | No | Alternative parameter to provide the password string |
+| `val` | `string` | No | Alternative parameter to provide the password string |
+
+**Example:**
+```zeno
+crypto.hash: $pass
+  as: $hashed
+```
+
+---
+
+### `crypto.verify`
+
+Verify a plain-text password against a bcrypt hash.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store the boolean result (Default: 'verify_result') |
+| `hash` | `string` | **Yes** | The bcrypt hash string to compare against |
+| `text` | `string` | **Yes** | The plain-text password to verify |
+
+**Example:**
+```zeno
+crypto.verify
+  hash: $h
+  text: $p
+  as: $is_valid
+```
 
 ---
 
@@ -1927,6 +2018,51 @@ engine.slots: { as: $docs }
 
 ---
 
+## Hash
+
+### `hash.make`
+
+Hash a plain-text password using bcrypt (cost: 10).
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | No | Shorthand input for the password string to hash |
+| `as` | `string` | No | Variable name to store the generated hash result (Default: 'hash_result') |
+| `text` | `string` | No | Alternative parameter to provide the password string |
+| `val` | `string` | No | Alternative parameter to provide the password string |
+
+**Example:**
+```zeno
+crypto.hash: $pass
+  as: $hashed
+```
+
+---
+
+### `hash.verify`
+
+Verify a plain-text password against a bcrypt hash.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store the boolean result (Default: 'verify_result') |
+| `hash` | `string` | **Yes** | The bcrypt hash string to compare against |
+| `text` | `string` | **Yes** | The plain-text password to verify |
+
+**Example:**
+```zeno
+crypto.verify
+  hash: $h
+  text: $p
+  as: $is_valid
+```
+
+---
+
 ## Http
 
 ### `http.accepted`
@@ -2757,6 +2893,25 @@ Create a variable (Legacy alias for 'var').
 ```zeno
 scope.set: $my_var
   val: 123
+```
+
+---
+
+## Sec
+
+### `sec.csrf_token`
+
+Retrieve the CSRF token for the current HTTP request context.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | No | Variable name to store the CSRF token (Default: 'csrf_token') |
+
+**Example:**
+```zeno
+sec.csrf_token: $token
 ```
 
 ---

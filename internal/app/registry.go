@@ -22,6 +22,7 @@ func RegisterAllSlots(eng *engine.Engine, r *chi.Mux, dbMgr *dbmanager.DBManager
 // RegisterCoreSlots mendaftarkan slot dasar (Logic, Math, Time, dll)
 func RegisterCoreSlots(eng *engine.Engine) {
 	slots.RegisterUtilSlots(eng)
+	slots.RegisterSecuritySlots(eng)
 	pkgslots.RegisterLogicSlots(eng)
 	slots.RegisterMathSlots(eng)
 	slots.RegisterTimeSlots(eng)
@@ -51,6 +52,7 @@ func RegisterDataSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 	slots.RegisterORMSlots(eng, dbMgr)
 	slots.RegisterValidatorSlots(eng, dbMgr)
 	slots.RegisterAuthSlots(eng, dbMgr)
+	slots.RegisterAspNetSlots(eng, dbMgr)
 	slots.RegisterJSONSlots(eng)
 	slots.RegisterDBHookSlots(eng)
 }
