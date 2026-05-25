@@ -5,14 +5,31 @@ log: "🚀 ZenoEngine Started..."
 
 view.root: 'views'
 
+# Welcome Page (Demo HTML)
 http.get: '/' {
     view.blade: 'welcome'
 }
 
-// 404 Handler
+# Benchmark Endpoints (Web Frameworks Benchmark compatible)
+http.get: '/user/{id}' {
+    http.response: {
+        status: 200
+        type: 'text/plain'
+        body: $id
+    }
+}
+
+http.post: '/user' {
+    http.response: {
+        status: 200
+        type: 'text/plain'
+        body: ''
+    }
+}
+
+# 404 Handler
 http.get: /* {
   do: {
-
     http.not_found: {
       body: "Halaman tidak ditemukan."
     }
