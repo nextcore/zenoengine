@@ -180,7 +180,6 @@ impl Engine {
             if let Some(val) = scope.get(key) {
                 return val;
             }
-            return Value::Nil;
         }
 
         // H. Fallback: Parse to appropriate primitive type or return raw string
