@@ -520,4 +520,158 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		Description: "Refresh JWT token with a new expiration.",
 		Example:     "jwt.refresh: $old_token\n  as: $new_token",
 	})
+
+	// 7. AUTH.ASPNET_LOGIN
+	eng.Register("auth.aspnet_login", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		var username, password string
+		jwtSecret := os.Getenv("JWT_SECRET")
+		if jwtSecret == "" {
+			jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
+		}
+		targetToken := "token"
+		targetUser := "user"
+		dbName := "default"
+		expiresIn := int64(86400) // 24 hours default
+		var customFields []string
+
+		for _, c := range node.Children {
+			val := parseNodeValue(c, scope)
+			if c.Name == "username" || c.Name == "email" {
+				username = coerce.ToString(val)
+			}
+			if c.Name == "password" {
+				password = coerce.ToString(val)
+			}
+			if c.Name == "secret" {
+				jwtSecret = coerce.ToString(val)
+			}
+			if c.Name == "as" {
+				targetToken = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+			if c.Name == "user_as" {
+				targetUser = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+			if c.Name == "db" {
+				dbName = coerce.ToString(val)
+			}
+			if c.Name == "expires_in" {
+				expiresIn, _ = coerce.ToInt64(val)
+			}
+			if c.Name == "fields" {
+				if fieldsVal := parseNodeValue(c, scope); fieldsVal != nil {
+					if list, ok := fieldsVal.([]interface{}); ok {
+						for _, item := range list {
+							customFields = append(customFields, coerce.ToString(item))
+						}
+					}
+				}
+			}
+		}
+
+		if username == "" || password == "" {
+			return fmt.Errorf("auth.aspnet_login: username and password required")
+		}
+
+		// DB Lookup
+		db := dbMgr.GetConnection(dbName)
+		dialect := dbMgr.GetDialect(dbName)
+		if db == nil {
+			return fmt.Errorf("auth.aspnet_login: database connection '%s' not found", dbName)
+		}
+
+		// Normalize search parameters
+		upperUsername := strings.ToUpper(username)
+
+		// Build columns select slice dynamically
+		columns := []string{
+			dialect.QuoteIdentifier("Id"),
+			dialect.QuoteIdentifier("UserName"),
+			dialect.QuoteIdentifier("Email"),
+			dialect.QuoteIdentifier("PasswordHash"),
+		}
+		for _, cf := range customFields {
+			columns = append(columns, dialect.QuoteIdentifier(cf))
+		}
+
+		query := fmt.Sprintf("SELECT %s FROM %s WHERE %s = %s OR %s = %s OR %s = %s OR %s = %s %s",
+			strings.Join(columns, ", "),
+			dialect.QuoteIdentifier("AspNetUsers"),
+			dialect.QuoteIdentifier("NormalizedUserName"), dialect.Placeholder(1),
+			dialect.QuoteIdentifier("NormalizedEmail"), dialect.Placeholder(2),
+			dialect.QuoteIdentifier("UserName"), dialect.Placeholder(3),
+			dialect.QuoteIdentifier("Email"), dialect.Placeholder(4),
+			dialect.Limit(1, 0))
+
+		var dbID interface{}
+		var dbUsername, dbEmail, dbPass string
+
+		scanTargets := make([]interface{}, 4+len(customFields))
+		scanTargets[0] = &dbID
+		scanTargets[1] = &dbUsername
+		scanTargets[2] = &dbEmail
+		scanTargets[3] = &dbPass
+
+		customValues := make([]interface{}, len(customFields))
+		for i := range customFields {
+			scanTargets[4+i] = &customValues[i]
+		}
+
+		err := db.QueryRowContext(ctx, query, upperUsername, upperUsername, username, username).Scan(scanTargets...)
+		if err != nil {
+			return fmt.Errorf("auth.aspnet_login: invalid credentials")
+		}
+
+		// Verify Password using ASP.NET Identity V3 PBKDF2/HMAC-SHA256
+		if !VerifyAspNetHash(dbPass, password) {
+			return fmt.Errorf("auth.aspnet_login: invalid credentials")
+		}
+
+		// Generate JWT Token
+		claims := jwt.MapClaims{
+			"sub":      coerce.ToString(dbID),
+			"username": dbUsername,
+			"email":    dbEmail,
+			"exp":      time.Now().Add(time.Duration(expiresIn) * time.Second).Unix(),
+			"iat":      time.Now().Unix(),
+		}
+
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString([]byte(jwtSecret))
+		if err != nil {
+			return fmt.Errorf("auth.aspnet_login: failed to sign token: %v", err)
+		}
+
+		// Save results to scope
+		scope.Set(targetToken, tokenString)
+
+		userMap := map[string]interface{}{
+			"id":       coerce.ToString(dbID),
+			"username": dbUsername,
+			"email":    dbEmail,
+		}
+		for i, cf := range customFields {
+			// Convert scanner interface value appropriately
+			if valBytes, ok := customValues[i].([]byte); ok {
+				userMap[cf] = string(valBytes)
+			} else {
+				userMap[cf] = customValues[i]
+			}
+		}
+		scope.Set(targetUser, userMap)
+
+		return nil
+	}, engine.SlotMeta{
+		Description: "Authenticate user using legacy ASP.NET Core Identity AspNetUsers table schema and PBKDF2 hashing.",
+		Example:     "auth.aspnet_login:\n  username: $input_user\n  password: $input_pass\n  fields: ['TenantId', 'FullName']\n  as: $token\n  user_as: $user",
+		Inputs: map[string]engine.InputMeta{
+			"username":   {Description: "Username or Email address of the user", Required: true, Type: "string"},
+			"password":   {Description: "Plain-text password", Required: true, Type: "string"},
+			"db":         {Description: "Database connection name (Default: 'default')", Required: false, Type: "string"},
+			"secret":     {Description: "JWT secret key for signing", Required: false, Type: "string"},
+			"expires_in": {Description: "Token expiration time in seconds (Default: 86400)", Required: false, Type: "int"},
+			"fields":     {Description: "List of custom database columns to retrieve from AspNetUsers", Required: false, Type: "list"},
+			"as":         {Description: "Variable to store the JWT token (Default: 'token')", Required: false, Type: "string"},
+			"user_as":    {Description: "Variable to store the user data map (Default: 'user')", Required: false, Type: "string"},
+		},
+	})
 }

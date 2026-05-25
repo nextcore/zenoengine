@@ -63,6 +63,35 @@ arrays.length: $users
 
 ## Auth
 
+### `auth.aspnet_login`
+
+Authenticate user using legacy ASP.NET Core Identity AspNetUsers table schema and PBKDF2 hashing.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable to store the JWT token (Default: 'token') |
+| `db` | `string` | No | Database connection name (Default: 'default') |
+| `expires_in` | `int` | No | Token expiration time in seconds (Default: 86400) |
+| `fields` | `list` | No | List of custom database columns to retrieve from AspNetUsers |
+| `password` | `string` | **Yes** | Plain-text password |
+| `secret` | `string` | No | JWT secret key for signing |
+| `user_as` | `string` | No | Variable to store the user data map (Default: 'user') |
+| `username` | `string` | **Yes** | Username or Email address of the user |
+
+**Example:**
+```zeno
+auth.aspnet_login:
+  username: $input_user
+  password: $input_pass
+  fields: ['TenantId', 'FullName']
+  as: $token
+  user_as: $user
+```
+
+---
+
 ### `auth.check`
 
 Check if user is logged in (returns boolean).
