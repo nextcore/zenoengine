@@ -131,6 +131,72 @@ aspnet.validate_password: $plain_password {
 
 This slot returns a boolean validation status (`$is_valid`) and a list of detailed error messages (`$password_errors`) that match Microsoft Identity's default error messages (e.g., "Passwords must have at least one uppercase ('A'-'Z').").
 
+### Example Registration Implementation
+
+Here is how you can use the password validation and hashing slots together in a ZenoLang route handler when registering a new user:
+
+```zl
+http.post: '/api/auth/register' {
+  # 1. Basic validation (required, confirmation check, email format/uniqueness)
+  validate {
+    rules: {
+      username: 'required|unique:AspNetUsers,UserName'
+      email: 'required|email|unique:AspNetUsers,Email'
+      password: 'required|confirmed'
+    }
+    as: $validation_errors
+  }
+
+  if $validation_errors_any {
+    response.json {
+      success: false
+      errors: $validation_errors
+    }
+  }
+
+  # 2. Advanced password policy validation matching ASP.NET Identity rules
+  aspnet.validate_password: $request.password {
+    required_length: 8
+    require_uppercase: true
+    require_digit: true
+    require_non_alphanumeric: true
+    as: $pw_ok
+    errors_as: $pw_errors
+  }
+
+  if $pw_ok == false {
+    response.json {
+      success: false
+      errors: {
+        password: $pw_errors
+      }
+    }
+  }
+
+  # 3. Hash the validated password in compatible format
+  aspnet.hash: $request.password {
+    as: $hashed_password
+  }
+
+  # 4. Insert into the AspNetUsers table
+  db.query: 'AspNetUsers' {
+    insert {
+      Id: uuid.v4
+      UserName: $request.username
+      NormalizedUserName: upper($request.username)
+      Email: $request.email
+      NormalizedEmail: upper($request.email)
+      PasswordHash: $hashed_password
+    }
+  }
+
+  response.json {
+    success: true
+    message: 'User registered successfully!'
+  }
+}
+```
+
 ---
 
 ## Security Verification Details

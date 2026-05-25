@@ -29,6 +29,7 @@ func RegisterCoreSlots(eng *engine.Engine) {
 	slots.RegisterFunctionSlots(eng)
 	slots.RegisterMetaSlots(eng)
 	slots.RegisterFileSystemSlots(eng)
+	slots.RegisterStorageSlots(eng)
 	slots.RegisterCollectionSlots(eng)
 }
 

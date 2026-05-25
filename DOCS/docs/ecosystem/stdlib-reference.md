@@ -2647,18 +2647,25 @@ logic.compare
 
 ### `mail.send`
 
-Mengirim email via SMTP.
+Send email natively via SMTP or in Mock Mode if no SMTP_HOST is configured.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store the boolean send status (Default: 'mail_status') |
+| `body` | `string` | No | Plain text email body |
+| `html` | `string` | No | HTML email body |
+| `subject` | `string` | **Yes** | Subject line of the email |
+| `to` | `string/list` | **Yes** | Recipient email address (string or list of strings) |
 
 **Example:**
 ```zeno
-mail.send: $client_email
-  host: "smtp.gmail.com"
-  port: 587
-  user: $smtp_user
-  pass: $smtp_pass
-  subject: "Invoice"
-  body: $html_content
-  as: $is_sent
+mail.send:
+  to: 'user@example.com'
+  subject: 'Welcome'
+  body: 'Hello User'
+  as: $sent
 ```
 
 ---
@@ -3004,6 +3011,68 @@ Regenerate session ID (Security).
 ### `session.set`
 
 Set session data.
+
+---
+
+## Storage
+
+### `storage.delete`
+
+Delete a file from the storage system.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store delete status (Default: 'storage_deleted') |
+| `path` | `string` | **Yes** | Relative path of the file to delete |
+
+**Example:**
+```zeno
+storage.delete: 'avatars/1.jpg' { as: $deleted }
+```
+
+---
+
+### `storage.exists`
+
+Check if a file exists in the storage system.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store exists status (Default: 'storage_exists') |
+| `path` | `string` | **Yes** | Relative path of the file to check |
+
+**Example:**
+```zeno
+storage.exists: 'avatars/1.jpg' { as: $exists }
+```
+
+---
+
+### `storage.put`
+
+Save file content or copy an existing local file to the storage system.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store the stored file path (Default: 'storage_path') |
+| `content` | `string/bytes` | **Yes** | File content (string/bytes) or local source filepath to copy |
+| `is_file_path` | `bool` | No | Whether the content should be treated as a filepath to copy from (Default: false) |
+| `path` | `string` | **Yes** | Target relative path inside storage (e.g. 'images/user.png') |
+
+**Example:**
+```zeno
+storage.put:
+  content: $uploaded_temp_path
+  path: 'avatars/1.jpg'
+  is_file_path: true
+  as: $file_url
+```
 
 ---
 

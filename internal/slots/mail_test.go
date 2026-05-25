@@ -2,8 +2,8 @@ package slots
 
 import (
 	"context"
-	"fmt"
-	"net/smtp"
+	"os"
+	"path/filepath"
 	"testing"
 	"zeno/pkg/engine"
 
@@ -14,86 +14,72 @@ func TestMailSlots(t *testing.T) {
 	eng := engine.NewEngine()
 	RegisterMailSlots(eng)
 
-	// Mock SendMail
-	origSendMail := SendMailFunc
-	defer func() { SendMailFunc = origSendMail }()
+	// Clean up storage dir before and after tests
+	mockMailDir := filepath.Join("storage", "logs", "mail")
+	os.RemoveAll(mockMailDir)
+	defer os.RemoveAll("storage")
 
-	var sentAddr string
-	var sentFrom string
-	var sentTo []string
-	var sentMsg []byte
+	t.Run("mail.send mock mode (success)", func(t *testing.T) {
+		// SMTP_HOST is not set, so it should run in Mock Mode
+		os.Unsetenv("SMTP_HOST")
 
-	SendMailFunc = func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-		sentAddr = addr
-		sentFrom = from
-		sentTo = to
-		sentMsg = msg
-		return nil
-	}
-
-	t.Run("mail.send success", func(t *testing.T) {
 		scope := engine.NewScope(nil)
-		scope.Set("email", "client@example.com")
-
 		node := &engine.Node{
 			Name: "mail.send",
-			Value: "$email",
 			Children: []*engine.Node{
-				{Name: "host", Value: "smtp.mailtrap.io"},
-				{Name: "port", Value: 2525},
-				{Name: "user", Value: "u"},
-				{Name: "pass", Value: "p"},
-				{Name: "subject", Value: "Test"},
-				{Name: "body", Value: "Hello"},
-				{Name: "as", Value: "$ok"},
+				{Name: "to", Value: "recipient@example.com"},
+				{Name: "subject", Value: "Hello Test"},
+				{Name: "body", Value: "This is a body"},
+				{Name: "html", Value: "<h1>This is html</h1>"},
+				{Name: "as", Value: "$sent"},
 			},
 		}
 
 		err := eng.Execute(context.Background(), node, scope)
 		assert.NoError(t, err)
 
-		okVal, _ := scope.Get("ok")
-		assert.Equal(t, true, okVal)
+		sent, ok := scope.Get("sent")
+		assert.True(t, ok)
+		assert.True(t, sent.(bool))
 
-		assert.Equal(t, "smtp.mailtrap.io:2525", sentAddr)
-		assert.Equal(t, "u", sentFrom)
-		assert.Equal(t, []string{"client@example.com"}, sentTo)
-		assert.Contains(t, string(sentMsg), "Subject: Test")
+		// Check if mock file was created
+		files, err := os.ReadDir(mockMailDir)
+		assert.NoError(t, err)
+		assert.Len(t, files, 1)
+
+		content, err := os.ReadFile(filepath.Join(mockMailDir, files[0].Name()))
+		assert.NoError(t, err)
+		assert.Contains(t, string(content), "To: recipient@example.com")
+		assert.Contains(t, string(content), "Subject: Hello Test")
+		assert.Contains(t, string(content), "This is a body")
+		assert.Contains(t, string(content), "<h1>This is html</h1>")
 	})
 
-	t.Run("mail.send missing args", func(t *testing.T) {
+	t.Run("mail.send missing recipient", func(t *testing.T) {
 		scope := engine.NewScope(nil)
 		node := &engine.Node{
 			Name: "mail.send",
 			Children: []*engine.Node{
-				{Name: "host", Value: "smtp.test"},
-				// missing user, to
+				{Name: "subject", Value: "No recipient"},
 			},
 		}
 
 		err := eng.Execute(context.Background(), node, scope)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "required")
+		assert.Contains(t, err.Error(), "missing required attribute 'to'")
 	})
 
-	t.Run("mail.send failure", func(t *testing.T) {
-		SendMailFunc = func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
-			return fmt.Errorf("connection refused")
-		}
-
+	t.Run("mail.send missing subject", func(t *testing.T) {
 		scope := engine.NewScope(nil)
 		node := &engine.Node{
 			Name: "mail.send",
 			Children: []*engine.Node{
-				{Name: "to", Value: "x"},
-				{Name: "host", Value: "x"},
-				{Name: "user", Value: "x"},
+				{Name: "to", Value: "test@example.com"},
 			},
 		}
 
 		err := eng.Execute(context.Background(), node, scope)
-		// Should return error OR set success false?
-		// Implementation returns error: "return err"
 		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "missing required attribute 'subject'")
 	})
 }

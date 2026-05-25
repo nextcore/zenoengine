@@ -37,6 +37,7 @@ export default defineConfig({
           items: [
             { text: 'What is ZenoEngine?', link: '/prologue/what-is-zeno' },
             { text: 'Migrating from Laravel', link: '/prologue/migrating' },
+            { text: 'ASP.NET Core Migration', link: '/prologue/aspnet-migration' },
             { text: 'Release Notes', link: '/prologue/releases' }
           ]
         },
@@ -62,6 +63,7 @@ export default defineConfig({
             { text: 'Responses', link: '/basics/responses' },
             { text: 'API Authentication', link: '/basics/authentication' },
             { text: 'Mail & Notifications', link: '/basics/mail' },
+            { text: 'File Storage', link: '/basics/storage' },
             { text: 'Views (Blade)', link: '/views/blade' },
             { text: 'Inertia.js SPA', link: '/views/inertia' },
             { text: 'Validation', link: '/basics/validation' }

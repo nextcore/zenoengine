@@ -1,82 +1,102 @@
 # Mail & Notifications
 
-Sending automatic transactional emails (welcome emails, password resets, receipts) is essential for modern web applications. ZenoEngine comes with a built-in, lightweight SMTP mail dispatcher module ready to send both plain text and HTML emails out of the box.
+Sending transactional emails (welcome emails, password resets, receipts) is essential for modern web applications. ZenoEngine comes with a built-in, lightweight SMTP mail dispatcher module ready to send both plain text and HTML emails out of the box.
 
 ## Configuration
 
-Before you can dispatch emails, configure your SMTP server connection in the `.env` file. Do not hardcode credentials in your `.zl` scripts.
+Before you can dispatch emails, configure your SMTP server connection in the `.env` file. You can use either the `SMTP_` or the `MAIL_` prefixes.
 
 ```env
-# Mailer Settings
-MAIL_HOST=smtp.mailtrap.io
-MAIL_PORT=2525
-MAIL_USERNAME=your_username
-MAIL_PASSWORD=your_password
-MAIL_FROM_ADDRESS="hello@zenoengine.com"
-MAIL_FROM_NAME="ZenoEngine Team"
+# Mailer Settings (Prefix Option A)
+SMTP_HOST=smtp.mailtrap.io
+SMTP_PORT=2525
+SMTP_USERNAME=your_username
+SMTP_PASSWORD=your_password
+SMTP_FROM_ADDRESS="hello@zenoengine.com"
+SMTP_FROM_NAME="ZenoEngine Team"
+
+# Prefix Option B (Fully Supported Fallback)
+# MAIL_HOST=smtp.mailtrap.io
+# MAIL_PORT=2525
+# ...
 ```
+
+---
+
+## Mock Mode (Development Fallback)
+
+If `SMTP_HOST` (or `MAIL_HOST`) is not configured or empty, the mail dispatcher automatically runs in **Mock Mode**:
+1. It logs the email dispatch parameters to the system console.
+2. It saves the composed email content as a `.txt` file under the `./storage/logs/mail/` directory.
+
+This allows developers to test registration flows or notifications locally without needing an active SMTP server or risking sending real emails accidentally.
+
+---
 
 ## Sending Emails
 
-To send an email, use the `mail.send` slot. It accepts several configuration parameters including the recipient array, subject line, and the body content.
+To send an email, use the `mail.send` slot. It accepts the recipient(s), subject line, and body/HTML content.
 
-```zeno
-// In your controller or logic block
-
-mail.send: {
-    to: ['user@example.com', 'admin@example.com']
-    subject: "Welcome to ZenoEngine!"
-    body: "Thank you for registering. Your account is now active."
-    as: $mailResult
-    error: $mailError
+```zl
+mail.send {
+  to: 'user@example.com' # Or an array: ['user1@mail.com', 'user2@mail.com']
+  subject: 'Welcome to ZenoEngine!'
+  body: 'Thank you for registering. Your account is now active.'
+  as: $is_sent
 }
-
-if: $mailError != null {
-    // Handle SMTP failure
-    log.error: "Failed to send welcome email: " + $mailError
-    http.response: { status: 500, json: { error: "Email delivery failed" } }
-    return
-}
-
-http.json: { success: true, message: "Email dispatched successfully!" }
 ```
 
-## HTML Emails
+### Parameter Reference
 
-While plain text is sufficient for simple notifications, you will often want to send rich HTML emails. The `mail.send` slot automatically detects if the `body` string contains HTML tags and sends the email appropriately with the `text/html` Content-Type.
+* **`to`** (string or list, **Required**): Recipient email address(es).
+* **`subject`** (string, **Required**): Subject line of the email.
+* **`body`** (string, Optional): Plain text content.
+* **`html`** (string, Optional): HTML formatted email content.
+* **`as`** (string, Optional): Variable to store boolean success status (Defaults to `$mail_status`).
 
-For best results, you should render your email content using the Blade engine before passing it to the mailer:
+---
 
-```zeno
-// 1. Render the blade template (resources/views/emails/welcome.blade.zl)
+## HTML & Multipart Emails
+
+You can send plain text, HTML, or both (as a multipart/alternative MIME message).
+
+### Sending HTML-only Emails
+
+```zl
+mail.send {
+  to: 'john@example.com'
+  subject: 'Verification Link'
+  html: '<p>Please click <a href="#">here</a> to verify.</p>'
+}
+```
+
+### Sending Multipart Emails (Plain Text + HTML Fallback)
+
+Providing both `body` and `html` sends a multipart email, allowing email clients that don't support HTML to render the plain text version safely:
+
+```zl
+mail.send {
+  to: 'john@example.com'
+  subject: 'Multipart Update'
+  body: 'Please visit our website for the update.'
+  html: '<h1>Updates!</h1><p>Please visit our <a href="#">website</a>.</p>'
+}
+```
+
+### Rendering via Blade templates
+
+For rich transactional templates, render using the Blade view engine first, then pass the HTML variable:
+
+```zl
 view.render: 'emails/welcome' {
-    user_name: "John Doe",
-    verify_link: "https://myapp.com/verify/12345"
-    as: $htmlContent
+  user_name: 'John Doe'
+  verify_link: 'https://myapp.com/verify/12345'
+  as: $welcome_html
 }
 
-// 2. Dispatch the rendered HTML
-mail.send: {
-    to: ['john@example.com']
-    subject: "Welcome Aboard, John!"
-    body: $htmlContent
+mail.send {
+  to: 'john@example.com'
+  subject: 'Welcome Aboard!'
+  html: $welcome_html
 }
 ```
-
-```html
-<!-- resources/views/emails/welcome.blade.zl -->
-<!DOCTYPE html>
-<html>
-<body>
-    <h1>Welcome, {{ $user_name }}!</h1>
-    <p>We are thrilled to have you here.</p>
-    <a href="{{ $verify_link }}" style="padding: 10px; background: blue; color: white;">
-        Verify Your Account
-    </a>
-</body>
-</html>
-```
-
-## Attachments
-
-The ZenoEngine mailer will support file attachments in an upcoming release. For now, it is specialized in rapid, direct notification dispatches.
