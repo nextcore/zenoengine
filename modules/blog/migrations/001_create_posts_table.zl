@@ -1,5 +1,0 @@
-db.create_table: 'posts' {
-    db.id: 'id'
-    db.string: 'title' { limit: 100 }
-    db.timestamp: 'created_at'
-}

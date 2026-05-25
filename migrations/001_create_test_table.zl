@@ -1,6 +1,0 @@
-db.create_table: 'test_users' {
-    db.id: 'id'
-    db.string: 'name' { limit: 100 }
-    db.string: 'email' { unique: true }
-    db.timestamp: 'created_at'
-}
