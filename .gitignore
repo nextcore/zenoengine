@@ -39,3 +39,7 @@ wwwroot/dist/
 
 # Other
 node_modules/
+
+# Rust zenocore-rs
+/zenocore-rs/target/
+/zenocore-rs/Cargo.lock
