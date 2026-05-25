@@ -106,6 +106,56 @@ func TestAspNetSlots(t *testing.T) {
 		assert.True(t, ok)
 		assert.True(t, isValid.(bool))
 	})
+
+	t.Run("aspnet.validate_password custom policy", func(t *testing.T) {
+		scope := engine.NewScope(nil)
+
+		// 1. Weak password validation
+		node := &engine.Node{
+			Name: "aspnet.validate_password",
+			Children: []*engine.Node{
+				{Name: "password", Value: "123"},
+				{Name: "required_length", Value: int64(6)},
+				{Name: "as", Value: "$is_ok"},
+				{Name: "errors_as", Value: "$errs"},
+			},
+		}
+
+		err := eng.Execute(context.Background(), node, scope)
+		assert.NoError(t, err)
+
+		isOk, ok := scope.Get("is_ok")
+		assert.True(t, ok)
+		assert.False(t, isOk.(bool))
+
+		errsRaw, ok := scope.Get("errs")
+		assert.True(t, ok)
+		errs := errsRaw.([]interface{})
+		assert.NotEmpty(t, errs)
+
+		// 2. Strong password validation
+		scopeStrong := engine.NewScope(nil)
+		nodeStrong := &engine.Node{
+			Name: "aspnet.validate_password",
+			Children: []*engine.Node{
+				{Name: "password", Value: "P@ssw0rd123!"},
+				{Name: "required_length", Value: int64(8)},
+				{Name: "as", Value: "$is_ok"},
+				{Name: "errors_as", Value: "$errs"},
+			},
+		}
+
+		err = eng.Execute(context.Background(), nodeStrong, scopeStrong)
+		assert.NoError(t, err)
+
+		isOkStrong, ok := scopeStrong.Get("is_ok")
+		assert.True(t, ok)
+		assert.True(t, isOkStrong.(bool))
+
+		errsStrong, ok := scopeStrong.Get("errs")
+		assert.True(t, ok)
+		assert.Nil(t, errsStrong)
+	})
 }
 
 func TestVerifyAspNetHash(t *testing.T) {

@@ -112,6 +112,27 @@ aspnet.verify
 
 ---
 
+## Validating Password Policies
+
+To validate passwords against ASP.NET Core Identity password policies before creating or updating users, use the `aspnet.validate_password` slot:
+
+```zl
+aspnet.validate_password: $plain_password {
+  [required_length: 6]
+  [require_digit: true]
+  [require_lowercase: true]
+  [require_uppercase: true]
+  [require_non_alphanumeric: true]
+  [required_unique_chars: 1]
+  [as: $is_valid]
+  [errors_as: $password_errors]
+}
+```
+
+This slot returns a boolean validation status (`$is_valid`) and a list of detailed error messages (`$password_errors`) that match Microsoft Identity's default error messages (e.g., "Passwords must have at least one uppercase ('A'-'Z').").
+
+---
+
 ## Security Verification Details
 
 Under the hood, the password hash verification runs compiled Go native code doing:

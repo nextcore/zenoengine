@@ -114,6 +114,35 @@ aspnet.login:
 
 ---
 
+### `aspnet.validate_password`
+
+Validate a password against configurable ASP.NET Core Identity password policies.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `(value)` | `string` | No | The plain-text password to validate |
+| `as` | `string` | No | Variable name to store validation status (Default: 'is_valid') |
+| `errors_as` | `string` | No | Variable name to store list of error messages (Default: 'password_errors') |
+| `password` | `string` | No | The plain-text password to validate |
+| `require_digit` | `bool` | No | Require at least one digit (Default: true) |
+| `require_lowercase` | `bool` | No | Require at least one lowercase letter (Default: true) |
+| `require_non_alphanumeric` | `bool` | No | Require at least one special character (Default: true) |
+| `require_uppercase` | `bool` | No | Require at least one uppercase letter (Default: true) |
+| `required_length` | `int` | No | Minimum length of the password (Default: 6) |
+| `required_unique_chars` | `int` | No | Minimum number of unique characters (Default: 1) |
+
+**Example:**
+```zeno
+aspnet.validate_password: $password
+  required_length: 8
+  require_uppercase: true
+  errors_as: $pw_errors
+```
+
+---
+
 ### `aspnet.verify`
 
 Verify a plain-text password against an ASP.NET Identity V3 PBKDF2/HMAC-SHA256 hash.

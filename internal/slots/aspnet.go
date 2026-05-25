@@ -253,6 +253,159 @@ func RegisterAspNetSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			"as":       {Description: "Variable name to store the boolean result (Default: 'verify_result')", Required: false, Type: "string"},
 		},
 	})
+
+	// 4. ASPNET.VALIDATE_PASSWORD
+	eng.Register("aspnet.validate_password", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		var password string
+		requireDigit := true
+		requireLowercase := true
+		requireUppercase := true
+		requireNonAlphanumeric := true
+		requiredLength := 6
+		requiredUniqueChars := 1
+		target := "is_valid"
+		targetErrors := "password_errors"
+
+		for _, c := range node.Children {
+			val := parseNodeValue(c, scope)
+			if c.Name == "password" || c.Name == "val" || c.Name == "value" {
+				password = coerce.ToString(val)
+			}
+			if c.Name == "require_digit" {
+				requireDigit, _ = coerce.ToBool(val)
+			}
+			if c.Name == "require_lowercase" {
+				requireLowercase, _ = coerce.ToBool(val)
+			}
+			if c.Name == "require_uppercase" {
+				requireUppercase, _ = coerce.ToBool(val)
+			}
+			if c.Name == "require_non_alphanumeric" {
+				requireNonAlphanumeric, _ = coerce.ToBool(val)
+			}
+			if c.Name == "required_length" {
+				valInt, _ := coerce.ToInt64(val)
+				requiredLength = int(valInt)
+			}
+			if c.Name == "required_unique_chars" {
+				valInt, _ := coerce.ToInt64(val)
+				requiredUniqueChars = int(valInt)
+			}
+			if c.Name == "as" {
+				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+			if c.Name == "errors_as" {
+				targetErrors = strings.TrimPrefix(coerce.ToString(c.Value), "$")
+			}
+		}
+
+		if password == "" {
+			scope.Set(target, false)
+			scope.Set(targetErrors, []interface{}{"Password is required"})
+			return nil
+		}
+
+		var errors []interface{}
+
+		// 1. Length Check
+		if len(password) < requiredLength {
+			errors = append(errors, fmt.Sprintf("Passwords must be at least %d characters.", requiredLength))
+		}
+
+		// 2. Digit Check
+		if requireDigit {
+			hasDigit := false
+			for _, r := range password {
+				if r >= '0' && r <= '9' {
+					hasDigit = true
+					break
+				}
+			}
+			if !hasDigit {
+				errors = append(errors, "Passwords must have at least one digit ('0'-'9').")
+			}
+		}
+
+		// 3. Lowercase Check
+		if requireLowercase {
+			hasLower := false
+			for _, r := range password {
+				if r >= 'a' && r <= 'z' {
+					hasLower = true
+					break
+				}
+			}
+			if !hasLower {
+				errors = append(errors, "Passwords must have at least one lowercase ('a'-'z').")
+			}
+		}
+
+		// 4. Uppercase Check
+		if requireUppercase {
+			hasUpper := false
+			for _, r := range password {
+				if r >= 'A' && r <= 'Z' {
+					hasUpper = true
+					break
+				}
+			}
+			if !hasUpper {
+				errors = append(errors, "Passwords must have at least one uppercase ('A'-'Z').")
+			}
+		}
+
+		// 5. Non-alphanumeric Check
+		if requireNonAlphanumeric {
+			hasNonAlpha := false
+			for _, r := range password {
+				isLetter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+				isDigit := r >= '0' && r <= '9'
+				if !isLetter && !isDigit {
+					hasNonAlpha = true
+					break
+				}
+			}
+			if !hasNonAlpha {
+				errors = append(errors, "Passwords must have at least one non alphanumeric character.")
+			}
+		}
+
+		// 6. Unique Chars Check
+		if requiredUniqueChars > 1 {
+			uniqueSet := make(map[rune]bool)
+			for _, r := range password {
+				uniqueSet[r] = true
+			}
+			if len(uniqueSet) < requiredUniqueChars {
+				errors = append(errors, fmt.Sprintf("Passwords must use at least %d different characters.", requiredUniqueChars))
+			}
+		}
+
+		isValid := len(errors) == 0
+		scope.Set(target, isValid)
+		if !isValid {
+			scope.Set(targetErrors, errors)
+		} else {
+			scope.Set(targetErrors, nil)
+		}
+
+		return nil
+	}, engine.SlotMeta{
+		Description: "Validate a password against configurable ASP.NET Core Identity password policies.",
+		Example:     "aspnet.validate_password: $password\n  required_length: 8\n  require_uppercase: true\n  errors_as: $pw_errors",
+		Inputs: map[string]engine.InputMeta{
+			"(value)":                  {Description: "The plain-text password to validate", Required: false, Type: "string"},
+			"password":                 {Description: "The plain-text password to validate", Required: false, Type: "string"},
+			"require_digit":            {Description: "Require at least one digit (Default: true)", Required: false, Type: "bool"},
+			"require_lowercase":        {Description: "Require at least one lowercase letter (Default: true)", Required: false, Type: "bool"},
+			"require_uppercase":        {Description: "Require at least one uppercase letter (Default: true)", Required: false, Type: "bool"},
+			"require_non_alphanumeric": {Description: "Require at least one special character (Default: true)", Required: false, Type: "bool"},
+			"required_length":          {Description: "Minimum length of the password (Default: 6)", Required: false, Type: "int"},
+			"required_unique_chars":    {Description: "Minimum number of unique characters (Default: 1)", Required: false, Type: "int"},
+			"as":                       {Description: "Variable name to store validation status (Default: 'is_valid')", Required: false, Type: "string"},
+			"errors_as":                {Description: "Variable name to store list of error messages (Default: 'password_errors')", Required: false, Type: "string"},
+		},
+	})
 }
 
 // VerifyAspNetHash verifies ASP.NET Identity V3 password hashes
