@@ -44,7 +44,7 @@ pub struct SlotMeta {
     pub value_type: String,
 }
 
-pub type HandlerFn = Arc<dyn Fn(&mut Context, &Node, &Arc<Scope>) -> Result<(), Diagnostic> + Send + Sync>;
+pub type HandlerFn = Arc<dyn Fn(&Engine, &mut Context, &Node, &Arc<Scope>) -> Result<(), Diagnostic> + Send + Sync>;
 
 pub struct Engine {
     pub registry: HashMap<String, HandlerFn>,
@@ -75,8 +75,8 @@ impl Engine {
         }
 
         // B. Get raw string value
-        let val_str = match &node.value {
-            Some(v) => v,
+        let mut val_str = match &node.value {
+            Some(v) => v.trim().to_string(),
             None => return Value::Nil,
         };
 
@@ -88,15 +88,94 @@ impl Engine {
             return Value::String(val_str[1..val_str.len()-1].to_string());
         }
 
-        // D. Check Variable Reference ($other)
+        // D. Check bracket notation index normalization (e.g. $list[0] -> $list.0)
+        if val_str.contains('[') && val_str.contains(']') {
+            val_str = val_str.replace('[', ".").replace(']', "");
+        }
+
+        // E. Check Null-coalescing (??)
+        if val_str.starts_with('$') && val_str.contains("??") {
+            let parts: Vec<&str> = val_str.splitn(2, "??").collect();
+            if parts.len() == 2 {
+                let v1 = parts[0].trim();
+                let v2 = parts[1].trim();
+
+                let res1 = self.resolve_shorthand_value(&Node {
+                    name: String::new(),
+                    value: Some(v1.to_string()),
+                    children: Vec::new(),
+                    line: node.line,
+                    col: node.col,
+                    filename: node.filename.clone(),
+                }, scope);
+
+                if res1 != Value::Nil && !res1.to_string_coerce().is_empty() {
+                    return res1;
+                }
+
+                return self.resolve_shorthand_value(&Node {
+                    name: String::new(),
+                    value: Some(v2.to_string()),
+                    children: Vec::new(),
+                    line: node.line,
+                    col: node.col,
+                    filename: node.filename.clone(),
+                }, scope);
+            }
+        }
+
+        // F. Check Ternary Operator ( ? and  : )
+        if val_str.starts_with('$') && val_str.contains(" ? ") && val_str.contains(" : ") {
+            let parts: Vec<&str> = val_str.splitn(2, " ? ").collect();
+            if parts.len() == 2 {
+                let cond_str = parts[0].trim();
+                let rest_parts: Vec<&str> = parts[1].splitn(2, " : ").collect();
+                if rest_parts.len() == 2 {
+                    let true_str = rest_parts[0].trim();
+                    let false_str = rest_parts[1].trim();
+
+                    let cond_val = self.resolve_shorthand_value(&Node {
+                        name: String::new(),
+                        value: Some(cond_str.to_string()),
+                        children: Vec::new(),
+                        line: node.line,
+                        col: node.col,
+                        filename: node.filename.clone(),
+                    }, scope);
+
+                    if cond_val.to_bool() {
+                        return self.resolve_shorthand_value(&Node {
+                            name: String::new(),
+                            value: Some(true_str.to_string()),
+                            children: Vec::new(),
+                            line: node.line,
+                            col: node.col,
+                            filename: node.filename.clone(),
+                        }, scope);
+                    } else {
+                        return self.resolve_shorthand_value(&Node {
+                            name: String::new(),
+                            value: Some(false_str.to_string()),
+                            children: Vec::new(),
+                            line: node.line,
+                            col: node.col,
+                            filename: node.filename.clone(),
+                        }, scope);
+                    }
+                }
+            }
+        }
+
+        // G. Check Variable Reference ($other)
         if val_str.starts_with('$') {
             let key = &val_str[1..];
             if let Some(val) = scope.get(key) {
                 return val;
             }
+            return Value::Nil;
         }
 
-        // E. Fallback: Parse to appropriate primitive type or return raw string
+        // H. Fallback: Parse to appropriate primitive type or return raw string
         if let Ok(i) = val_str.parse::<i64>() {
             Value::Int(i)
         } else if let Ok(f) = val_str.parse::<f64>() {
@@ -310,7 +389,7 @@ impl Engine {
             }
 
             // 2. Call the registered handler
-            return handler(ctx, node, scope);
+            return handler(self, ctx, node, scope);
         }
 
         // C. Fallback: Execute child nodes recursively
@@ -335,7 +414,7 @@ mod tests {
 
         engine.register(
             "log",
-            Arc::new(move |_ctx, node, scope| {
+            Arc::new(move |_engine, _ctx, node, scope| {
                 // Get resolved value
                 let val = if let Some(ref v) = node.value {
                     if v.starts_with('$') {
@@ -378,7 +457,7 @@ mod tests {
         let mut engine = Engine::new();
         engine.register(
             "panic_slot",
-            Arc::new(|_ctx, _node, _scope| {
+            Arc::new(|_engine, _ctx, _node, _scope| {
                 panic!("intentional panic");
             }),
             SlotMeta {

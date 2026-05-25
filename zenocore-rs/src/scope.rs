@@ -55,6 +55,57 @@ impl Value {
             Value::Map(m) => format!("{:?}", m),
         }
     }
+
+    pub fn to_bool(&self) -> bool {
+        match self {
+            Value::Nil => false,
+            Value::Bool(b) => *b,
+            Value::Int(i) => *i != 0,
+            Value::Float(f) => *f != 0.0,
+            Value::String(s) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "true" || s_lower == "1" || s_lower == "yes" || s_lower == "on"
+            }
+            Value::List(l) => !l.is_empty(),
+            Value::Map(m) => !m.is_empty(),
+        }
+    }
+
+    pub fn to_int(&self) -> i64 {
+        match self {
+            Value::Nil => 0,
+            Value::Bool(b) => if *b { 1 } else { 0 },
+            Value::Int(i) => *i,
+            Value::Float(f) => *f as i64,
+            Value::String(s) => s.parse::<i64>().unwrap_or(0),
+            Value::List(_) | Value::Map(_) => 0,
+        }
+    }
+
+    pub fn to_float(&self) -> f64 {
+        match self {
+            Value::Nil => 0.0,
+            Value::Bool(b) => if *b { 1.0 } else { 0.0 },
+            Value::Int(i) => *i as f64,
+            Value::Float(f) => *f,
+            Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+            Value::List(_) | Value::Map(_) => 0.0,
+        }
+    }
+
+    pub fn to_list(&self) -> Vec<Value> {
+        match self {
+            Value::List(l) => l.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        match self {
+            Value::Map(m) => m.clone(),
+            _ => HashMap::new(),
+        }
+    }
 }
 
 pub struct Scope {
@@ -137,6 +188,17 @@ impl Scope {
                     Value::Map(ref map) => {
                         if let Some(next) = map.get(part) {
                             val = next.clone();
+                        } else {
+                            return None;
+                        }
+                    }
+                    Value::List(ref list) => {
+                        if let Ok(idx) = part.parse::<usize>() {
+                            if idx < list.len() {
+                                val = list[idx].clone();
+                            } else {
+                                return None;
+                            }
                         } else {
                             return None;
                         }
