@@ -65,13 +65,21 @@ impl Engine {
     }
 
     pub fn resolve_shorthand_value(&self, node: &Node, scope: &Arc<Scope>) -> Value {
-        // A. If has children, treat as Map/Object
+        // A. If has children, treat as List (if all keys are empty or numeric) or Map
         if !node.children.is_empty() {
-            let mut map = HashMap::new();
-            for child in &node.children {
-                map.insert(child.name.clone(), self.resolve_shorthand_value(child, scope));
+            let is_list = node.children.iter().all(|c| c.name.is_empty() || c.name.parse::<usize>().is_ok());
+            if is_list {
+                let mut sorted_children = node.children.clone();
+                sorted_children.sort_by_key(|c| c.name.parse::<usize>().unwrap_or(0));
+                let list = sorted_children.iter().map(|c| self.resolve_shorthand_value(c, scope)).collect();
+                return Value::List(list);
+            } else {
+                let mut map = HashMap::new();
+                for child in &node.children {
+                    map.insert(child.name.clone(), self.resolve_shorthand_value(child, scope));
+                }
+                return Value::Map(map);
             }
-            return Value::Map(map);
         }
 
         // B. Get raw string value

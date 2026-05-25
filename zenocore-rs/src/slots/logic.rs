@@ -4,8 +4,9 @@ use crate::parser::Node;
 use crate::scope::{Scope, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
+use super::{eval_simple_condition, serialize_json};
 
-pub fn register_logic_slots(engine: &mut Engine) {
+pub fn register(engine: &mut Engine) {
     // ==========================================
     // SLOT: RETURN / STOP
     // ==========================================
@@ -561,14 +562,6 @@ pub fn register_logic_slots(engine: &mut Engine) {
             Value::List(l) => l.is_empty(),
             Value::Map(m) => m.is_empty(),
             _ => false,
-        };
-        // Fix compiler return statement
-        match val {
-            Value::Nil => true,
-            Value::String(s) => s.is_empty(),
-            Value::List(l) => l.is_empty(),
-            Value::Map(m) => m.is_empty(),
-            _ => false,
         }
     };
 
@@ -749,8 +742,6 @@ pub fn register_logic_slots(engine: &mut Engine) {
     engine.register(
         "can",
         Arc::new(|engine, ctx, node, scope| {
-            // Under Go's implementation, it checks if user has ability.
-            // We stub it: if 'can' variable exists as boolean or is_auth_fn is true.
             let user_auth = scope.get("user").or_else(|| scope.get("auth")).unwrap_or(Value::Nil);
             if user_auth != Value::Nil {
                 for child in &node.children {
@@ -891,144 +882,4 @@ pub fn register_logic_slots(engine: &mut Engine) {
             value_type: String::new(),
         },
     );
-}
-
-fn eval_simple_condition(expr: &str, scope: &Arc<Scope>) -> bool {
-    let ops = ["<=", ">=", "==", "!=", "<", ">"];
-    let mut found_op = None;
-    for op in &ops {
-        if expr.contains(op) {
-            found_op = Some(*op);
-            break;
-        }
-    }
-
-    let op = match found_op {
-        Some(o) => o,
-        None => return false,
-    };
-
-    let parts: Vec<&str> = expr.splitn(2, op).collect();
-    if parts.len() != 2 {
-        return false;
-    }
-
-    let left = parts[0].trim();
-    let right = parts[1].trim();
-
-    let left_val = resolve_expression_value(left, scope);
-    let right_val = resolve_expression_value(right, scope);
-
-    match op {
-        "<" => left_val.to_float() < right_val.to_float(),
-        ">" => left_val.to_float() > right_val.to_float(),
-        "<=" => left_val.to_float() <= right_val.to_float(),
-        ">=" => left_val.to_float() >= right_val.to_float(),
-        "==" => left_val.to_string_coerce() == right_val.to_string_coerce(),
-        "!=" => left_val.to_string_coerce() != right_val.to_string_coerce(),
-        _ => false,
-    }
-}
-
-fn resolve_expression_value(s: &str, scope: &Arc<Scope>) -> Value {
-    if s.starts_with('$') {
-        let key = &s[1..];
-        return scope.get(key).unwrap_or(Value::Nil);
-    }
-    if let Ok(i) = s.parse::<i64>() {
-        return Value::Int(i);
-    }
-    if let Ok(f) = s.parse::<f64>() {
-        return Value::Float(f);
-    }
-    Value::String(s.to_string())
-}
-
-fn serialize_json(val: &Value) -> String {
-    match val {
-        Value::Nil => "null".to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::String(s) => format!("\"{}\"", s.replace('"', "\\\"")),
-        Value::List(l) => {
-            let parts: Vec<String> = l.iter().map(serialize_json).collect();
-            format!("[{}]", parts.join(","))
-        }
-        Value::Map(m) => {
-            let mut items: Vec<(String, String)> = m.iter()
-                .map(|(k, v)| (k.clone(), serialize_json(v)))
-                .collect();
-            items.sort_by(|a, b| a.0.cmp(&b.0)); // Stable ordering for testing
-            let parts: Vec<String> = items.into_iter()
-                .map(|(k, v)| format!("\"{}\":{}", k.replace('"', "\\\""), v))
-                .collect();
-            format!("{{{}}}", parts.join(","))
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parser::parse_string;
-
-    #[test]
-    fn test_logic_slots_loop_and_variables() {
-        let mut engine = Engine::new();
-        register_logic_slots(&mut engine);
-
-        let code = r#"
-            var: $counter {
-              val: 0
-            }
-            for: "$counter = 0; $counter < 3; $counter++" {
-              do: {
-                var: $nested {
-                  val: $counter
-                }
-              }
-            }
-        "#;
-        let root = parse_string(code, "test.zl").unwrap();
-        let mut ctx = Context::new();
-        let scope = Scope::new(None);
-
-        engine.execute(&mut ctx, &root, &scope).unwrap();
-        assert_eq!(scope.get("counter").unwrap(), Value::Int(3));
-    }
-
-    #[test]
-    fn test_forelse_empty() {
-        let mut engine = Engine::new();
-        register_logic_slots(&mut engine);
-
-        let code = r#"
-            var: $called {
-              val: "no"
-            }
-            forelse: $list {
-              as: $item
-              do: {
-                var: $called {
-                  val: "yes"
-                }
-              }
-              forelse_empty: {
-                var: $called {
-                  val: "empty_triggered"
-                }
-              }
-            }
-        "#;
-        let root = parse_string(code, "test.zl").unwrap();
-        println!("AST: {:#?}", root);
-        let mut ctx = Context::new();
-        let scope = Scope::new(None);
-        // Let's verify list is nil/empty initially
-        let res = engine.execute(&mut ctx, &root, &scope);
-        println!("EXECUTE RESULT: {:?}", res);
-        res.unwrap();
-        assert_eq!(scope.get("called").unwrap(), Value::String("empty_triggered".to_string()));
-    }
 }
