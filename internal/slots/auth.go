@@ -25,8 +25,10 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		table := "users"
 		colUser := "email"
 		colPass := "password"
-		// ini harus diperbaiki
-		jwtSecret := "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+		jwtSecret := os.Getenv("JWT_SECRET")
+		if jwtSecret == "" {
+			jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
+		}
 		target := "token"
 		dbName := "default"
 
@@ -134,7 +136,10 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 	// 2. AUTH.MIDDLEWARE (Guard) - Auto Multi-Tenant Detection
 	eng.Register("auth.middleware", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		jwtSecret := "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+		jwtSecret := os.Getenv("JWT_SECRET")
+		if jwtSecret == "" {
+			jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
+		}
 		var doNode *engine.Node
 
 		// Parse parameters
@@ -417,7 +422,10 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 
 		// Jika secret kosong, cari dari environment global atau default
 		if secret == "" {
-			secret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+			secret = os.Getenv("JWT_SECRET")
+			if secret == "" {
+				secret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
+			}
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -474,7 +482,10 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		}
 
 		if secret == "" {
-			secret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default from .env
+			secret = os.Getenv("JWT_SECRET")
+			if secret == "" {
+				secret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
+			}
 		}
 
 		// Parse token (even if expired, we might want to allow refresh if within grace period - but here we require valid signature)
