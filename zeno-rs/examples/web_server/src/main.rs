@@ -67,7 +67,6 @@ async fn handle_swagger_ui() -> axum::response::Html<String> {
 
 // POST /execute (evaluates a ZenoLang script)
 async fn handle_execute(Json(payload): Json<ExecuteRequest>) -> Json<ExecuteResponse> {
-    println!("--- INCOMING SCRIPT ---\n{}\n-----------------------", payload.script);
     let engine = new_engine();
     let mut ctx = Context::new();
     let scope = Scope::new(None);

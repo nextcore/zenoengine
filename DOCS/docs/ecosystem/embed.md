@@ -1,10 +1,14 @@
 # Embedding ZenoLang
 
-ZenoLang core engine dirancang agar bisa di-*embed* (ditanam) ke dalam projek Go murni dengan sangat mudah. Ini memungkinkan Anda menggunakan ZenoLang sebagai bahasa skrip di dalam aplikasi Anda sendiri.
+ZenoLang core engine dirancang agar bisa di-*embed* (ditanam) ke dalam projek lain dengan sangat mudah. Bahasa skrip ZenoLang saat ini dapat di-embed di projek **Go** maupun **Rust**.
 
-## Instalasi
+---
 
-Pastikan Anda telah menginisialisasi modul Go di projek Anda. Untuk saat ini, karena projek ini masih dalam pengembangan lokal, Anda dapat mereferensikan folder `zenoengine` di `go.mod` Anda atau mengimportnya jika berada di dalam workspace yang sama.
+## 1. Embedding in Go
+
+### Instalasi
+
+Untuk mengimpor ZenoLang di dalam projek Go, Anda dapat mengimpor package engine:
 
 ```go
 import (
@@ -12,11 +16,11 @@ import (
 )
 ```
 
-## Dasar Penggunaan
+### Dasar Penggunaan
 
 Untuk menjalankan skrip ZenoLang di dalam aplikasi Go Anda, Anda hanya perlu menginisialisasi `engine.Engine` dan mengeksekusi AST (Abstract Syntax Tree) yang dihasilkan oleh parser.
 
-### Contoh Sederhana
+#### Contoh Sederhana
 
 Berikut adalah contoh cara mengeksekusi string skrip ZenoLang langsung dari Go:
 
@@ -56,24 +60,20 @@ func main() {
 }
 ```
 
-## Mendaftarkan Slot Kustom
+### Mendaftarkan Slot Kustom (Go)
 
-Kekuatan utama ZenoLang adalah kemampuannya untuk diperluas dengan **Slots**. Anda bisa mendaftarkan fungsi Go Anda sebagai slot yang bisa dipanggil dari skrip ZenoLang.
+Anda bisa mendaftarkan fungsi Go Anda sebagai slot yang bisa dipanggil dari skrip ZenoLang:
 
 ```go
 eng.Register("my.slot", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-    // Ambil nilai utama
     val := node.Value
     fmt.Println("Nilai utama:", val)
 
-    // Ambil anak-anak (children) jika ada
     for _, child := range node.Children {
         fmt.Printf("Atribut: %s = %v\n", child.Name, child.Value)
     }
 
-    // Anda juga bisa memanipulasi scope
     scope.Set("my_result", "Sukses!")
-
     return nil
 }, engine.SlotMeta{
     Description: "Slot kustom saya",
@@ -81,15 +81,104 @@ eng.Register("my.slot", func(ctx context.Context, node *engine.Node, scope *engi
 })
 ```
 
-## Menggunakan Zeno Blade
+---
 
-Jika Anda juga ingin menggunakan sistem template Blade di projek Go Anda, Anda bisa mengimport `zeno/pkg/blade` dan mendaftarkannya:
+## 2. Embedding in Rust (`zenoengine`)
 
-```go
-import "zeno/pkg/blade"
+Modular workspace Rust `zenoengine` (dan sub-crate pendukungnya) dapat diintegrasikan langsung ke proyek Rust Anda menggunakan Cargo.
 
-// Di dalam main()
-blade.RegisterBladeSlots(eng)
+### Instalasi via GitHub
+
+Untuk menambahkan `zenoengine` ke proyek Rust Anda langsung dari repository GitHub, tambahkan baris berikut ke `Cargo.toml` proyek Anda:
+
+```toml
+[dependencies]
+zenoengine = { git = "https://github.com/nextcore/zenoengine.git", package = "zenoengine" }
 ```
 
-Sekarang Anda bisa menggunakan slot `view.blade` di dalam skrip Anda untuk me-render template Blade!
+> [!NOTE]
+> Meskipun repositori utama `zenoengine` berisi kode Go di root-nya dan kode Rust berada di subfolder `zeno-rs/`, Cargo secara otomatis akan melakukan pemindaian (scan) rekursif ke seluruh direktori repositori Git tersebut saat proses build untuk mencari file `Cargo.toml` yang mendefinisikan crate dengan nama `zenoengine`. Oleh karena itu, Cargo dapat menemukannya dan melakukan import tanpa masalah.
+
+### Dasar Penggunaan
+
+Untuk membuat instance engine yang telah dimuat dengan standard library (Math & Date slots) bawaan:
+
+```rust
+use zenoengine::{new_engine, parser::parse_string, executor::Context, scope::Scope};
+
+fn main() {
+    // 1. Buat engine baru dengan slot stdlib pre-registered
+    let engine = new_engine();
+    let mut ctx = Context::new();
+    let scope = Scope::new(None);
+
+    // 2. Tulis skrip ZenoLang
+    let script = r#"
+        var: $a { val: 10 }
+        var: $b { val: 20 }
+        math.calc: "$a + $b" {
+            as: $sum
+        }
+    "#;
+
+    // 3. Parse dan Eksekusi
+    let root = parse_string(script, "example.zl").unwrap();
+    engine.execute(&mut ctx, &root, &scope).unwrap();
+
+    // 4. Ambil hasil dari scope
+    if let Some(val) = scope.get("sum") {
+        println!("Hasil penjumlahan: {:?}", val); // Output: Float(30.0)
+    }
+}
+```
+
+### Mendaftarkan Slot Kustom (Rust)
+
+Anda dapat memperluas engine Rust dengan mendaftarkan closure atau fungsi sebagai slot:
+
+```rust
+use std::sync::Arc;
+use zenoengine::{Engine, SlotMeta, InputMeta, Diagnostic};
+
+fn register_custom_slot(engine: &mut Engine) {
+    engine.register(
+        "custom.log",
+        Arc::new(|_engine, _ctx, node, scope| {
+            if let Some(ref v) = node.value {
+                println!("LOG: {}", v);
+            }
+            Ok(())
+        }),
+        SlotMeta {
+            description: "Mencetak pesan kustom ke stdout".to_string(),
+            example: "custom.log: 'Pesan'".to_string(),
+            inputs: std::collections::HashMap::new(),
+            required_blocks: Vec::new(),
+            value_type: "string".to_string(),
+        }
+    );
+}
+```
+
+### Menyajikan Dokumentasi API & Swagger UI
+
+Jika Anda menggunakan framework web Rust seperti Axum atau Actix-web, Anda dapat menggunakan modul `apidoc` dari `zenoengine` untuk mendaftarkan skema API dan menyajikan Swagger UI:
+
+```rust
+use zenoengine::apidoc::{self, APIRegistry, RouteDoc};
+
+// 1. Daftarkan rute dokumentasi
+APIRegistry::global().register("POST", "/execute", RouteDoc {
+    method: "POST".to_string(),
+    path: "/execute".to_string(),
+    summary: "Eksekusi ZenoLang Script".to_string(),
+    description: "Mengevaluasi kode skrip yang dikirimkan client".to_string(),
+    tags: vec!["Execution".to_string()],
+    params: Vec::new(),
+    request_body: None,
+    responses: std::collections::HashMap::new(),
+});
+
+// 2. Generate HTML Swagger UI untuk handler endpoint
+let swagger_html = apidoc::swagger_ui_html("/openapi.json");
+```
