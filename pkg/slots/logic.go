@@ -623,6 +623,104 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		},
 	})
 
+	eng.Register("if", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		expression := coerce.ToString(node.Value)
+		isTrue := false
+
+		// Helper untuk parsing bagian kiri dan kanan operator
+		parseParts := func(expr, op string) (interface{}, interface{}) {
+			parts := strings.SplitN(expr, op, 2)
+			left := resolveValue(strings.TrimSpace(parts[0]), scope)
+			right := resolveValue(strings.TrimSpace(parts[1]), scope)
+			return left, right
+		}
+
+		if strings.Contains(expression, "==") {
+			left, right := parseParts(expression, "==")
+			// Handle Explicit Nil Check
+			if (left == nil && coerce.ToString(right) == "nil") || (right == nil && coerce.ToString(left) == "nil") {
+				isTrue = true
+			} else {
+				isTrue = (coerce.ToString(left) == coerce.ToString(right))
+			}
+
+		} else if strings.Contains(expression, "!=") {
+			left, right := parseParts(expression, "!=")
+			isTrue = (coerce.ToString(left) != coerce.ToString(right))
+
+		} else if strings.Contains(expression, ">=") {
+			left, right := parseParts(expression, ">=")
+			l, err1 := coerce.ToFloat64(left)
+			r, err2 := coerce.ToFloat64(right)
+			if err1 == nil && err2 == nil {
+				isTrue = (l >= r)
+			}
+		} else if strings.Contains(expression, "<=") {
+			left, right := parseParts(expression, "<=")
+			l, err1 := coerce.ToFloat64(left)
+			r, err2 := coerce.ToFloat64(right)
+			if err1 == nil && err2 == nil {
+				isTrue = (l <= r)
+			}
+		} else if strings.Contains(expression, ">") {
+			left, right := parseParts(expression, ">")
+			l, err1 := coerce.ToFloat64(left)
+			r, err2 := coerce.ToFloat64(right)
+			if err1 == nil && err2 == nil {
+				isTrue = (l > r)
+			}
+		} else if strings.Contains(expression, "<") {
+			left, right := parseParts(expression, "<")
+			l, err1 := coerce.ToFloat64(left)
+			r, err2 := coerce.ToFloat64(right)
+			if err1 == nil && err2 == nil {
+				isTrue = (l < r)
+			}
+		} else {
+			// Logic: Truthy Check (Single Value)
+			val := resolveValue(node.Value, scope)
+			if b, err := coerce.ToBool(val); err == nil {
+				isTrue = b
+			} else {
+				s := coerce.ToString(val)
+				isTrue = (s != "" && s != "false" && s != "0" && s != "<nil>")
+			}
+		}
+
+		// Eksekusi Blok Then/Else
+		var target *engine.Node
+		if isTrue {
+			for _, c := range node.Children {
+				if c.Name == "then" {
+					target = c
+					break
+				}
+			}
+		} else {
+			for _, c := range node.Children {
+				if c.Name == "else" {
+					target = c
+					break
+				}
+			}
+		}
+
+		if target != nil {
+			for _, c := range target.Children {
+				if err := eng.Execute(ctx, c, scope); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}, engine.SlotMeta{
+		Description: "Execute block if condition is true.",
+		Inputs: map[string]engine.InputMeta{
+			"then": {Description: "Block to execute if condition is true"},
+			"else": {Description: "Block to execute if condition is false"},
+		},
+	})
+
 	// ==========================================
 	// SLOT: ISSET, EMPTY, UNLESS
 	// ==========================================
