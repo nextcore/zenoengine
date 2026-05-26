@@ -7,3 +7,4 @@ edition = "2024"
 zenocore = { path = "../zenocore" }
 zeno-std = { path = "../zeno-std" }
 zeno-apidoc = { path = "../zeno-apidoc" }
+zeno-blade = { path = "../zeno-blade" }
