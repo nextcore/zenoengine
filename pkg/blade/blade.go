@@ -100,7 +100,10 @@ func RegisterBladeSlots(eng *engine.Engine) {
 			return nil
 		}
 
-		val := resolveValue(node.Value, scope)
+		val := node.Value
+		if strVal, ok := node.Value.(string); ok && strings.HasPrefix(strVal, "$") {
+			val = resolveValue(strVal, scope)
+		}
 		str := coerce.ToString(val)
 		w.Write([]byte(str))
 		return nil

@@ -125,6 +125,28 @@ func (s *Scope) ToMap() map[string]interface{} {
 	return m
 }
 
+// GetAll mengembalikan semua variabel di scope ini dan scope parent secara rekursif
+func (s *Scope) GetAll() map[string]interface{} {
+	m := make(map[string]interface{})
+	
+	s.mu.RLock()
+	parent := s.parent
+	for k, v := range s.vars {
+		m[k] = v
+	}
+	s.mu.RUnlock()
+
+	if parent != nil {
+		parentMap := parent.GetAll()
+		for k, v := range parentMap {
+			if _, exists := m[k]; !exists {
+				m[k] = v
+			}
+		}
+	}
+	return m
+}
+
 // Reset clears all variables from the scope.
 // This is used by the object pool to safely reuse Scope instances
 // without data leakage between requests.

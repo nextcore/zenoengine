@@ -5,6 +5,8 @@ import (
 	"strings"
 	"zeno/pkg/engine"
 	"zeno/pkg/utils/coerce"
+
+	"github.com/expr-lang/expr"
 )
 
 func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
@@ -17,6 +19,34 @@ func parseNodeValue(n *engine.Node, scope *engine.Scope) interface{} {
 	}
 
 	valStr := strings.TrimSpace(fmt.Sprintf("%v", n.Value))
+
+	// Try evaluating as a general expression if it looks like one (e.g. contains math operators, comparison, or starts with '$' and contains other expressions/spaces)
+	isExpr := false
+	if strings.ContainsAny(valStr, "+-*/%<>=!&|()") {
+		isExpr = true
+	} else if strings.HasPrefix(valStr, "$") && (strings.ContainsAny(valStr, " \t\n") || strings.Contains(valStr, "??")) {
+		isExpr = true
+	}
+
+	if isExpr {
+		cleanExpr := strings.ReplaceAll(valStr, "$", "")
+		env := scope.GetAll()
+		// Auto-convert numeric strings to float64 for calculations
+		for k, v := range env {
+			if str, ok := v.(string); ok {
+				if f, err := coerce.ToFloat64(str); err == nil {
+					env[k] = f
+				}
+			}
+		}
+		program, err := expr.Compile(cleanExpr, expr.Env(env))
+		if err == nil {
+			output, err := expr.Run(program, env)
+			if err == nil {
+				return output
+			}
+		}
+	}
 
 	if len(valStr) >= 2 {
 		if (strings.HasPrefix(valStr, "\"") && strings.HasSuffix(valStr, "\"")) ||
