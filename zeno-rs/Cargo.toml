@@ -5,6 +5,7 @@ members = [
     "crates/zeno-apidoc",
     "crates/zenoengine",
     "crates/zeno-blade",
-    "examples/web_server"
+    "examples/web_server",
+    "examples/zenocctv"
 ]
 resolver = "2"

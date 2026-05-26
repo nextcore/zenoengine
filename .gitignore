@@ -39,6 +39,7 @@ wwwroot/dist/
 
 # Other
 node_modules/
+ref/
 
 # Rust zeno-rs
 /zeno-rs/target/
