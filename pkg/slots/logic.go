@@ -288,12 +288,13 @@ func RegisterLogicSlots(eng *engine.Engine) {
 	handlerFor := func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		var raw interface{}
 		valStr, _ := node.Value.(string)
-		if strings.Count(valStr, ";") == 2 {
+		isCStyle := strings.Count(valStr, ";") == 2
+
+		if isCStyle {
 			raw = valStr
 		} else {
 			raw = resolveValue(node.Value, scope)
 		}
-		rawStr := coerce.ToString(raw)
 
 		var doNode *engine.Node
 		for _, c := range node.Children {
@@ -304,8 +305,8 @@ func RegisterLogicSlots(eng *engine.Engine) {
 		}
 
 		// A. C-Style For Loop (e.g. "$i = 0; $i < 10; $i++")
-		if strings.Count(rawStr, ";") == 2 {
-			parts := strings.Split(rawStr, ";")
+		if isCStyle {
+			parts := strings.Split(valStr, ";")
 			initStr := strings.TrimSpace(parts[0])
 			condStr := strings.TrimSpace(parts[1])
 			updStr := strings.TrimSpace(parts[2])
@@ -625,67 +626,7 @@ func RegisterLogicSlots(eng *engine.Engine) {
 
 	eng.Register("if", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		expression := coerce.ToString(node.Value)
-		isTrue := false
-
-		// Helper untuk parsing bagian kiri dan kanan operator
-		parseParts := func(expr, op string) (interface{}, interface{}) {
-			parts := strings.SplitN(expr, op, 2)
-			left := resolveValue(strings.TrimSpace(parts[0]), scope)
-			right := resolveValue(strings.TrimSpace(parts[1]), scope)
-			return left, right
-		}
-
-		if strings.Contains(expression, "==") {
-			left, right := parseParts(expression, "==")
-			// Handle Explicit Nil Check
-			if (left == nil && coerce.ToString(right) == "nil") || (right == nil && coerce.ToString(left) == "nil") {
-				isTrue = true
-			} else {
-				isTrue = (coerce.ToString(left) == coerce.ToString(right))
-			}
-
-		} else if strings.Contains(expression, "!=") {
-			left, right := parseParts(expression, "!=")
-			isTrue = (coerce.ToString(left) != coerce.ToString(right))
-
-		} else if strings.Contains(expression, ">=") {
-			left, right := parseParts(expression, ">=")
-			l, err1 := coerce.ToFloat64(left)
-			r, err2 := coerce.ToFloat64(right)
-			if err1 == nil && err2 == nil {
-				isTrue = (l >= r)
-			}
-		} else if strings.Contains(expression, "<=") {
-			left, right := parseParts(expression, "<=")
-			l, err1 := coerce.ToFloat64(left)
-			r, err2 := coerce.ToFloat64(right)
-			if err1 == nil && err2 == nil {
-				isTrue = (l <= r)
-			}
-		} else if strings.Contains(expression, ">") {
-			left, right := parseParts(expression, ">")
-			l, err1 := coerce.ToFloat64(left)
-			r, err2 := coerce.ToFloat64(right)
-			if err1 == nil && err2 == nil {
-				isTrue = (l > r)
-			}
-		} else if strings.Contains(expression, "<") {
-			left, right := parseParts(expression, "<")
-			l, err1 := coerce.ToFloat64(left)
-			r, err2 := coerce.ToFloat64(right)
-			if err1 == nil && err2 == nil {
-				isTrue = (l < r)
-			}
-		} else {
-			// Logic: Truthy Check (Single Value)
-			val := resolveValue(node.Value, scope)
-			if b, err := coerce.ToBool(val); err == nil {
-				isTrue = b
-			} else {
-				s := coerce.ToString(val)
-				isTrue = (s != "" && s != "false" && s != "0" && s != "<nil>")
-			}
-		}
+		isTrue := evalSimpleCondition(expression, scope)
 
 		// Eksekusi Blok Then/Else
 		var target *engine.Node
@@ -1091,6 +1032,38 @@ func RegisterLogicSlots(eng *engine.Engine) {
 }
 
 func evalSimpleCondition(expr string, scope *engine.Scope) bool {
+	// First split by "||" (logical OR has lower precedence than AND)
+	orParts := strings.Split(expr, "||")
+	for _, orPart := range orParts {
+		orPart = strings.TrimSpace(orPart)
+		if orPart == "" {
+			continue
+		}
+		// Now split by "&&"
+		andParts := strings.Split(orPart, "&&")
+		andMatch := true
+		for _, andPart := range andParts {
+			andPart = strings.TrimSpace(andPart)
+			if andPart == "" {
+				andMatch = false
+				break
+			}
+			
+			// Evaluate single sub-condition
+			if !evalSubCondition(andPart, scope) {
+				andMatch = false
+				break
+			}
+		}
+		// If all AND parts matched for this OR group, the whole compound expression is true!
+		if andMatch {
+			return true
+		}
+	}
+	return false
+}
+
+func evalSubCondition(expr string, scope *engine.Scope) bool {
 	var op string
 	var left, right string
 
@@ -1106,11 +1079,29 @@ func evalSimpleCondition(expr string, scope *engine.Scope) bool {
 	}
 
 	if op == "" {
-		return false
+		// Truthy check (single value)
+		val := resolveValue(expr, scope)
+		if b, err := coerce.ToBool(val); err == nil {
+			return b
+		}
+		s := coerce.ToString(val)
+		return (s != "" && s != "false" && s != "0" && s != "<nil>")
 	}
 
-	leftVal := resolveExpressionValue(left, scope)
-	rightVal := resolveExpressionValue(right, scope)
+	leftVal := resolveValue(left, scope)
+	rightVal := resolveValue(right, scope)
+
+	// Explicit nil checks for == and !=
+	if op == "==" {
+		if (leftVal == nil && coerce.ToString(rightVal) == "nil") || (rightVal == nil && coerce.ToString(leftVal) == "nil") {
+			return true
+		}
+	}
+	if op == "!=" {
+		if (leftVal == nil && coerce.ToString(rightVal) == "nil") || (rightVal == nil && coerce.ToString(leftVal) == "nil") {
+			return false
+		}
+	}
 
 	lInt, errL := coerce.ToInt(leftVal)
 	rInt, errR := coerce.ToInt(rightVal)

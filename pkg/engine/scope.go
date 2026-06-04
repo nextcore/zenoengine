@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"reflect"
 	"strings"
 	"sync"
 )
@@ -89,9 +90,35 @@ func (s *Scope) Get(key string) (interface{}, bool) {
 					return nil, false // Property not found
 				}
 			} else {
-				// Current Value is NOT a map, so we can't go deeper.
-				// This acts as Safe Navigation: return nil, false (Not Found)
-				return nil, false
+				// Support struct properties using reflection
+				val := reflect.ValueOf(currentVal)
+				if val.Kind() == reflect.Ptr {
+					val = val.Elem()
+				}
+
+				if val.Kind() == reflect.Struct {
+					fieldVal := val.FieldByName(part)
+					if !fieldVal.IsValid() {
+						t := val.Type()
+						found := false
+						for idx := 0; idx < val.NumField(); idx++ {
+							f := t.Field(idx)
+							if strings.EqualFold(f.Name, part) || f.Tag.Get("json") == part || f.Tag.Get("db") == part {
+								fieldVal = val.Field(idx)
+								found = true
+								break
+							}
+						}
+						if !found {
+							return nil, false
+						}
+					}
+					currentVal = fieldVal.Interface()
+				} else {
+					// Current Value is NOT a map or struct, so we can't go deeper.
+					// This acts as Safe Navigation: return nil, false (Not Found)
+					return nil, false
+				}
 			}
 
 			// Safe Navigation check: If currentVal becomes nil during traversal, stop
