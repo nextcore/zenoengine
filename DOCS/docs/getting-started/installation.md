@@ -9,7 +9,7 @@ If you are coming from Laravel, you will feel right at home. ZenoEngine brings t
 ### Step 1: Download & Install
 
 ZenoEngine is distributed as a single executable binary.
-1. Go to the [Releases](https://github.com/zenolang/zenoengine/releases) page.
+1. Go to the [Releases](https://github.com/nextcore/zenoengine/releases) page.
 2. Download the appropriate binary file for your OS (`zeno-linux-amd64`, `zeno-darwin-arm64`, etc.).
 3. Rename the file to `zeno` (or `zeno.exe` on Windows).
 4. Make it executable: `chmod +x zeno`

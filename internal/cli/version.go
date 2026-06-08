@@ -6,7 +6,7 @@ import (
 )
 
 // Version is the current version of ZenoEngine
-const Version = "1.1.4"
+const Version = "1.1.5"
 
 // HandleVersion prints the current version of ZenoEngine
 func HandleVersion() {
