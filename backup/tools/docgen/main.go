@@ -7,7 +7,7 @@ import (
 	"strings"
 	"zeno/internal/app"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 
 	"github.com/go-chi/chi/v5"
 )

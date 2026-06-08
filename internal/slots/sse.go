@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"zeno/pkg/engine"
-	"zeno/pkg/fastjson"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/fastjson"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 // RegisterSSESlots registers Server-Sent Events slots

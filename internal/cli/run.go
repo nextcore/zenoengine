@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"zeno/internal/app"
-	pkgslots "zeno/pkg/slots"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 	"zeno/pkg/logger"
 	"zeno/pkg/worker"
 

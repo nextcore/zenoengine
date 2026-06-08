@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"sync"
 	"time"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 )
 
 // Struktur Data Tugas

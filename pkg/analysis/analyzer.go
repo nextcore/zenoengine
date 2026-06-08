@@ -3,7 +3,7 @@ package analysis
 import (
 	"fmt"
 	"strings"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 )
 
 type AnalysisResult struct {

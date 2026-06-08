@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
-	pkgslots "zeno/pkg/slots"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"

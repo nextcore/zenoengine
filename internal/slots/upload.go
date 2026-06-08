@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings" // [WAJIB] Jangan lupa import strings
 	"time"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 func RegisterUploadSlots(eng *engine.Engine) {

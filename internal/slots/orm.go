@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 func RegisterORMSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {

@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 func RegisterHTTPClientSlots(eng *engine.Engine) {

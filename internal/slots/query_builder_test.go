@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 
 	"github.com/stretchr/testify/assert"
 )

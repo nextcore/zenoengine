@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"zeno/pkg/engine"
-	"zeno/pkg/fastjson"
-	"zeno/pkg/utils/coerce"
-	pkgslots "zeno/pkg/slots"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/fastjson"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 )
 
 func RegisterHTTPServerSlots(eng *engine.Engine) {

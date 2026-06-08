@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
-	"zeno/pkg/blade"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/blade"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 func RegisterMetaSlots(eng *engine.Engine) {

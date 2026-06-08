@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 	"time"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 )
 
 func TestTimeSlots(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"image/png"
 	"os"
 	"strings"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 	// Library resize pihak ketiga (golang.org/x/image/draw) direkomendasikan,
 	// tapi untuk "Zero-effort" start kita pakai basic logic atau library standar.
 )

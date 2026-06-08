@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"zeno/internal/app"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 	"zeno/pkg/logger"
 	"zeno/pkg/migrator"
 	"zeno/pkg/worker"

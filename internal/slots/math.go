@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 
 	"github.com/expr-lang/expr"
 	"github.com/shopspring/decimal"

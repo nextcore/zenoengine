@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 
 	"github.com/dchest/captcha"
 	"github.com/go-chi/chi/v5"

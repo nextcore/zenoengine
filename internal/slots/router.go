@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 	"zeno/pkg/apidoc"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 	hostPkg "zeno/pkg/host"
 	"zeno/pkg/middleware"
-	"zeno/pkg/utils/coerce"
-	pkgslots "zeno/pkg/slots"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 
 	"github.com/go-chi/chi/v5"
 )

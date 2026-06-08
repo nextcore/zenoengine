@@ -1,25 +1,25 @@
 module zeno
 
-go 1.26.0
+go 1.26.1
 
 require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/cors v1.2.2
 	github.com/go-chi/httprate v0.15.0
 	github.com/go-sql-driver/mysql v1.7.1
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gosimple/slug v1.15.0
 	github.com/joho/godotenv v1.5.1
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/shopspring/decimal v1.4.0
-	github.com/spf13/cast v1.10.0
+	github.com/spf13/cast v1.10.0 // indirect
 	golang.org/x/crypto v0.47.0
 )
 
 require (
 	github.com/dchest/captcha v1.1.0
-	github.com/expr-lang/expr v1.17.7
-	github.com/goccy/go-json v0.10.5
+	github.com/expr-lang/expr v1.17.8
+	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/microsoft/go-mssqldb v1.9.6
@@ -76,3 +76,5 @@ require (
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 )
+
+require github.com/nextcore/zeno-go v1.0.0

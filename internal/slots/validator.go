@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 func RegisterValidatorSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {

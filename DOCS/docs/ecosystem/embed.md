@@ -8,11 +8,17 @@ ZenoLang core engine dirancang agar bisa di-*embed* (ditanam) ke dalam projek la
 
 ### Instalasi
 
-Untuk mengimpor ZenoLang di dalam projek Go, Anda dapat mengimpor package engine:
+Untuk mengimpor ZenoLang di dalam projek Go, unduh modul `zeno-go` terlebih dahulu:
+
+```bash
+go get github.com/nextcore/zeno-go
+```
+
+Kemudian impor package engine:
 
 ```go
 import (
-    "zeno/pkg/engine"
+    "github.com/nextcore/zeno-go/pkg/engine"
 )
 ```
 
@@ -30,7 +36,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 )
 
 func main() {
@@ -85,19 +91,19 @@ eng.Register("my.slot", func(ctx context.Context, node *engine.Node, scope *engi
 
 ## 2. Embedding in Rust (`zenoengine`)
 
-Modular workspace Rust `zenoengine` (dan sub-crate pendukungnya) dapat diintegrasikan langsung ke proyek Rust Anda menggunakan Cargo.
+Modular workspace Rust `zeno-rs` (dan sub-crate pendukungnya) telah dipublikasikan ke [crates.io](https://crates.io).
 
-### Instalasi via GitHub
+### Instalasi
 
-Untuk menambahkan `zenoengine` ke proyek Rust Anda langsung dari repository GitHub, tambahkan baris berikut ke `Cargo.toml` proyek Anda:
+Untuk menambahkan `zenoengine` ke proyek Rust Anda dari crates.io, tambahkan baris berikut ke `Cargo.toml` proyek Anda:
 
 ```toml
 [dependencies]
-zenoengine = { git = "https://github.com/nextcore/zenoengine.git", package = "zenoengine" }
+zenoengine = "0.1"
 ```
 
 > [!NOTE]
-> Meskipun repositori utama `zenoengine` berisi kode Go di root-nya dan kode Rust berada di subfolder `zeno-rs/`, Cargo secara otomatis akan melakukan pemindaian (scan) rekursif ke seluruh direktori repositori Git tersebut saat proses build untuk mencari file `Cargo.toml` yang mendefinisikan crate dengan nama `zenoengine`. Oleh karena itu, Cargo dapat menemukannya dan melakukan import tanpa masalah.
+> Proyek Rust ZenoEngine dikembangkan secara independen di repositori [nextcore/zeno-rs](https://github.com/nextcore/zeno-rs) dan dipublikasikan di crates.io untuk integrasi yang lebih mudah tanpa memerlukan URL git.
 
 ### Dasar Penggunaan
 

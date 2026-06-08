@@ -3,8 +3,8 @@ package slots
 import (
 	"context"
 	"testing"
-	"zeno/pkg/engine"
-	pkgslots "zeno/pkg/slots"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 )
 
 func TestFunctionSlots(t *testing.T) {

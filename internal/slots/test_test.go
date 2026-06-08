@@ -3,7 +3,7 @@ package slots
 import (
 	"context"
 	"testing"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

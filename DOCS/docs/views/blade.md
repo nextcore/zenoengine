@@ -187,11 +187,16 @@ See the [Multi-App Architecture](/ecosystem/multi-app) guide for a complete exam
 Zeno Blade kini dapat digunakan di projek Go murni secara independen tanpa harus menggunakan seluruh framework ZenoEngine.
 
 ### Instalasi
-Import paket `blade` dan `slots` dari ZenoEngine:
+Unduh modul `zeno-go`:
+```bash
+go get github.com/nextcore/zeno-go
+```
+
+Import paket `blade` dan `slots`:
 ```go
 import (
-    "zeno/pkg/engine"
-    "zeno/pkg/blade"
+    "github.com/nextcore/zeno-go/pkg/engine"
+    "github.com/nextcore/zeno-go/pkg/blade"
 )
 ```
 

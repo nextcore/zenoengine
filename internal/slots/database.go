@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 // Helper: Build query from Node

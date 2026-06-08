@@ -6,7 +6,7 @@ import (
 	"os"
 	"zeno/internal/app"
 	"zeno/pkg/analysis"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 )
 
 func HandleCheck(args []string) {

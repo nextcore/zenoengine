@@ -6,9 +6,9 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 	"zeno/pkg/middleware"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 func RegisterIPSecuritySlots(eng *engine.Engine) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"testing"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 	"zeno/pkg/middleware"
 
 	"github.com/stretchr/testify/assert"

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"zeno/internal/slots"
-	"zeno/pkg/engine"
-	pkgslots "zeno/pkg/slots"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 )
 
 type ExecuteRequest struct {

@@ -12,7 +12,7 @@ import (
 	"time"
 	"zeno/internal/console"
 	"zeno/pkg/apidoc"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 	"zeno/pkg/logger"
 	"zeno/pkg/metrics"
 	"zeno/pkg/middleware"

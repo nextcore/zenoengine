@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/pbkdf2"

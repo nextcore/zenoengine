@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 
 // TestStats tracks the results of the test execution

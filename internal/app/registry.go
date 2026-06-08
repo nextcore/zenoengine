@@ -2,10 +2,10 @@ package app
 
 import (
 	"zeno/internal/slots"
-	pkgslots "zeno/pkg/slots"
-	"zeno/pkg/blade"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
+	"github.com/nextcore/zeno-go/pkg/blade"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 	"zeno/pkg/worker"
 
 	"github.com/go-chi/chi/v5"

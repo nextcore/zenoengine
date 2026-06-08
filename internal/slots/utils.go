@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 
 	"github.com/gosimple/slug"
 	"github.com/microcosm-cc/bluemonday"

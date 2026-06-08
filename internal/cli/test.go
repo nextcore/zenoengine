@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"zeno/internal/slots"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 )
 
 func HandleTest(args []string) {

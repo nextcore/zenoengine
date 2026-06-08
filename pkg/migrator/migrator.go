@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 )
 
 type Migrator struct {

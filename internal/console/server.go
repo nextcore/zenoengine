@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 	"zeno/pkg/apidoc"
-	"zeno/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/engine"
 
 	"github.com/go-chi/chi/v5"
 )
