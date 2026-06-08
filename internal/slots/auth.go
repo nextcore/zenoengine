@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
 	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
@@ -26,9 +26,6 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		colUser := "email"
 		colPass := "password"
 		jwtSecret := os.Getenv("JWT_SECRET")
-		if jwtSecret == "" {
-			jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
-		}
 		target := "token"
 		dbName := "default"
 
@@ -58,6 +55,10 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			if c.Name == "db" {
 				dbName = coerce.ToString(val)
 			}
+		}
+
+		if jwtSecret == "" {
+			return fmt.Errorf("auth.login: JWT_SECRET is not configured. Please set the JWT_SECRET environment variable or provide the 'secret' parameter")
 		}
 
 		if username == "" || password == "" {
@@ -137,9 +138,6 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 	// 2. AUTH.MIDDLEWARE (Guard) - Auto Multi-Tenant Detection
 	eng.Register("auth.middleware", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		jwtSecret := os.Getenv("JWT_SECRET")
-		if jwtSecret == "" {
-			jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
-		}
 		var doNode *engine.Node
 
 		// Parse parameters
@@ -150,6 +148,10 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			if c.Name == "do" {
 				doNode = c
 			}
+		}
+
+		if jwtSecret == "" {
+			return fmt.Errorf("auth.middleware: JWT_SECRET is not configured. Please set the JWT_SECRET environment variable or provide the 'secret' parameter")
 		}
 
 		// Get HTTP request
@@ -312,11 +314,10 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			}
 
 			if tokenString != "" {
-				// We need the secret. Since it's not passed here, we use the default
-				// or we could try to find it from env.
+				// We need the secret. Since it's not passed here, we use the env.
 				jwtSecret := os.Getenv("JWT_SECRET")
 				if jwtSecret == "" {
-					jwtSecret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar"
+					return fmt.Errorf("auth.user: JWT_SECRET environment variable is not configured")
 				}
 
 				token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -420,11 +421,11 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			}
 		}
 
-		// Jika secret kosong, cari dari environment global atau default
+		// Jika secret kosong, cari dari environment global
 		if secret == "" {
 			secret = os.Getenv("JWT_SECRET")
 			if secret == "" {
-				secret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
+				return fmt.Errorf("jwt.verify: JWT_SECRET environment variable is not configured. Please set the JWT_SECRET environment variable or provide the 'secret' parameter")
 			}
 		}
 
@@ -484,7 +485,7 @@ func RegisterAuthSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 		if secret == "" {
 			secret = os.Getenv("JWT_SECRET")
 			if secret == "" {
-				secret = "458127c2cffdd41a448b5d37b825188bf12db10e5c98cb03b681da667ac3b294_pekalongan_kota_2025_!@#_jgn_disebar" // Default fallback
+				return fmt.Errorf("jwt.refresh: JWT_SECRET environment variable is not configured. Please set the JWT_SECRET environment variable or provide the 'secret' parameter")
 			}
 		}
 

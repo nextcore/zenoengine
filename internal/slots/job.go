@@ -8,7 +8,7 @@ import (
 	"github.com/nextcore/zeno-go/pkg/engine"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 
-	"zeno/pkg/worker"
+	"github.com/nextcore/zenoengine/pkg/worker"
 )
 
 func RegisterJobSlots(eng *engine.Engine, queue worker.JobQueue, setConfig func([]string)) {

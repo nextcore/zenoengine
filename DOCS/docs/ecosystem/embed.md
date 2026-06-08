@@ -1,10 +1,6 @@
 # Embedding ZenoLang
 
-ZenoLang core engine dirancang agar bisa di-*embed* (ditanam) ke dalam projek lain dengan sangat mudah. Bahasa skrip ZenoLang saat ini dapat di-embed di projek **Go** maupun **Rust**.
-
----
-
-## 1. Embedding in Go
+ZenoLang core engine dirancang agar bisa di-*embed* (ditanam) ke dalam projek Go lain dengan sangat mudah.
 
 ### Instalasi
 
@@ -85,106 +81,56 @@ eng.Register("my.slot", func(ctx context.Context, node *engine.Node, scope *engi
     Description: "Slot kustom saya",
     Example:     "my.slot: 'nilai' { attr: 'v' }",
 })
+### Integrasi Modular ZenoEngine (Option Pattern)
+
+Jika Anda menggunakan framework **`zenoengine`** penuh di dalam proyek Go Anda, Anda bisa menggunakan **Option Pattern** untuk mendaftarkan modul-modul bawaan secara selektif. Ini sangat berguna jika Anda tidak ingin membebani aplikasi dengan seluruh fitur monolitik (misalnya, membangun microservice tanpa database, atau sekadar melakukan rendering template Blade).
+
+Untuk menggunakan pendaftaran modular, impor package `app` dari `zenoengine`:
+
+```go
+import (
+    "github.com/nextcore/zeno-go/pkg/engine"
+    "github.com/nextcore/zenoengine/internal/app"
+)
 ```
 
----
+#### Opsi Pendaftaran Kategori (Broad Options)
+- **`app.WithCore()`**: Mendaftarkan seluruh slot inti (Math, Time, Logic, FileSystem, Metadata, dll).
+- **`app.WithWeb(r *chi.Mux)`**: Mendaftarkan slot web server (Router, Blade, Inertia, HTTP Client/Server, Session, Captcha).
+- **`app.WithData(dbMgr *dbmanager.DBManager)`**: Mendaftarkan slot database, ORM, Schema, Validator, serta Auth.
+- **`app.WithExtra(queue worker.JobQueue, setConfig func([]string))`**: Mendaftarkan modul pengiriman Email, in-memory caching, serta background jobs.
 
-## 2. Embedding in Rust (`zenoengine`)
+#### Opsi Pendaftaran Granular
+Untuk kontrol yang lebih detail, Anda bisa memilih modul tertentu secara individual:
+- **`app.WithBlade()`**: Mengaktifkan mesin templating Blade.
+- **`app.WithRouter(r *chi.Mux)`**: Mengaktifkan routing HTTP.
+- **`app.WithDB(dbMgr)`**: Mengaktifkan Database, ORM, Schema, dan DB Hooks.
+- **`app.WithMail()`**: Mengaktifkan modul Email.
+- **`app.WithCache()`**: Mengaktifkan in-memory Cache.
+- **`app.WithJob(queue, setConfig)`**: Mengaktifkan background worker queue.
 
-Modular workspace Rust `zeno-rs` (dan sub-crate pendukungnya) telah dipublikasikan ke [crates.io](https://crates.io).
+#### Contoh Integrasi Selektif
 
-### Instalasi
+Berikut adalah contoh inisialisasi engine yang hanya menggunakan fitur **Core** dan **Blade Templating** (tanpa database, worker, ataupun router HTTP):
 
-Untuk menambahkan `zenoengine` ke proyek Rust Anda dari crates.io, tambahkan baris berikut ke `Cargo.toml` proyek Anda:
+```go
+package main
 
-```toml
-[dependencies]
-zenoengine = "0.1"
-```
+import (
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zenoengine/internal/app"
+)
 
-> [!NOTE]
-> Proyek Rust ZenoEngine dikembangkan secara independen di repositori [nextcore/zeno-rs](https://github.com/nextcore/zeno-rs) dan dipublikasikan di crates.io untuk integrasi yang lebih mudah tanpa memerlukan URL git.
+func main() {
+	// 1. Inisialisasi Core Engine
+	eng := engine.NewEngine()
 
-### Dasar Penggunaan
+	// 2. Registrasi Fitur secara Selektif (hanya Core & Blade Template)
+	app.RegisterSlots(eng,
+		app.WithCore(),
+		app.WithBlade(),
+	)
 
-Untuk membuat instance engine yang telah dimuat dengan standard library (Math & Date slots) bawaan:
-
-```rust
-use zenoengine::{new_engine, parser::parse_string, executor::Context, scope::Scope};
-
-fn main() {
-    // 1. Buat engine baru dengan slot stdlib pre-registered
-    let engine = new_engine();
-    let mut ctx = Context::new();
-    let scope = Scope::new(None);
-
-    // 2. Tulis skrip ZenoLang
-    let script = r#"
-        var: $a { val: 10 }
-        var: $b { val: 20 }
-        math.calc: "$a + $b" {
-            as: $sum
-        }
-    "#;
-
-    // 3. Parse dan Eksekusi
-    let root = parse_string(script, "example.zl").unwrap();
-    engine.execute(&mut ctx, &root, &scope).unwrap();
-
-    // 4. Ambil hasil dari scope
-    if let Some(val) = scope.get("sum") {
-        println!("Hasil penjumlahan: {:?}", val); // Output: Float(30.0)
-    }
+	// Sekarang Anda dapat mengeksekusi template Blade atau skrip ZenoLang secara langsung!
 }
-```
-
-### Mendaftarkan Slot Kustom (Rust)
-
-Anda dapat memperluas engine Rust dengan mendaftarkan closure atau fungsi sebagai slot:
-
-```rust
-use std::sync::Arc;
-use zenoengine::{Engine, SlotMeta, InputMeta, Diagnostic};
-
-fn register_custom_slot(engine: &mut Engine) {
-    engine.register(
-        "custom.log",
-        Arc::new(|_engine, _ctx, node, scope| {
-            if let Some(ref v) = node.value {
-                println!("LOG: {}", v);
-            }
-            Ok(())
-        }),
-        SlotMeta {
-            description: "Mencetak pesan kustom ke stdout".to_string(),
-            example: "custom.log: 'Pesan'".to_string(),
-            inputs: std::collections::HashMap::new(),
-            required_blocks: Vec::new(),
-            value_type: "string".to_string(),
-        }
-    );
-}
-```
-
-### Menyajikan Dokumentasi API & Swagger UI
-
-Jika Anda menggunakan framework web Rust seperti Axum atau Actix-web, Anda dapat menggunakan modul `apidoc` dari `zenoengine` untuk mendaftarkan skema API dan menyajikan Swagger UI:
-
-```rust
-use zenoengine::apidoc::{self, APIRegistry, RouteDoc};
-
-// 1. Daftarkan rute dokumentasi
-APIRegistry::global().register("POST", "/execute", RouteDoc {
-    method: "POST".to_string(),
-    path: "/execute".to_string(),
-    summary: "Eksekusi ZenoLang Script".to_string(),
-    description: "Mengevaluasi kode skrip yang dikirimkan client".to_string(),
-    tags: vec!["Execution".to_string()],
-    params: Vec::new(),
-    request_body: None,
-    responses: std::collections::HashMap::new(),
-});
-
-// 2. Generate HTML Swagger UI untuk handler endpoint
-let swagger_html = apidoc::swagger_ui_html("/openapi.json");
 ```

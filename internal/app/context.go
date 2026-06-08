@@ -3,8 +3,8 @@ package app
 import (
 	"net/http"
 	"sync"
-	"zeno/pkg/dbmanager"
-	"zeno/pkg/worker"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/worker"
 
 	"github.com/go-chi/chi/v5"
 )

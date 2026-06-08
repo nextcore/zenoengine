@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	"zeno/pkg/middleware"
+	"github.com/nextcore/zenoengine/pkg/middleware"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )
 

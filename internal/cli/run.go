@@ -7,12 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"zeno/internal/app"
+	"github.com/nextcore/zenoengine/internal/app"
 	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	"zeno/pkg/logger"
-	"zeno/pkg/worker"
+	"github.com/nextcore/zenoengine/pkg/logger"
+	"github.com/nextcore/zenoengine/pkg/worker"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
@@ -24,6 +24,7 @@ func HandleRun(args []string) {
 		os.Exit(1)
 	}
 	godotenv.Load()
+	EnsureJWTSecret()
 	logger.Setup("development")
 	path := args[0]
 	root, err := engine.LoadScript(path)

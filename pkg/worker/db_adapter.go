@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 )
 
 type DBQueue struct {

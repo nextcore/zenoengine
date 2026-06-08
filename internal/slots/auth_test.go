@@ -3,7 +3,7 @@ package slots
 import (
 	"context"
 	"testing"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -33,8 +33,7 @@ func TestAuthSlots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to insert user: %v", err)
 	}
-
-
+	t.Setenv("JWT_SECRET", "testsecret123456789012345678901234")
 
 	eng := engine.NewEngine()
 	RegisterAuthSlots(eng, dbMgr)

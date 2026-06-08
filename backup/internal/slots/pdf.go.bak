@@ -5,8 +5,8 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zenoengine/pkg/engine"
+	"github.com/nextcore/zenoengine/pkg/utils/coerce"
 
 	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
 )

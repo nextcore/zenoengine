@@ -3,7 +3,7 @@ package middleware
 import (
 	"net"
 	"net/http"
-	"zeno/pkg/host"
+	"github.com/nextcore/zenoengine/pkg/host"
 )
 
 // HostDispatcher performs an O(1) lookup to route requests based on the Host header.

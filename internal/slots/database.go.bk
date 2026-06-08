@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"zeno/pkg/dbmanager"
-	"zeno/pkg/engine"
-	"zeno/pkg/utils/coerce"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/engine"
+	"github.com/nextcore/zenoengine/pkg/utils/coerce"
 )
 
 // Helper: Build query from Node

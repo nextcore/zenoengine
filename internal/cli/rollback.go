@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"zeno/internal/app"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/internal/app"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	"zeno/pkg/logger"
-	"zeno/pkg/migrator"
-	"zeno/pkg/worker"
+	"github.com/nextcore/zenoengine/pkg/logger"
+	"github.com/nextcore/zenoengine/pkg/migrator"
+	"github.com/nextcore/zenoengine/pkg/worker"
 )
 
 func HandleRollback() {

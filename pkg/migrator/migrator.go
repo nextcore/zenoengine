@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
 )
 

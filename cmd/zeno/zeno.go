@@ -16,14 +16,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"zeno/internal/app"
-	"zeno/internal/cli"
+	"github.com/nextcore/zenoengine/internal/app"
+	"github.com/nextcore/zenoengine/internal/cli"
 	"github.com/nextcore/zeno-go/pkg/blade"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	hostPkg "zeno/pkg/host"
-	"zeno/pkg/logger"
-	"zeno/pkg/worker"
+	hostPkg "github.com/nextcore/zenoengine/pkg/host"
+	"github.com/nextcore/zenoengine/pkg/logger"
+	"github.com/nextcore/zenoengine/pkg/worker"
 
 	"golang.org/x/crypto/acme/autocert"
 
@@ -33,7 +33,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/microsoft/go-mssqldb"
 
-	"zeno/pkg/livereload"
+	"github.com/nextcore/zenoengine/pkg/livereload"
 )
 
 func main() {
@@ -69,6 +69,9 @@ func main() {
 		}
 		return // STOP HERE for CLI commands
 	}
+
+	// 1.4 ENSURE JWT SECRET IS CONFIGURED
+	cli.EnsureJWTSecret()
 
 	// 1.5 EARLY PORT CHECK
 	// Check if port is available BEFORE loading heavy dependencies (logger, DB, etc.)

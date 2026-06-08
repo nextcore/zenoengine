@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"zeno/internal/slots"
+	"github.com/nextcore/zenoengine/internal/slots"
 	"github.com/nextcore/zeno-go/pkg/engine"
 	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 )

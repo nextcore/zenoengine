@@ -1,4 +1,4 @@
-module zeno
+module github.com/nextcore/zenoengine
 
 go 1.26.1
 

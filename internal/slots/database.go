@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 )

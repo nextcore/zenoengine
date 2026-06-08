@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	"zeno/pkg/middleware"
+	"github.com/nextcore/zenoengine/pkg/middleware"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

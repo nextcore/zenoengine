@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"zeno/internal/app"
-	"zeno/pkg/analysis"
+	"github.com/nextcore/zenoengine/internal/app"
+	"github.com/nextcore/zenoengine/pkg/analysis"
 	"github.com/nextcore/zeno-go/pkg/engine"
 )
 

@@ -208,5 +208,37 @@ blade.RegisterBladeSlots(eng)
 // RegisterBladeSlots otomatis mendaftarkan slots.RegisterLogicSlots juga!
 ```
 
-Sekarang Anda dapat mengeksekusi file Blade langsung dari kode Go Anda dengan memanggil `eng.Execute` atau menggunakan slot yang tersedia!
+Sekarang Anda dapat mengeksekusi file Blade langsung dari kode Go Anda dengan memanggil `eng.Execute` menggunakan slot `view.blade`:
 
+```go
+package main
+
+import (
+	"context"
+	"github.com/nextcore/zeno-go/pkg/engine"
+	"github.com/nextcore/zeno-go/pkg/blade"
+)
+
+func main() {
+	eng := engine.NewEngine()
+	blade.RegisterBladeSlots(eng)
+
+	// 1. Setup scope untuk variabel template
+	scope := engine.NewScope(nil)
+	scope.Set("_view_root", "views/") // folder tempat file .blade.zl berada
+	scope.Set("name", "Budi")
+
+	// 2. Parse perintah pemanggilan view: 'welcome'
+	// ini akan merender berkas: views/welcome.blade.zl
+	root, err := engine.ParseString("view.blade: 'welcome'", "eval")
+	if err != nil {
+		panic(err)
+	}
+
+	// 3. Eksekusi rendering
+	ctx := context.Background()
+	if err := eng.Execute(ctx, root, scope); err != nil {
+		panic(err)
+	}
+}
+```

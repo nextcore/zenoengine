@@ -11,7 +11,7 @@ While it is used natively by ZenoEngine to generate documentation for ZenoLang r
 If you are using ZenoEngine as a dependency, you can import the package directly:
 
 ```go
-import "zeno/pkg/apidoc"
+import "github.com/nextcore/zenoengine/pkg/apidoc"
 ```
 
 If you are in another project, you can copy the `pkg/apidoc` directory into your project structure, or import it directly if within the same Go workspace/module.
@@ -30,7 +30,7 @@ To document a route, define a `RouteDoc` struct and register it to the global re
 package main
 
 import (
-	"zeno/pkg/apidoc"
+	"github.com/nextcore/zenoengine/pkg/apidoc"
 )
 
 func registerUserEndpoints() {
@@ -80,7 +80,7 @@ package main
 
 import (
 	"net/http"
-	"zeno/pkg/apidoc"
+	"github.com/nextcore/zenoengine/pkg/apidoc"
 )
 
 func main() {

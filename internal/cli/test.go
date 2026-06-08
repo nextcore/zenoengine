@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"zeno/internal/slots"
+	"github.com/nextcore/zenoengine/internal/slots"
 	"github.com/nextcore/zeno-go/pkg/engine"
 )
 

@@ -4,6 +4,8 @@ bin/
 /zeno.exe
 /zeno_test
 /zeno_test.exe
+/zenoengine
+/zenoengine.exe
 
 # OS generated files
 .DS_Store

@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"zeno/pkg/apidoc"
+	"github.com/nextcore/zenoengine/pkg/apidoc"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	hostPkg "zeno/pkg/host"
-	"zeno/pkg/middleware"
+	hostPkg "github.com/nextcore/zenoengine/pkg/host"
+	"github.com/nextcore/zenoengine/pkg/middleware"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 

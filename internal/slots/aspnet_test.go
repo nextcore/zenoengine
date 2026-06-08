@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"testing"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
 
 	"github.com/stretchr/testify/assert"

@@ -5,8 +5,8 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"zeno/internal/app"
-	"zeno/pkg/dbmanager"
+	"github.com/nextcore/zenoengine/internal/app"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
 
 	"github.com/go-chi/chi/v5"
