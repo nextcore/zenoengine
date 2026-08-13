@@ -389,7 +389,7 @@ func RegisterUtilSlots(eng *engine.Engine) {
 
 		url := coerce.ToString(resolveValue(node.Value, scope))
 		http.Redirect(w, r, url, http.StatusSeeOther)
-		return nil
+		return pkgslots.ErrReturn
 	}, engine.SlotMeta{})
 
 	// 9. IF (UPGRADED: Support ==, !=, >, <, >=, <=)

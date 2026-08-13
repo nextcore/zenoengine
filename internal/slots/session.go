@@ -2,10 +2,14 @@ package slots
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"github.com/nextcore/zeno-go/pkg/engine"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
@@ -13,6 +17,42 @@ import (
 
 // FlashSessionKeyPrefix is the prefix for flash cookies
 const FlashSessionKeyPrefix = "_flash_"
+
+// Helper to get APP_KEY for signing
+func getAppKey() []byte {
+	key := os.Getenv("APP_KEY")
+	if key == "" {
+		key = "zenoengine_default_secret_key_change_me_in_production"
+	}
+	return []byte(key)
+}
+
+// Generate HMAC signature for value
+func signCookieValue(value string) string {
+	mac := hmac.New(sha256.New, getAppKey())
+	mac.Write([]byte(value))
+	sig := hex.EncodeToString(mac.Sum(nil))
+	return value + "|" + sig
+}
+
+// Verify HMAC signature of cookie value, returns clean value or empty string if invalid
+func verifyCookieValue(signedValue string) string {
+	parts := strings.SplitN(signedValue, "|", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	val := parts[0]
+	sig := parts[1]
+
+	mac := hmac.New(sha256.New, getAppKey())
+	mac.Write([]byte(val))
+	expectedSig := hex.EncodeToString(mac.Sum(nil))
+
+	if hmac.Equal([]byte(sig), []byte(expectedSig)) {
+		return val
+	}
+	return ""
+}
 
 // RegisterSessionSlots registers session related slots
 func RegisterSessionSlots(eng *engine.Engine) {
@@ -51,8 +91,9 @@ func RegisterSessionSlots(eng *engine.Engine) {
 			return fmt.Errorf("session.flash: failed to marshal value: %v", err)
 		}
 
-		// URL Encode to be safe in cookie
-		cookieVal := url.QueryEscape(string(jsonBytes))
+		// Sign cookie value to prevent tampering
+		signedVal := signCookieValue(string(jsonBytes))
+		cookieVal := url.QueryEscape(signedVal)
 
 		// Set Cookie (Short lived, e.g. 5 minutes to allow redirect)
 		http.SetCookie(w, &http.Cookie{
@@ -77,9 +118,6 @@ func RegisterSessionSlots(eng *engine.Engine) {
 		}
 		r := reqVal.(*http.Request)
 		w, ok := ctx.Value("httpWriter").(http.ResponseWriter)
-
-		// If we can't write (read-only context?), we can still read cookie but can't delete it.
-		// Detailed logic: Read cookie, then Set-Cookie MaxAge=-1 to delete it.
 
 		var key string
 		target := "flash_data"
@@ -107,21 +145,26 @@ func RegisterSessionSlots(eng *engine.Engine) {
 		cookie, err := r.Cookie(cookieName)
 
 		if err != nil || cookie.Value == "" {
-			// Not found
 			scope.Set(target, nil)
 			return nil
 		}
 
 		// Decode value
-		jsonStr, err := url.QueryUnescape(cookie.Value)
+		escapedStr, err := url.QueryUnescape(cookie.Value)
 		if err != nil {
+			scope.Set(target, nil)
+			return nil
+		}
+
+		// Verify signature
+		jsonStr := verifyCookieValue(escapedStr)
+		if jsonStr == "" {
 			scope.Set(target, nil)
 			return nil
 		}
 
 		var val interface{}
 		if err := json.Unmarshal([]byte(jsonStr), &val); err != nil {
-			// If not valid JSON, maybe raw string?
 			val = jsonStr
 		}
 
@@ -159,7 +202,8 @@ func RegisterSessionSlots(eng *engine.Engine) {
 		}
 
 		jsonBytes, _ := json.Marshal(val)
-		cookieVal := url.QueryEscape(string(jsonBytes))
+		signedVal := signCookieValue(string(jsonBytes))
+		cookieVal := url.QueryEscape(signedVal)
 
 		http.SetCookie(w, &http.Cookie{
 			Name:     "_session_" + key,
@@ -192,7 +236,14 @@ func RegisterSessionSlots(eng *engine.Engine) {
 			return nil
 		}
 
-		jsonStr, _ := url.QueryUnescape(cookie.Value)
+		escapedStr, _ := url.QueryUnescape(cookie.Value)
+		jsonStr := verifyCookieValue(escapedStr)
+		if jsonStr == "" {
+			// Signature failed, treat as nil/unauthorized session
+			scope.Set(target, nil)
+			return nil
+		}
+
 		var val interface{}
 		json.Unmarshal([]byte(jsonStr), &val)
 		scope.Set(target, val)
@@ -223,8 +274,6 @@ func RegisterSessionSlots(eng *engine.Engine) {
 
 	// 6. SESSION.REGENERATE
 	eng.Register("session.regenerate", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		// No-op for now as we use stateless cookies per-key.
-		// In a real session manager, this would change the session ID.
 		return nil
 	}, engine.SlotMeta{Description: "Regenerate session ID (Security)."})
 }
