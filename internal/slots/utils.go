@@ -10,6 +10,7 @@ import (
 	"time"
 	"github.com/nextcore/zeno-go/pkg/engine"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
+	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
 
 	"github.com/gosimple/slug"
 	"github.com/microcosm-cc/bluemonday"
