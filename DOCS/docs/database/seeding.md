@@ -26,10 +26,10 @@ db.seed {
 
 ## Running Seeders
 
-You can run the database seeder using the Zeno CLI:
+You can run your database seeders by executing the seeder script directly using the `zeno` runtime:
 
 ```bash
-zeno db:seed
+zeno database/seeders/user_seeder.zl
 ```
 
 ## Calling Additional Seeders
