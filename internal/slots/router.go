@@ -6,15 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 	"github.com/nextcore/zenoengine/pkg/apidoc"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	hostPkg "github.com/nextcore/zenoengine/pkg/host"
 	"github.com/nextcore/zenoengine/pkg/middleware"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
 	pkgslots "github.com/nextcore/zeno-go/pkg/slots"
@@ -227,57 +224,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		return base + sub
 	}
 
-	// ==========================================
-	// 0. HOST / DOMAIN GROUP
-	// ==========================================
-	eng.Register("http.host", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		host := coerce.ToString(resolveValue(node.Value, scope))
-		if host == "" {
-			return fmt.Errorf("http.host: domain/host is required")
-		}
 
-		// Create host-specific router
-		hostRouter := chi.NewRouter()
-
-		// [AUTOMATIC] Register to Native Host Map (O(1) lookup)
-		// This is much faster than linear middleware checks
-		hostPkg.GlobalManager.RegisterRouter(host, hostRouter)
-
-		// Logic: Cari 'do'. Jika tidak ada, pakai 'node' itu sendiri (Implicit)
-		var childrenToExec []*engine.Node
-		var doNode *engine.Node
-
-		for _, c := range node.Children {
-			if c.Name == "do" {
-				doNode = c
-				break
-			}
-		}
-
-		if doNode != nil {
-			childrenToExec = doNode.Children
-		} else {
-			for _, c := range node.Children {
-				if c.Name != "summary" && c.Name != "desc" {
-					childrenToExec = append(childrenToExec, c)
-				}
-			}
-		}
-
-		// Create new context with host-router
-		hostCtx := context.WithValue(ctx, routerKey{}, hostRouter)
-
-		// Execute children in host context
-		for _, child := range childrenToExec {
-			eng.Execute(hostCtx, child, scope)
-		}
-
-		fmt.Printf("   🌐 [VHOST] Registered domain: %s\n", host)
-		return nil
-	}, engine.SlotMeta{
-		Description: "Mengelompokkan route berdasarkan Domain atau Subdomain tertentu.",
-		Example:     "http.host: \"api.zeno.dev\"\n  do:\n    http.get: \"/v1/users\" { ... }",
-	})
 
 	// ==========================================
 	// 1. ROUTE GROUP (Mendukung Implicit Do)
@@ -548,62 +495,7 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		}, engine.SlotMeta{})
 	}
 
-	// ==========================================
-	// 3. REVERSE PROXY SLOT (Caddy-Style)
-	// ==========================================
-	eng.Register("http.proxy", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		targetStr := coerce.ToString(resolveValue(node.Value, scope))
-		if targetStr == "" {
-			for _, c := range node.Children {
-				if c.Name == "to" || c.Name == "target" {
-					targetStr = coerce.ToString(parseNodeValue(c, scope))
-				}
-			}
-		}
 
-		if targetStr == "" {
-			return fmt.Errorf("http.proxy: target URL is required")
-		}
-
-		targetURL, err := url.Parse(targetStr)
-		if err != nil {
-			return fmt.Errorf("http.proxy: invalid target URL: %v", err)
-		}
-
-		path := "/"
-		for _, c := range node.Children {
-			if c.Name == "path" {
-				path = coerce.ToString(parseNodeValue(c, scope))
-			}
-		}
-
-		// Create Reverse Proxy
-		proxy := httputil.NewSingleHostReverseProxy(targetURL)
-
-		// [OPTIONAL] Customizing the Director to handle headers correctly
-		originalDirector := proxy.Director
-		proxy.Director = func(req *http.Request) {
-			originalDirector(req)
-			req.Host = targetURL.Host // Critical for some backends
-			req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-		}
-
-		// Register to router
-		getCurrentRouter(ctx).Handle(path+"*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Strip prefix if not root
-			if path != "/" {
-				http.StripPrefix(strings.TrimSuffix(path, "/"), proxy).ServeHTTP(w, r)
-			} else {
-				proxy.ServeHTTP(w, r)
-			}
-		}))
-
-		fmt.Printf("   🔄 [PROXY] Registered proxy: %s -> %s\n", path, targetStr)
-		return nil
-	}, engine.SlotMeta{
-		Description: "Meneruskan request ke backend service lain (Reverse Proxy).",
-		Example:     "http.proxy: \"http://localhost:8080\"\n  path: \"/api\"",
-	})
 
 	// ==========================================
 	// 4. STATIC / SPA HOSTING SLOT

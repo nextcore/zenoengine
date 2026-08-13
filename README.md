@@ -72,7 +72,7 @@ Utilize a familiar, powerful Laravel-like template engine directly in your web v
 ## ✨ Features Out of the Box
 
 * **Eloquent-inspired ORM**: Relationships (`hasOne`, `hasMany`, `belongsTo`, `belongsToMany`), eager loading (resolving N+1 issues in exactly 2 queries), and mass-assignment protection.
-* **Robust Routing**: Route grouping, middleware support, virtual host/subdomain routing, and reverse proxies out-of-the-box.
+* **Robust Routing**: Clean URL routing, route grouping, and middleware support out-of-the-box.
 * **Integrated Mail & Storage**: Configurable SMTP/mock mailers and standard file storage slots (`put`, `delete`, `exists`).
 * **Automated API Documentation**: Automatically generate interactive Swagger/OpenAPI documentation from route definitions and comments.
 

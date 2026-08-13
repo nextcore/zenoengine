@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -21,11 +20,8 @@ import (
 	"github.com/nextcore/zeno-go/pkg/blade"
 	"github.com/nextcore/zenoengine/pkg/dbmanager"
 	"github.com/nextcore/zeno-go/pkg/engine"
-	hostPkg "github.com/nextcore/zenoengine/pkg/host"
 	"github.com/nextcore/zenoengine/pkg/logger"
 	"github.com/nextcore/zenoengine/pkg/worker"
-
-	"golang.org/x/crypto/acme/autocert"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
@@ -475,86 +471,10 @@ func startServer(ln net.Listener, port string, appCtx *app.AppContext, cancelWor
 	// Listener is already opened in main()
 
 	go func() {
-		// 1. Check for Automatic HTTPS (Caddy-style)
-		autoHTTPS := os.Getenv("AUTO_HTTPS") == "true"
-		if autoHTTPS {
-			domains := hostPkg.GlobalManager.GetDomains()
-			if d := os.Getenv("APP_DOMAIN"); d != "" {
-				// Add APP_DOMAIN if not already registered
-				hostPkg.GlobalManager.RegisterDomain(d)
-				domains = hostPkg.GlobalManager.GetDomains()
-			}
-
-			if len(domains) > 0 {
-				certDir := "data/certs"
-				os.MkdirAll(certDir, 0700)
-
-				m := &autocert.Manager{
-					Prompt:     autocert.AcceptTOS,
-					HostPolicy: autocert.HostWhitelist(domains...),
-					Cache:      autocert.DirCache(certDir),
-				}
-
-				// ACME requires port 80 for challenges and redirection
-				go http.ListenAndServe(":80", m.HTTPHandler(nil))
-
-				srv.TLSConfig = m.TLSConfig()
-				srv.TLSConfig.MinVersion = tls.VersionTLS12
-				srv.TLSConfig.CurvePreferences = []tls.CurveID{tls.CurveP256, tls.X25519}
-				srv.TLSConfig.CipherSuites = []uint16{
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-				}
-				slog.Info("🚀 Engine Ready (AUTO-HTTPS via Let's Encrypt)", "domains", domains, "port", port)
-
-				// Use ListenAndServeTLS for autocert (it handles its own certificates)
-				// We might need to handle the port here. Autocert usually expects 443.
-				if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-					slog.Error("❌ Auto-HTTPS Listen failed", "error", err)
-					os.Exit(1)
-				}
-				return
-			} else {
-				slog.Warn("⚠️  AUTO_HTTPS=true but no domains registered via http.host or APP_DOMAIN. Falling back to HTTP.")
-			}
-		}
-
-		// 2. Check for Manual HTTPS
-		certFile := os.Getenv("SSL_CERT_PATH")
-		keyFile := os.Getenv("SSL_KEY_PATH")
-
-		if certFile != "" && keyFile != "" {
-			slog.Info("🚀 Engine Ready (HTTPS-Manual)", "port", port, "cert", certFile)
-
-			// Apply hardening to manual TLS as well
-			srv.TLSConfig = &tls.Config{
-				MinVersion:       tls.VersionTLS12,
-				CurvePreferences: []tls.CurveID{tls.CurveP256, tls.X25519},
-				CipherSuites: []uint16{
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-				},
-			}
-
-			if err := srv.ServeTLS(ln, certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				slog.Error("❌ Manual HTTPS Listen failed", "error", err)
-				os.Exit(1)
-			}
-		} else {
-			// 3. Fallback to HTTP
-			slog.Info("🚀 Engine Ready (HTTP)", "port", port)
-			if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-				slog.Error("❌ HTTP Listen failed", "error", err)
-				os.Exit(1)
-			}
+		slog.Info("🚀 Engine Ready (HTTP)", "port", port)
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			slog.Error("❌ HTTP Listen failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
