@@ -76,4 +76,4 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 )
 
-require github.com/nextcore/zeno-go v1.0.0
+require github.com/nextcore/zeno-go v1.0.1

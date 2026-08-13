@@ -181,9 +181,11 @@ func RegisterCollectionSlots(eng *engine.Engine) {
 		}
 
 		// Get or Init Map
-		currentVal, ok := scope.Get(targetName)
+		// IMPORTANT: Track whether map already existed in scope chain (reference type behavior)
+		currentVal, existed := scope.Get(targetName)
 		mapVal, okMap := currentVal.(map[string]interface{})
-		if !ok || !okMap || mapVal == nil {
+		isNewMap := !existed || !okMap || mapVal == nil
+		if isNewMap {
 			mapVal = make(map[string]interface{})
 		}
 
@@ -213,9 +215,15 @@ func RegisterCollectionSlots(eng *engine.Engine) {
 			mapVal[explicitKey] = explicitVal
 		}
 
-		scope.Set(targetName, mapVal)
+		// Gunakan scope.Update agar:
+		// 1. Jika map sudah ada di parent scope → mutasi in-place (tidak perlu Set)
+		// 2. Jika map baru → simpan di scope tempat variabel pertama kali dideklarasikan
+		//    (bukan selalu di child scope)
+		scope.Update(targetName, mapVal)
 		return nil
+
 	}, engine.SlotMeta{Example: "map.set: $user\n  age: 30"})
+
 
 	// MAP.KEYS
 	eng.Register("map.keys", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
