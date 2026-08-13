@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 	"github.com/nextcore/zenoengine/internal/console"
 	"github.com/nextcore/zenoengine/pkg/apidoc"
 	"github.com/nextcore/zeno-go/pkg/engine"
@@ -18,9 +17,7 @@ import (
 	"github.com/nextcore/zenoengine/pkg/middleware"
 
 	"github.com/go-chi/chi/v5"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/go-chi/httprate"
 	"github.com/gorilla/csrf"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -30,29 +27,7 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 	r := chi.NewRouter()
 	r.Use(logger.Middleware)
 	r.Use(metrics.Middleware)          // PROMETHEUS METRICS (Place early)
-	r.Use(middleware.IPBlocker)        // [IP] Block known bad IPs first
-	r.Use(middleware.WAF)              // [WAF] Shield up early
-	r.Use(middleware.BotDefense)       // [BOT] JS Challenge Interstitial
-	r.Use(chiMiddleware.Compress(5))
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.SecurityHeaders) // New Security Middleware
-
-	// Rate Limiting
-	// Rate Limiting
-	rlReqStr := os.Getenv("RATE_LIMIT_REQUESTS")
-	if rlReqStr == "" {
-		slog.Info("⚠️  Rate Limiting Disabled (RATE_LIMIT_REQUESTS not set)")
-	} else {
-		rlRequests, _ := strconv.Atoi(rlReqStr)
-		if rlRequests == 0 {
-			rlRequests = 100
-		}
-		rlWindow, _ := strconv.Atoi(os.Getenv("RATE_LIMIT_WINDOW"))
-		if rlWindow == 0 {
-			rlWindow = 60
-		}
-		r.Use(httprate.LimitByIP(rlRequests, time.Duration(rlWindow)*time.Second))
-	}
 
 	// CORS
 	r.Use(cors.Handler(cors.Options{
@@ -171,8 +146,7 @@ func BuildRouter(app *AppContext) (*chi.Mux, error) {
 		w.Write([]byte("OK"))
 	})
 
-	// Bot Challenge Verification Endpoint
-	r.Post("/_zeno/challenge", middleware.BotChallengeHandler)
+
 
 	// Prometheus Metrics Endpoint
 	r.Handle("/metrics", promhttp.Handler())
