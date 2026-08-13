@@ -98,8 +98,7 @@ export default defineConfig({
           items: [
             { text: 'Realtime SSE', link: '/advanced/realtime-sse' },
             { text: 'Background Jobs & Queues', link: '/advanced/jobs-queues' },
-            { text: 'Web Server Gateway', link: '/advanced/gateway' },
-            { text: 'Edge Security (WAF/Bot)', link: '/advanced/edge-security' },
+            { text: 'Static Asset Hosting', link: '/advanced/gateway' },
             { text: 'Filesystem & Uploads', link: '/advanced/filesystem' }
           ]
         },

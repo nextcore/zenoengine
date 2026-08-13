@@ -107,19 +107,7 @@ http.static: 'shared/public' {
 }
 ```
 
-## Virtual Hosting (Multi-Domain)
 
-Use `http.host:` to route different domains to different apps within the same engine:
-
-```zeno
-http.host: 'blog.mysite.com' { do: {
-    include: apps/blog/routes/web.zl
-}}
-
-http.host: 'shop.mysite.com' { do: {
-    include: apps/shop/routes/web.zl
-}}
-```
 
 ## Complete Example
 
