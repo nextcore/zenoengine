@@ -81,7 +81,7 @@ Utilize a familiar, powerful Laravel-like template engine directly in your web v
 ## 🚀 Quick Start
 
 ### 1. Download the CLI
-Download the latest executable binary from the [Releases](https://github.com/nextcore/zenoengine/releases) page for your operating system.
+Download the latest executable binary from the Releases page for your operating system.
 
 On Linux/macOS:
 ```bash
@@ -89,20 +89,13 @@ chmod +x zeno
 mv zeno /usr/local/bin/
 ```
 
-### 2. Create a New Project
-Scaffold a fully configured MVC or Modular starting boilerplate:
+### 2. Run the Server
+Start your application by passing the main ZenoLang entry point file directly to the binary:
 ```bash
-zeno new my-app
+zeno src/main.zl
 ```
 
-### 3. Run the Development Server
-Navigate to the directory and start development with automatic hot reloading:
-```bash
-cd my-app
-zeno run src/main.zl
-```
-
-Your app is now running at `http://localhost:8080`!
+Your app is now running at `http://localhost:3000` (or the port specified in your `.env` file)!
 
 ---
 

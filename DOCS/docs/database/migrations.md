@@ -87,24 +87,10 @@ db.execute: "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT, content TEX
 
 ## Running Migrations
 
-Run all pending migrations in the default `migrations/` directory:
+Since database schema definitions are built using ZenoLang syntax, you can run them directly by passing the migration script to the `zeno` runtime:
 
 ```bash
-./zeno migrate
+zeno migrations/001_create_users_table.zl
 ```
 
-Run migrations from a specific folder (e.g., for a module):
-
-```bash
-./zeno migrate modules/blog/migrations
-```
-
-## Rolling Back Migrations
-
-To rollback the last batch of migrations:
-
-```bash
-./zeno migrate:rollback
-```
-
-This will execute the `down` blocks of the migrations in the last batch in reverse order.
+Alternatively, you can write a master script (e.g., `db_init.zl`) that imports or runs multiple schema definitions sequentially.

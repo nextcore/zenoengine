@@ -15,38 +15,22 @@ ZenoEngine is distributed as a single executable binary.
 4. Make it executable: `chmod +x zeno`
 5. Move it to your `/usr/local/bin/` so you can use it globally.
 
-### Step 2: Create a New Project
+### Step 2: Set Up a Project
+Since ZenoEngine behaves as a universal runtime, you can write your own `src/main.zl` file or clone a starter template to get started.
 
-ZenoEngine comes with two powerful officially supported templates built-in: a classic Laravel-style **MVC** template, and a modern Domain-Driven **Modular** template. Both come fully configured with Authentication, User Management, Roles, and an SQLite database!
-
-To scaffold a new project, run:
-
-```bash
-zeno new my_first_app
-```
-
-You will be presented with an interactive prompt asking you to choose your preferred template:
+A standard project structure looks like this:
 ```text
-🚀 Welcome to ZenoEngine!
-Choose a starting boilerplate for your project:
-  1) MVC (Classic Laravel-style architecture)
-  2) Modular (Domain-Driven, feature-based architecture)
-
-Enter choice (1 or 2) [default: 1]: 
+my-app/
+├── src/
+│   └── main.zl
+├── views/
+│   └── welcome.blade.zl
+└── .env
 ```
-
-*(Alternatively, you can skip the prompt by passing `--template=mvc` or `--template=modular`)*
 
 ### Step 3: Run the Server
-
-Once your project is created, navigate into it and start the development server:
+To start the application, execute `zeno` by passing the path to your entry point script:
 
 ```bash
-cd my_first_app
-zeno run src/main.zl
-```
-
-Or just run the binary by itself if it's in the project root:
-```bash
-./zeno
+zeno src/main.zl
 ```
