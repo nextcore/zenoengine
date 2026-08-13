@@ -39,20 +39,6 @@ func main() {
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
 		switch cmd {
-		case "check":
-			cli.HandleCheck(os.Args[2:])
-		case "new":
-			cli.HandleNew(os.Args[2:])
-		case "run":
-			cli.HandleRun(os.Args[2:])
-		case "migrate":
-			cli.HandleMigrate()
-		case "migrate:rollback":
-			cli.HandleRollback()
-		case "test":
-			cli.HandleTest(os.Args[2:])
-		case "make:auth":
-			cli.HandleMakeAuth()
 		case "key:generate":
 			cli.HandleKeyGenerate()
 		case "version":
