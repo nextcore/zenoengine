@@ -106,6 +106,26 @@ Your app is now running at `http://localhost:3000` (or the port specified in you
 
 ---
 
+## 🔧 Embedding ZenoEngine in Your Go App (Advanced)
+
+If you are building a custom hybrid application in Go (e.g., custom streaming server or background workers) and want to utilize ZenoEngine slots and interpreter natively, you can import and register all default ZenoEngine slots using the public wrapper package:
+
+```go
+import (
+    "github.com/nextcore/zeno-go/pkg/engine"
+    "github.com/nextcore/zenoengine/pkg/app"
+)
+
+func main() {
+    eng := engine.NewEngine()
+    
+    // Register all default ZenoEngine slots (ORM, Mail, Auth, Session, etc.)
+    app.RegisterAllSlots(eng, r, dbMgr, queue, nil)
+}
+```
+
+---
+
 ## 📜 License
 
 ZenoEngine is open-source software licensed under the [Apache 2.0 License](LICENSE).
