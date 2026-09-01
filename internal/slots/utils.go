@@ -267,30 +267,51 @@ func RegisterUtilSlots(eng *engine.Engine) {
 		},
 	})
 
-	// 4. TEXT SANITIZE
-	eng.Register("text.sanitize", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+	// 4. TEXT SANITIZE / SANITIZE
+	handlerSanitize := func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
 		p := bluemonday.UGCPolicy()
 		var input, target string
-		target = "clean_text"
+
+		if node.Value != nil {
+			input = coerce.ToString(resolveValue(node.Value, scope))
+		}
+
 		for _, c := range node.Children {
 			if c.Name == "input" || c.Name == "val" {
 				input = coerce.ToString(parseNodeValue(c, scope))
 			}
 			if c.Name == "as" {
-				// [FIX] Bersihkan awalan $
 				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
 		}
-		scope.Set(target, p.Sanitize(input))
+
+		cleanText := p.Sanitize(input)
+
+		if target != "" {
+			scope.Set(target, cleanText)
+		} else {
+			wVal := ctx.Value("httpResponseWriter")
+			if wVal == nil {
+				wVal = ctx.Value("httpWriter")
+			}
+			if wVal != nil {
+				if w, ok := wVal.(http.ResponseWriter); ok {
+					w.Write([]byte(cleanText))
+					return nil
+				}
+			}
+			scope.Set("clean_text", cleanText)
+		}
 		return nil
-	}, engine.SlotMeta{
+	}
+
+	eng.Register("text.sanitize", handlerSanitize, engine.SlotMeta{
 		Description: "Membersihkan teks dari tag HTML berbahaya (XSS prevention).",
 		Example:     "text.sanitize: $user_input\n  as: $clean_input",
-		Inputs: map[string]engine.InputMeta{
-			"input": {Description: "Teks sumber", Required: false},
-			"val":   {Description: "Alias untuk input", Required: false},
-			"as":    {Description: "Variabel penyimpan hasil", Required: false},
-		},
+	})
+	eng.Register("sanitize", handlerSanitize, engine.SlotMeta{
+		Description: "Membersihkan tag HTML dari script berbahaya (XSS prevention).",
+		Example:     "sanitize: $user_input\n  as: $clean_input",
 	})
 
 	// 5. SYS INCLUDE

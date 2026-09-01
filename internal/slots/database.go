@@ -3,10 +3,12 @@ package slots
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
-	"github.com/nextcore/zenoengine/pkg/dbmanager"
+
 	"github.com/nextcore/zeno-go/pkg/engine"
 	"github.com/nextcore/zeno-go/pkg/utils/coerce"
+	"github.com/nextcore/zenoengine/pkg/dbmanager"
 )
 
 // Helper: Build query from Node
@@ -25,9 +27,6 @@ func buildQuery(node *engine.Node, scope *engine.Scope) (string, string, []inter
 	}
 
 	for _, c := range node.Children {
-		if c.Name == "sql" {
-			query = coerce.ToString(parseNodeValue(c, scope))
-		}
 		if c.Name == "db" || c.Name == "connection" {
 			dbName = coerce.ToString(parseNodeValue(c, scope))
 		}
@@ -109,6 +108,14 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			return fmt.Errorf("db.select: query cannot be empty")
 		}
 
+		// Enforce read-only queries for db.select
+		qTrim := strings.ToLower(strings.TrimSpace(query))
+		if !strings.HasPrefix(qTrim, "select") && !strings.HasPrefix(qTrim, "with") && !strings.HasPrefix(qTrim, "show") && !strings.HasPrefix(qTrim, "explain") {
+			err := fmt.Errorf("db.select only allows read-only queries (SELECT, WITH, SHOW, EXPLAIN)")
+			log.Printf("[Zeno DB Security] Blocked query: %s. Error: %v\n", query, err)
+			return err
+		}
+
 		executor, dialect, err := getExecutor(scope, dbMgr, dbName)
 		if err != nil {
 			return err
@@ -182,8 +189,6 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			"bind":   {Description: "Bind parameters container", Required: false, Type: "any"},
 		},
 	})
-	eng.Register("mysql.select", handlerSelect, engine.SlotMeta{Description: "Alias for db.select"})
-	eng.Register("db.query", handlerSelect, engine.SlotMeta{Description: "Alias for db.select"})
 
 	// DB.EXECUTE (Generic)
 	handlerExecute := func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
@@ -228,5 +233,4 @@ func RegisterRawDBSlots(eng *engine.Engine, dbMgr *dbmanager.DBManager) {
 			"bind":   {Description: "Bind parameters container", Required: false, Type: "any"},
 		},
 	})
-	eng.Register("mysql.execute", handlerExecute, engine.SlotMeta{Description: "Alias for db.execute"})
 }

@@ -21,19 +21,9 @@ import (
 //   - captcha.serve  : Daftarkan route handler bawaan captcha ke router
 func RegisterCaptchaSlots(eng *engine.Engine, r *chi.Mux) {
 
-	// ─── captcha.new ────────────────────────────────────────────────────────
-	// Membuat captcha baru dengan panjang default (6 digit) atau custom.
-	// Menyimpan captcha ID ke scope.
-	//
-	// Contoh:
-	//   captcha.new
-	//     as: $captcha_id
-	//
-	//   captcha.new
-	//     length: 4
-	//     as: $captcha_id
-	eng.Register("captcha.new", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		target := "captcha_id"
+	// ─── captcha.id / captcha.new ───────────────────────────────────────────
+	handlerCaptchaID := func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		var target string
 		length := captcha.DefaultLen
 
 		for _, c := range node.Children {
@@ -49,35 +39,44 @@ func RegisterCaptchaSlots(eng *engine.Engine, r *chi.Mux) {
 		}
 
 		id := captcha.NewLen(length)
-		scope.Set(target, id)
-		// fmt.Printf("   [DEBUG] captcha.new: target=%s, id=%s\n", target, id)
+
+		if target != "" {
+			scope.Set(target, id)
+		} else {
+			// Write raw string ID to HTTP ResponseWriter if available
+			wVal := ctx.Value("httpResponseWriter")
+			if wVal == nil {
+				wVal = ctx.Value("httpWriter")
+			}
+			if wVal != nil {
+				if w, ok := wVal.(http.ResponseWriter); ok {
+					w.Write([]byte(id))
+				}
+			} else {
+				scope.Set("captcha_id", id)
+			}
+		}
 		return nil
-	}, engine.SlotMeta{
-		Description: "Membuat captcha baru dan menyimpan ID-nya ke scope.",
-		Example: `captcha.new
-  as: $captcha_id`,
+	}
+
+	eng.Register("captcha.id", handlerCaptchaID, engine.SlotMeta{
+		Description: "Membuat captcha ID baru dan mencetaknya atau menyimpannya ke scope.",
+		Example:     "captcha.id\n  as: $captcha_id",
 	})
 
 	// ─── captcha.verify ─────────────────────────────────────────────────────
-	// Memverifikasi jawaban user terhadap captcha ID yang diberikan.
-	// Menghapus captcha dari store setelah verifikasi (one-time use).
-	//
-	// Contoh:
-	//   captcha.verify
-	//     id: $captcha_id
-	//     answer: $user_input
-	//     as: $is_valid
 	eng.Register("captcha.verify", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
-		var id, answer string
-		target := "captcha_valid"
+		var id, input, elseRedirect, target string
 
 		for _, c := range node.Children {
 			val := parseNodeValue(c, scope)
 			switch c.Name {
 			case "id":
 				id = coerce.ToString(val)
-			case "answer":
-				answer = coerce.ToString(val)
+			case "input":
+				input = coerce.ToString(val)
+			case "else_redirect":
+				elseRedirect = coerce.ToString(val)
 			case "as":
 				target = strings.TrimPrefix(coerce.ToString(c.Value), "$")
 			}
@@ -86,18 +85,41 @@ func RegisterCaptchaSlots(eng *engine.Engine, r *chi.Mux) {
 		if id == "" {
 			return fmt.Errorf("captcha.verify: 'id' is required")
 		}
-		if answer == "" {
-			return fmt.Errorf("captcha.verify: 'answer' is required")
+		if input == "" {
+			return fmt.Errorf("captcha.verify: 'input' is required")
 		}
 
-		ok := captcha.VerifyString(id, answer)
-		scope.Set(target, ok)
+		isValid := captcha.VerifyString(id, input)
+
+		if target != "" {
+			scope.Set(target, isValid)
+		} else {
+			scope.Set("captcha_valid", isValid)
+		}
+
+		if !isValid && elseRedirect != "" {
+			wVal := ctx.Value("httpResponseWriter")
+			if wVal == nil {
+				wVal = ctx.Value("httpWriter")
+			}
+			rVal := ctx.Value("httpRequest")
+
+			if wVal != nil && rVal != nil {
+				if w, okW := wVal.(http.ResponseWriter); okW {
+					if r, okR := rVal.(*http.Request); okR {
+						http.Redirect(w, r, elseRedirect, http.StatusSeeOther)
+						return fmt.Errorf("captcha verification failed, redirecting to %s", elseRedirect)
+					}
+				}
+			}
+		}
 		return nil
 	}, engine.SlotMeta{
-		Description: "Memverifikasi jawaban user terhadap captcha ID. Menghapus captcha setelah verifikasi.",
+		Description: "Memverifikasi jawaban user terhadap captcha ID dan melakukan aksi opsional jika gagal.",
 		Example: `captcha.verify
   id: $captcha_id
-  answer: $user_input
+  input: $user_input
+  else_redirect: /login?error=captcha
   as: $is_valid`,
 	})
 

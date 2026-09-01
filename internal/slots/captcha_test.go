@@ -14,10 +14,10 @@ func TestCaptchaSlots(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterCaptchaSlots(eng, r)
 
-	t.Run("captcha.new - default length", func(t *testing.T) {
+	t.Run("captcha.id - default length", func(t *testing.T) {
 		scope := engine.NewScope(nil)
 		node := &engine.Node{
-			Name: "captcha.new",
+			Name: "captcha.id",
 			Children: []*engine.Node{
 				{Name: "as", Value: "$my_captcha"},
 			},
@@ -31,10 +31,10 @@ func TestCaptchaSlots(t *testing.T) {
 		assert.NotEmpty(t, id, "captcha ID tidak boleh kosong")
 	})
 
-	t.Run("captcha.new - custom length", func(t *testing.T) {
+	t.Run("captcha.id - custom length", func(t *testing.T) {
 		scope := engine.NewScope(nil)
 		node := &engine.Node{
-			Name: "captcha.new",
+			Name: "captcha.id",
 			Children: []*engine.Node{
 				{Name: "length", Value: 4},
 				{Name: "as", Value: "$cap_id"},
@@ -53,7 +53,7 @@ func TestCaptchaSlots(t *testing.T) {
 		// Buat captcha baru
 		scope := engine.NewScope(nil)
 		newNode := &engine.Node{
-			Name: "captcha.new",
+			Name: "captcha.id",
 			Children: []*engine.Node{
 				{Name: "as", Value: "$cid"},
 			},
@@ -70,7 +70,7 @@ func TestCaptchaSlots(t *testing.T) {
 			Name: "captcha.verify",
 			Children: []*engine.Node{
 				{Name: "id", Value: captchaID},
-				{Name: "answer", Value: "000000"},
+				{Name: "input", Value: "000000"},
 				{Name: "as", Value: "$result"},
 			},
 		}
@@ -79,8 +79,7 @@ func TestCaptchaSlots(t *testing.T) {
 
 		result, ok := verifyScope.Get("result")
 		assert.True(t, ok)
-		// Jawaban "000000" kemungkinan besar salah (bisa benar secara kebetulan, tapi sangat jarang)
-		// Kita hanya memastikan slot berjalan tanpa error dan mengembalikan bool
+		// Jawaban "000000" kemungkinan besar salah
 		_, isBool := result.(bool)
 		assert.True(t, isBool, "hasil verifikasi harus bertipe bool")
 	})
@@ -91,7 +90,7 @@ func TestCaptchaSlots(t *testing.T) {
 			Name: "captcha.verify",
 			Children: []*engine.Node{
 				{Name: "id", Value: ""},
-				{Name: "answer", Value: "123456"},
+				{Name: "input", Value: "123456"},
 			},
 		}
 		err := eng.Execute(context.Background(), node, scope)
@@ -103,7 +102,7 @@ func TestCaptchaSlots(t *testing.T) {
 		// Buat captcha baru
 		scope := engine.NewScope(nil)
 		newNode := &engine.Node{
-			Name: "captcha.new",
+			Name: "captcha.id",
 			Children: []*engine.Node{
 				{Name: "as", Value: "$img_id"},
 			},

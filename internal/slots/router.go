@@ -642,4 +642,125 @@ func RegisterRouterSlots(eng *engine.Engine, rootRouter *chi.Mux) {
 		// Currently a no-op as the middleware bridge proceeds by default.
 		return nil
 	}, engine.SlotMeta{Description: "Melanjutkan ke handler berikutnya dalam rantai middleware."})
+
+	// 8. MIDDLEWARE SPOOF (Laravel/PHP Security Obfuscation)
+	eng.Register("middleware.spoof", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		r := getCurrentRouter(ctx)
+		if r == nil {
+			return fmt.Errorf("middleware.spoof: router context not found")
+		}
+
+		enabled := true
+		xPoweredBy := "PHP/8.3.0"
+		laravelSession := "eyJpdiI6IlZGVk..."
+		phpSessID := "sess_89a7f3..."
+
+		for _, c := range node.Children {
+			val := parseNodeValue(c, scope)
+			switch c.Name {
+			case "enabled":
+				if b, err := coerce.ToBool(val); err == nil {
+					enabled = b
+				}
+			case "x_powered_by":
+				xPoweredBy = coerce.ToString(val)
+			case "laravel_session":
+				laravelSession = coerce.ToString(val)
+			case "php_sessid":
+				phpSessID = coerce.ToString(val)
+			}
+		}
+
+		if !enabled {
+			return nil
+		}
+
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("X-Powered-By", xPoweredBy)
+				isSecure := req.TLS != nil || strings.ToLower(req.Header.Get("X-Forwarded-Proto")) == "https"
+
+				if _, err := req.Cookie("laravel_session"); err != nil {
+					http.SetCookie(w, &http.Cookie{
+						Name:     "laravel_session",
+						Value:    laravelSession,
+						Path:     "/",
+						HttpOnly: true,
+						Secure:   isSecure,
+						SameSite: http.SameSiteLaxMode,
+					})
+				}
+				if _, err := req.Cookie("PHPSESSID"); err != nil {
+					http.SetCookie(w, &http.Cookie{
+						Name:     "PHPSESSID",
+						Value:    phpSessID,
+						Path:     "/",
+						HttpOnly: true,
+						Secure:   isSecure,
+						SameSite: http.SameSiteLaxMode,
+					})
+				}
+				next.ServeHTTP(w, req)
+			})
+		})
+		fmt.Printf("   🛡️ [MIDDLEWARE] Applied SpoofLaravelMiddleware\n")
+		return nil
+	}, engine.SlotMeta{
+		Description: "Memasang header & cookie penyamaran PHP/Laravel untuk obfuscation keamanan server.",
+		Example:     "middleware.spoof:\n  enabled: true\n  x_powered_by: 'PHP/8.3.0'",
+	})
+
+	// 9. MIDDLEWARE API KEY
+	eng.Register("middleware.api_key", func(ctx context.Context, node *engine.Node, scope *engine.Scope) error {
+		r := getCurrentRouter(ctx)
+		if r == nil {
+			return fmt.Errorf("middleware.api_key: router context not found")
+		}
+
+		envKey := "API_KEY"
+		defaultKey := ""
+
+		for _, c := range node.Children {
+			val := parseNodeValue(c, scope)
+			switch c.Name {
+			case "env":
+				envKey = coerce.ToString(val)
+			case "key", "default_key":
+				defaultKey = coerce.ToString(val)
+			}
+		}
+
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				expectedKey := os.Getenv(envKey)
+				if expectedKey == "" {
+					expectedKey = defaultKey
+				}
+
+				clientKey := req.Header.Get("X-API-KEY")
+				if clientKey == "" {
+					clientKey = req.URL.Query().Get("api_key")
+				}
+				if clientKey == "" {
+					authHeader := req.Header.Get("Authorization")
+					if strings.HasPrefix(authHeader, "Bearer ") {
+						clientKey = strings.TrimPrefix(authHeader, "Bearer ")
+					}
+				}
+
+				if expectedKey != "" && clientKey != expectedKey {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					w.Write([]byte(`{"status":"error","message":"Unauthorized: Invalid or missing API Key"}`))
+					return
+				}
+				next.ServeHTTP(w, req)
+			})
+		})
+		fmt.Printf("   🔑 [MIDDLEWARE] Applied ApiKeyMiddleware (env: %s)\n", envKey)
+		return nil
+	}, engine.SlotMeta{
+		Description: "Memverifikasi X-API-KEY header, query param, atau Bearer token pada request HTTP.",
+		Example:     "middleware.api_key:\n  env: 'MY_API_KEY'\n  key: 'secret123'",
+	})
 }
