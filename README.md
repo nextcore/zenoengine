@@ -20,10 +20,10 @@
 
 Traditional fullstack development requires configuring complex web servers, process managers, and language runtimes (Nginx, PHP-FPM, Node/PM2, Docker). **ZenoEngine changes everything.**
 
-* **🚀 Compiled Go Speed**: Built on top of Go, your routes, ORM database queries, and template rendering execute in microseconds with minimal RAM footprint.
+* **🚀 Compiled Go Speed**: Built on top of Go (`go 1.26+`), your routes, ORM database queries, and template rendering execute in microseconds with minimal RAM footprint.
 * **🎨 Laravel-Parity DX**: Write clean, expressive logic using **ZenoLang** alongside a 1-to-1 port of the **Blade templating engine** (`@if`, `@foreach`, `@extends`, `$loop`, components, and more).
 * **📦 Single-Binary Deployment**: Compile your entire application—including routes, views, database migrations, and assets—into a single executable binary. Just copy-paste and run.
-* **🛡️ Secure by Default**: Built-in protection against common security risks, including CSRF protection, mass-assignment guards, and automatic cryptographically secure JWT configuration.
+* **🛡️ Secure by Default**: Built-in read-only database query guards (`SELECT`/`WITH`/`SHOW`/`EXPLAIN`), security obfuscation middleware (`middleware.spoof`), CSRF protection, mass-assignment guards, and automatic JWT handling.
 * **🔄 Hot Reload**: Modify your templates and logic files and see changes instantly without restarting the server or breaking development flow.
 
 ---
@@ -34,12 +34,10 @@ Traditional fullstack development requires configuring complex web servers, proc
 Write clean, readable, brace-based backend logic for your routing and database queries:
 
 ```zeno
-// Define a route and query database
+// Define a route and execute safe database query
 http.get: '/users' {
-    $users: db.query: 'users' {
-        select: 'id, name, email'
-        where: 'is_active = ?' { val: true }
-        limit: 10
+    db.select: 'SELECT id, name, email FROM users WHERE is_active = 1' {
+        as: $users
     }
     
     return: view: 'users.index' { users: $users }
@@ -71,10 +69,15 @@ Utilize a familiar, powerful Laravel-like template engine directly in your web v
 
 ## ✨ Features Out of the Box
 
-* **Eloquent-inspired ORM**: Relationships (`hasOne`, `hasMany`, `belongsTo`, `belongsToMany`), eager loading (resolving N+1 issues in exactly 2 queries), and mass-assignment protection.
-* **Robust Routing**: Clean URL routing, route grouping, and middleware support out-of-the-box.
-* **Integrated Mail & Storage**: Configurable SMTP/mock mailers and standard file storage slots (`put`, `delete`, `exists`).
-* **Automated API Documentation**: Automatically generate interactive Swagger/OpenAPI documentation from route definitions and comments.
+* **Eloquent-inspired ORM & Schema Builder**: Relationships (`hasOne`, `hasMany`, `belongsTo`, `belongsToMany`), eager loading, and mass-assignment protection.
+* **Safe Standard Database Slots (`db.select` & `db.execute`)**: Strict read-only query enforcement on `db.select`, variable prefix trimming (`as: $var`), and non-empty query validations.
+* **Security Obfuscation (`middleware.spoof`)**: Masks server headers (`X-Powered-By: PHP/8.3.0`) and injects dummy session cookies to trick automated vulnerability scanners.
+* **API Protection (`middleware.api_key`)**: Built-in verification for `X-API-KEY` headers, query parameters, or Bearer tokens.
+* **Image Upload & Conversion (`upload.webp`)**: Auto-converts uploaded images to WebP format and cleans up previous file uploads.
+* **HTML Sanitizer (`sanitize`)**: XSS prevention for user-generated HTML content.
+* **Captcha Engine (`captcha.id` & `captcha.verify`)**: Native Captcha generator and verification slots.
+* **Inertia.js & SPA Support**: Complete official Inertia.js protocol implementation (`inertia.render`, `inertia.share`, `inertia.location`) and SPA static hosting fallback.
+* **Automated API Documentation**: Automatically generates interactive Swagger/OpenAPI documentation from route definitions.
 
 ---
 
@@ -102,25 +105,35 @@ Your app is now running at `http://localhost:3000` (or the port specified in you
 ## 📚 Ecosystem & Libraries
 
 * **Core Runtime**: [github.com/nextcore/zeno-go](https://github.com/nextcore/zeno-go)
+* **Web Core Library**: [github.com/nextcore/zenoweb-core](https://github.com/nextcore/zenoweb-core)
 * **VS Code Extension**: [vscode-zenolang](vscode-zenolang/)
 
 ---
 
-## 🔧 Embedding ZenoEngine in Your Go App (Advanced)
+## 🔧 Modular Embedding in Your Go App (Advanced)
 
-If you are building a custom hybrid application in Go (e.g., custom streaming server or background workers) and want to utilize ZenoEngine slots and interpreter natively, you can import and register all default ZenoEngine slots using the public wrapper package:
+If you are building a custom hybrid application in Go, you can selectively import only the modules you need using the Functional Options pattern:
 
 ```go
 import (
     "github.com/nextcore/zeno-go/pkg/engine"
     "github.com/nextcore/zenoengine/pkg/app"
+    "github.com/go-chi/chi/v5"
 )
 
 func main() {
     eng := engine.NewEngine()
+    r := chi.NewRouter()
     
-    // Register all default ZenoEngine slots (ORM, Mail, Auth, Session, etc.)
+    // Option A: Register all slots
     app.RegisterAllSlots(eng, r, dbMgr, queue, nil)
+
+    // Option B: Selective / Modular registration
+    app.RegisterSlots(eng,
+        app.WithCore(),
+        app.WithWeb(r),
+        app.WithDB(dbMgr),
+    )
 }
 ```
 
