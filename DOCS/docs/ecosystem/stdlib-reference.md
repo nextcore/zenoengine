@@ -302,6 +302,24 @@ cache.put
 
 ## Captcha
 
+### `captcha.id` / `captcha.new`
+
+Membuat ID captcha baru dan menyimpan ID-nya ke scope (`$captcha_id` secara default). Dapat juga diakses via `@captcha.id`.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `as` | `string` | No | Variable name to store the generated captcha ID (Default: 'captcha_id') |
+
+**Example:**
+```zeno
+captcha.id
+  as: $my_captcha_id
+```
+
+---
+
 ### `captcha.image`
 
 Menulis gambar PNG captcha ke http.ResponseWriter atau menyimpan bytes ke scope.
@@ -312,18 +330,6 @@ captcha.image
   id: $captcha_id
   width: 240
   height: 80
-```
-
----
-
-### `captcha.new`
-
-Membuat captcha baru dan menyimpan ID-nya ke scope.
-
-**Example:**
-```zeno
-captcha.new
-  as: $captcha_id
 ```
 
 ---
@@ -342,14 +348,21 @@ captcha.serve
 
 ### `captcha.verify`
 
-Memverifikasi jawaban user terhadap captcha ID. Menghapus captcha setelah verifikasi.
+Memverifikasi jawaban user terhadap captcha ID. Menghapus captcha setelah verifikasi. Jika verifikasi gagal dan `else_redirect` diisi, otomatis mengarahkan kembali (redirect) dengan flash message error.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `id` | `string` | No | Captcha ID (Default: dari form request `captcha_id`) |
+| `input` | `string` | No | Jawaban captcha dari user (Default: dari form request `captcha_code` / `captcha`) |
+| `else_redirect` | `string` | No | URL redirect jika verifikasi captcha gagal |
+| `as` | `string` | No | Variable name untuk menyimpan status boolean verifikasi |
 
 **Example:**
 ```zeno
 captcha.verify
-  id: $captcha_id
-  answer: $user_input
-  as: $is_valid
+  else_redirect: '/register'
 ```
 
 ---
@@ -2239,6 +2252,36 @@ http.middleware: 'auth' {
 
 ---
 
+### `middleware.spoof` / `@middleware.spoof`
+
+Middleware penyamaran server HTTP yang mengaburkan header respons (`X-Powered-By: PHP/8.3.0`) dan menyuntikkan cookie sesi palsu (`laravel_session`, `PHPSESSID`) untuk mengelabui pemindai kerentanan otomatis.
+
+**Example:**
+```zeno
+middleware.spoof
+```
+
+---
+
+### `middleware.api_key` / `@middleware.api_key`
+
+Middleware verifikasi API Key. Memeriksa keberadaan API Key yang sah dari header `X-API-KEY`, query parameter `?api_key=`, atau Authorization Bearer token.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `key` | `string` | No | API Key yang diharapkan |
+| `keys` | `list` | No | Daftar API Key yang diperbolehkan |
+
+**Example:**
+```zeno
+middleware.api_key
+  key: $env.API_SECRET_KEY
+```
+
+---
+
 ### `http.next`
 
 Melanjutkan ke handler berikutnya dalam rantai middleware.
@@ -3072,6 +3115,32 @@ storage.put:
   path: 'avatars/1.jpg'
   is_file_path: true
   as: $file_url
+```
+
+---
+
+### `upload.webp` / `@upload.webp`
+
+Mengunggah file gambar dari form request HTTP (`field`), mengonversinya secara otomatis ke format WebP terkompresi, membuat folder target jika belum ada, serta melakukan pembersihan berkas lama jika parameter `old_file` diberikan.
+
+**Inputs:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `field` | `string` | No | Nama field form request (Default: 'image') |
+| `path` | `string` | No | Direktori penyimpanan publik (Default: 'public/uploads') |
+| `quality` | `int` | No | Kualitas kompresi WebP 1-100 (Default: 80) |
+| `old_file` | `string` | No | Path file lama yang akan dihapus jika upload baru berhasil |
+| `as` | `string` | No | Variable name untuk menyimpan path WebP yang tersimpan (Default: 'filepath') |
+
+**Example:**
+```zeno
+upload.webp
+  field: 'avatar'
+  path: 'public/uploads/avatars'
+  quality: 85
+  old_file: $user.avatar
+  as: $avatar_path
 ```
 
 ---
