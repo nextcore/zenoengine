@@ -20,7 +20,7 @@
 
 Traditional fullstack development requires configuring complex web servers, process managers, and language runtimes (Nginx, PHP-FPM, Node/PM2, Docker). **ZenoEngine changes everything.**
 
-* **🚀 Compiled Go Speed**: Built on top of Go (`go 1.26+`), your routes, ORM database queries, and template rendering execute in microseconds with minimal RAM footprint.
+* **🚀 Compiled Go Speed**: Built on top of Go (`go 1.27+`), your routes, ORM database queries, and template rendering execute in microseconds with minimal RAM footprint.
 * **🎨 Laravel-Parity DX**: Write clean, expressive logic using **ZenoLang** alongside a 1-to-1 port of the **Blade templating engine** (`@if`, `@foreach`, `@extends`, `$loop`, components, and more).
 * **📦 Single-Binary Deployment**: Compile your entire application—including routes, views, database migrations, and assets—into a single executable binary. Just copy-paste and run.
 * **🛡️ Secure by Default**: Built-in read-only database query guards (`SELECT`/`WITH`/`SHOW`/`EXPLAIN`), security obfuscation middleware (`middleware.spoof`), CSRF protection, mass-assignment guards, and automatic JWT handling.
