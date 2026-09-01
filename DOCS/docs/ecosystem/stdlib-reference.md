@@ -3204,27 +3204,37 @@ No description available.
 
 ---
 
-## Text
+## Sanitize
 
-### `text.sanitize`
+### `sanitize` / `@sanitize`
 
-Membersihkan teks dari tag HTML berbahaya (XSS prevention).
+Slot standar utama untuk membersihkan teks atau masukan HTML dari tag dan skrip berbahaya (Pencegahan XSS / Cross-Site Scripting). 
+Dapat menyimpan hasil pembersihan ke variabel scope (`as`) atau menuliskan hasilnya langsung ke `http.ResponseWriter` bila dipanggil dalam konteks HTTP handler tanpa opsi `as`.
+
+*(Catatan: `text.sanitize` tetap didukung sebagai alias kompatibilitas).*
 
 **Inputs:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `as` | `any` | No | Variabel penyimpan hasil |
-| `input` | `any` | No | Teks sumber |
-| `val` | `any` | No | Alias untuk input |
+| `(value)` | `string` | No | Teks sumber yang akan dibersihkan |
+| `input` | `string` | No | Parameter teks sumber |
+| `as` | `string` | No | Variabel penyimpan hasil (Jika tidak diisi dan dalam konteks HTTP, hasil langsung ditulis ke response) |
 
-**Example:**
+**Example (Menyimpan ke Variabel):**
 ```zeno
-text.sanitize: $user_input
-  as: $clean_input
+sanitize: $user_bio
+  as: $clean_bio
+```
+
+**Example (Short Syntax / HTTP Direct Output):**
+```zeno
+@sanitize: $request.body
 ```
 
 ---
+
+## Text
 
 ### `text.slugify`
 
